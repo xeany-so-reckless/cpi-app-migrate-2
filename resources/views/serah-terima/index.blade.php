@@ -981,25 +981,28 @@
                         <th style="background-color: #2c3e50; color: white;">Nomor Trolly</th>
                         <th style="background-color: #2c3e50; color: white;">Jumlah Bag</th>
                         <th style="background-color: #2c3e50; color: white;">Kg</th>
+                        <th style="background-color: #2c3e50; color: white;">Kode Cell</th>
                     </tr>
                 </thead>
                 <tbody>`;
             currentDisplayedData.forEach(d => {
-                let tgl = d.timestamp ? d.timestamp.split(" ")[0] : "-";
-                let kode = d.id || "-";
-                let nama = d.namaItem || "-";
-                let trolly = d.noTrolly || "-";
-                let jmlBag = d.jumlahBag || "0";
-                let kg = d.totalKg ? d.totalKg.toFixed(1) : "0";
-
-                tableHtml += `<tr>
-                    <td>${tgl}</td>
-                    <td>${kode}</td>
-                    <td>${nama}</td>
-                    <td>${trolly}</td>
-                    <td>${jmlBag}</td>
-                    <td>${kg}</td>
-                </tr>`;
+            let tgl = d.timestamp ? d.timestamp.split(" ")[0] : "-";
+            let kode = d.id || "-";
+            let nama = d.namaItem || "-";
+            let trolly = d.noTrolly || "-";
+            let jmlBag = d.jumlahBag || "0"; 
+            let kg = d.totalKg ? d.totalKg.toFixed(1) : "0";
+            let kodeCell = d.kodeCell || "-";
+            
+            tableHtml += `<tr>
+                <td>${tgl}</td>
+                <td>${kode}</td>
+                <td>${nama}</td>
+                <td>${trolly}</td>
+                <td>${jmlBag}</td>
+                <td>${kg}</td>
+                <td>${kodeCell}</td>
+            </tr>`;
             });
             tableHtml += `</tbody></table>`;
 

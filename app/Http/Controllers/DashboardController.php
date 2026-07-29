@@ -31,12 +31,12 @@ class DashboardController extends Controller
                 "info" => "Web GMP Patrol: Digitalisasi audit, pantau kepatuhan real-time, dan pelaporan instan",
                 "url"  => "http://10.71.3.27/gmp-patrol/",
             ],
-            [
-                "name" => "Man Power Produksi",
-                "icon" => "Groups",
-                "info" => "Data Absensi, borongan Harian & Bulanan tim Produksi",
-                "url"  => "#",
-            ],
+            // [
+            //     "name" => "Man Power Produksi",
+            //     "icon" => "Groups",
+            //     "info" => "Data Absensi, borongan Harian & Bulanan tim Produksi",
+            //     "url"  => "#",
+            // ],
             [
                 "name" => "Serah Terima Hasil Produksi",
                 "icon" => "File_Copy",
@@ -55,12 +55,12 @@ class DashboardController extends Controller
                 "info" => "Rekap Grafik Performa Produksi",
                 "url"  => route('produksi-dashboard.index'),
             ],
-            [
-                "name" => "OEE",
-                "icon" => "Add_Chart",
-                "info" => "(Overall Equipment Effectiveness) Monitoring efektivitas Proses Produksi ",
-                "url"  => null,
-            ],
+            // [
+            //     "name" => "OEE",
+            //     "icon" => "Add_Chart",
+            //     "info" => "(Overall Equipment Effectiveness) Monitoring efektivitas Proses Produksi ",
+            //     "url"  => null,
+            // ],
             [
                 "name" => "Report Harian Bahan Baku Live Birds",
                 "icon" => "Assignment_Add",
