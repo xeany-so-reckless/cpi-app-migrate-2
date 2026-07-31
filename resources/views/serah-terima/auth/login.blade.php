@@ -102,7 +102,7 @@
 
 <div class="login-wrapper">
     <div class="login-card">
-        <h3 class="text-center mb-1 fw-bold text-dark">E-SERAH TERIMA</h3>
+        <h3 class="text-center mb-1 fw-bold text-dark">E-SERAH TERIMA & INBOUND WAREHOUSE</h3>
         <p class="text-center text-muted small mb-4">CPI Jombang Plant</p>
 
         <form method="POST" action="{{ route('serahterima.login.attempt') }}">
