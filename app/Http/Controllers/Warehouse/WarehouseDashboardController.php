@@ -50,6 +50,18 @@ class WarehouseDashboardController extends Controller
                 "info" => "Pemindahan stock antar Cell - untuk kasus overstock atau relokasi",
                 "url"  => "#",
             ],
+            [
+                "name" => "E-GMP",
+                "icon" => "shield_lock",
+                "info" => "Web GMP Patrol: Digitalisasi audit, pantau kepatuhan real-time, dan pelaporan instan",
+                "url"  => "http://10.71.3.27/gmp-patrol/",
+            ],
+            [
+                "name" => "Suhu Ruang CS",
+                "icon" => "thermostat",
+                "info" => "Monitoring suhu ruang CS secara real-time",
+                "url"  => "http://10.60.22.21:3000/d/adhfkzm/cs-suhu-ruang?kiosk=true&orgId=1&from=now-24h&to=now&timezone=browser&refresh=1m",
+            ],
         ];
 
         // Kalau url null/kosong berarti belum aktif -> jadi "#"
