@@ -114,7 +114,7 @@
                     name="employee_code"
                     value="{{ old('employee_code') }}"
                     class="form-control text-uppercase"
-                    placeholder="TPR / TWH / SPV"
+                    placeholder="TPR / TWH / SPV / SPVG / ADMG"
                     oninput="this.value = this.value.toUpperCase()"
                     autofocus
                 >
