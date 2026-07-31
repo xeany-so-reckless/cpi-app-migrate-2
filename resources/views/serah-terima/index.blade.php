@@ -26,6 +26,8 @@
             --red-soft: #fee2e2;
             --indigo: #3730a3;
             --indigo-soft: #e6e4fb;
+            --blue: #1d4ed8;
+            --blue-soft: #eef6ff;
         }
 
         body {
@@ -98,11 +100,11 @@
             text-transform: uppercase;
             letter-spacing: 0.03em;
         }
-        .form-control {
+        .form-control, .form-select {
             border-radius: 9px;
             border: 1px solid var(--line);
         }
-        .form-control:focus {
+        .form-control:focus, .form-select:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 .2rem var(--accent-soft);
         }
@@ -182,6 +184,15 @@
             font-family: 'Inter', sans-serif;
         }
 
+        .reservation-item {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 11px;
+            margin-bottom: 6px;
+            background: var(--surface);
+        }
+
         /* SweetAlert Modern */
         .modern-popup{ box-shadow:0 25px 60px rgba(0,0,0,.18)!important; font-family:'Inter',sans-serif; }
         .modern-confirm-btn{ border-radius:12px!important; padding:12px 24px!important; font-size:15px!important; font-weight:600!important; transition:.25s; }
@@ -239,19 +250,20 @@
     @php
         $currentUser = auth()->guard('tally')->user();
         $roleLabels = [
-            'tally_produksi' => 'Tally Produksi',
-            'tally_gudang'   => 'Tally Gudang',
-            'supervisor'     => 'Supervisor',
+            'tally_produksi'     => 'Tally Produksi',
+            'tally_gudang'       => 'Tally Gudang',
+            'supervisor'         => 'Supervisor (SPV Produksi)',
+            'admin_gudang'       => 'Admin Gudang',
+            'supervisor_gudang'  => 'Supervisor Gudang',
         ];
-        // Ambil role aktif user untuk modul ini (dari relasi roles yang baru),
-        // dipakai untuk label tampilan & dikirim ke JS di bawah.
         $activeRole = collect(array_keys($roleLabels))->first(fn ($r) => $currentUser->hasRole($r));
         $roleLabel = $roleLabels[$activeRole] ?? $activeRole;
+        $showLeftPanel = $currentUser->hasAnyRole(['tally_produksi', 'supervisor', 'tally_gudang']);
     @endphp
 
     <nav class="navbar navbar-custom px-4 py-3 d-flex justify-content-between no-print">
         <span class="navbar-brand text-white mb-0">
-            Serah Terima Hasil Produksi
+            {{ $currentUser->hasAnyRole(['tally_gudang', 'admin_gudang', 'supervisor_gudang']) ? 'Inbound Warehouse' : 'Serah Terima Hasil Produksi' }}
             <small>CPI Jombang Plant &middot; Traceability System</small>
         </span>
         <div class="d-flex align-items-center gap-2">
@@ -266,14 +278,24 @@
     <div class="container-fluid mt-4">
         <div class="row">
 
-            <div id="leftInputPanel" class="col-md-3 no-print @if(! $currentUser->hasAnyRole(['tally_produksi', 'supervisor'])) d-none @endif">
+            <div id="leftInputPanel" class="col-md-3 no-print @if(! $showLeftPanel) d-none @endif">
+
+                @if ($currentUser->hasAnyRole(['tally_produksi', 'supervisor']))
                 <div class="card p-3 shadow-sm mb-3">
                     <h5 class="fw-bold" id="formTitle">Input Tally Produksi</h5>
                     <input type="hidden" id="edit_col_index" value="">
 
                     <div class="mb-2">
                         <label>Tanggal Produksi</label>
-                        <input type="date" id="p_tanggal_produksi" class="form-control" onchange="handleDateChange(this)" onkeydown="handleMainFormEnter(event, 'p_trolly')">
+                        <input type="date" id="p_tanggal_produksi" class="form-control" onchange="handleDateChange(this)" onkeydown="handleMainFormEnter(event, 'p_reservation_id')">
+                    </div>
+
+                    <div class="mb-2">
+                        <label>Reservasi Cell (dari Tally Gudang)</label>
+                        <select id="p_reservation_id" class="form-select" onchange="handleReservationChange()">
+                            <option value="">-- Pilih Reservasi --</option>
+                        </select>
+                        <div id="reservation_info_preview" class="text-muted small mt-1" style="min-height: 16px; font-size: 11px;"></div>
                     </div>
 
                     <div class="mb-2">
@@ -290,21 +312,54 @@
                     <div class="mb-2">
                         <label>Jumlah Bag (Max 10)</label>
                         <input type="number" id="p_qty" class="form-control" max="10" min="1" onchange="generateKgInputs()" onkeydown="handleQtyEnter(event)">
+                        <div id="qty_max_hint" class="text-muted small mt-1" style="font-size: 11px;"></div>
                     </div>
 
                     <div id="kgInputsContainer" class="mt-2 p-2 bg-light rounded border">
                         <small class="text-muted d-block mb-2">
                             <i class="fa-solid fa-lightbulb me-1 text-warning"></i>
-                            Tips: Ketik tanpa desimal (cth: 265 → 26.5) & Tekan Enter untuk lanjut.
+                            Tips: Ketik tanpa desimal (cth: 265 -> 26.5) & Tekan Enter untuk lanjut.
                         </small>
                     </div>
 
                     <button id="btnSubmitRole1" class="btn btn-success w-100 mt-3 fw-bold" onclick="submitRole1()">Simpan & Geser Kolom</button>
                     <button id="btnCancelEdit" class="btn btn-secondary w-100 mt-2 d-none" onclick="cancelEditMode()">Batal Koreksi</button>
                 </div>
+                @endif
+
+                @if ($currentUser->hasRole('tally_gudang'))
+                <div class="card p-3 shadow-sm mb-3">
+                    <h5 class="fw-bold">Reservasi Cell</h5>
+                    <p class="text-muted small mb-3" style="font-size: 11.5px;">
+                        Pilih Cell tujuan sebelum Tally Produksi input trolly. Sistem akan hitung otomatis sisa kapasitas & maksimal bag yang boleh masuk.
+                    </p>
+
+                    <div class="mb-2">
+                        <label>Pilih Cell</label>
+                        <select id="wh_cell_id" class="form-select">
+                            <option value="">-- Memuat daftar cell... --</option>
+                        </select>
+                    </div>
+
+                    <button id="btnBuatReservasi" class="btn btn-primary w-100 fw-bold" onclick="submitWhReservation()">
+                        <i class="fa-solid fa-plus me-1"></i> Buat Reservasi
+                    </button>
+
+                    <button class="btn btn-outline-primary w-100 mt-2 fw-bold btn-sm" onclick="loadWhCellOptions(); loadPendingReservationsList();">
+                        <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh
+                    </button>
+
+                    <hr>
+                    <h6 class="fw-bold text-secondary" style="font-size: 12px;">Reservasi Menunggu Dipakai TPR</h6>
+                    <div id="pendingReservationsList">
+                        <p class="text-muted small">Memuat...</p>
+                    </div>
+                </div>
+                @endif
+
             </div>
 
-            <div class="col-md-{{ $currentUser->hasAnyRole(['tally_produksi', 'supervisor']) ? '9' : '12' }}" id="mainTablePanel">
+            <div class="col-md-{{ $showLeftPanel ? '9' : '12' }}" id="mainTablePanel">
                 <div class="no-print d-flex justify-content-between align-items-center mb-3 bg-white p-3 rounded shadow-sm flex-wrap gap-2">
                     <div class="d-flex align-items-center flex-wrap gap-2">
                         <span class="fw-bold text-secondary text-uppercase small" style="font-size: 8.5pt;">
@@ -319,7 +374,7 @@
                         <button class="btn btn-dark btn-sm shadow-sm fw-bold" onclick="refreshData()">
                             <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh
                         </button>
-                        @if ($currentUser->hasAnyRole(['supervisor']))
+                        @if ($currentUser->hasAnyRole(['supervisor', 'admin_gudang', 'supervisor_gudang']))
                             <button class="btn btn-success btn-sm shadow-sm fw-bold" onclick="exportToExcel()">
                                 <i class="fa-solid fa-file-excel me-1"></i> Download Excel
                             </button>
@@ -385,6 +440,9 @@
         let globalDataList = [];
         let currentDisplayedData = [];
         let verifiedNamaItem = "";
+        let currentReservations = []; // daftar reservasi PENDING untuk dropdown TPR
+        let selectedReservationMaxBag = null;
+        let selectedReservationProdukCodes = null; // null = belum pilih reservasi (belum bisa divalidasi)
 
         async function apiFetch(url, options = {}) {
             const response = await fetch(url, {
@@ -411,7 +469,13 @@
             syncAndFilterDate(todayStr);
 
             if (currentUser.role === 'tally_produksi') {
+                loadReservationOptions();
                 setTimeout(() => { document.getElementById('p_trolly')?.focus(); }, 300);
+            }
+
+            if (currentUser.role === 'tally_gudang') {
+                loadWhCellOptions();
+                loadPendingReservationsList();
             }
         });
 
@@ -422,21 +486,149 @@
             }
         }
 
+        // ============ RESERVASI CELL - SISI TALLY GUDANG (TWH) ============
+
+        async function loadWhCellOptions() {
+            const select = document.getElementById('wh_cell_id');
+            if (!select) return;
+            select.innerHTML = `<option value="">-- Memuat... --</option>`;
+            try {
+                const cells = await apiFetch(`/serah-terima/cells`);
+                if (cells.length === 0) {
+                    select.innerHTML = `<option value="">Tidak ada Cell aktif</option>`;
+                    return;
+                }
+                select.innerHTML = `<option value="">-- Pilih Cell --</option>` + cells.map(c =>
+                    `<option value="${c.id}" ${c.sisa <= 0 ? 'disabled' : ''}>${c.kode_cell} (Sisa: ${c.sisa}/${c.kapasitas_max} Bag)${c.sisa <= 0 ? ' - PENUH' : ''}</option>`
+                ).join('');
+            } catch (err) {
+                select.innerHTML = `<option value="">Gagal memuat cell</option>`;
+                console.error(err);
+            }
+        }
+
+        async function submitWhReservation() {
+            const cellId = document.getElementById('wh_cell_id').value;
+            if (!cellId) { alert("Pilih Cell terlebih dahulu!"); return; }
+
+            const btn = document.getElementById('btnBuatReservasi');
+            btn.disabled = true;
+            try {
+                const res = await apiFetch(`/serah-terima/cell-reservations`, {
+                    method: 'POST',
+                    body: JSON.stringify({ cell_id: cellId }),
+                });
+                alert(`Reservasi berhasil dibuat!\nCell: ${res.reservation.kode_cell}\nMaks Bag: ${res.reservation.max_bag_allowed}\n\nSilakan informasikan ke Tally Produksi untuk memilih reservasi ini saat input trolly.`);
+                loadWhCellOptions();
+                loadPendingReservationsList();
+            } catch (err) {
+                alert("Gagal membuat reservasi: " + err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loadPendingReservationsList() {
+            const container = document.getElementById('pendingReservationsList');
+            if (!container) return;
+            try {
+                const list = await apiFetch(`/serah-terima/cell-reservations`);
+                if (list.length === 0) {
+                    container.innerHTML = `<p class="text-muted small">Belum ada reservasi menunggu.</p>`;
+                    return;
+                }
+                container.innerHTML = list.map(r => `
+                    <div class="reservation-item">
+                        <span class="cell-chip">${r.kode_cell}</span>
+                        <b>Maks ${r.max_bag_allowed} Bag</b>
+                        <div class="text-muted" style="font-size:10px;">oleh ${r.dibuat_oleh} &middot; ${r.dibuat_pada}</div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                container.innerHTML = `<p class="text-danger small">Gagal memuat: ${err.message}</p>`;
+            }
+        }
+
+        // ============ RESERVASI CELL - SISI TALLY PRODUKSI (TPR) ============
+
+        async function loadReservationOptions() {
+            const select = document.getElementById('p_reservation_id');
+            if (!select) return;
+            try {
+                currentReservations = await apiFetch(`/serah-terima/cell-reservations`);
+                if (currentReservations.length === 0) {
+                    select.innerHTML = `<option value="">-- Belum ada reservasi dari TWH --</option>`;
+                    return;
+                }
+                select.innerHTML = `<option value="">-- Pilih Reservasi --</option>` + currentReservations.map(r =>
+                    `<option value="${r.id}" data-max="${r.max_bag_allowed}" data-cell="${r.kode_cell}">${r.kode_cell} (Maks ${r.max_bag_allowed} Bag) - oleh ${r.dibuat_oleh}</option>`
+                ).join('');
+            } catch (err) {
+                select.innerHTML = `<option value="">Gagal memuat reservasi</option>`;
+                console.error(err);
+            }
+        }
+
+        function handleReservationChange() {
+            const select = document.getElementById('p_reservation_id');
+            const opt = select.options[select.selectedIndex];
+            const preview = document.getElementById('reservation_info_preview');
+            const qtyInput = document.getElementById('p_qty');
+            const hint = document.getElementById('qty_max_hint');
+
+            if (!select.value) {
+                selectedReservationMaxBag = null;
+                selectedReservationProdukCodes = null;
+                preview.innerText = "";
+                qtyInput.removeAttribute('max');
+                hint.innerText = "";
+                handleKodeItemInput(); // re-validasi kode item yang mungkin sudah keisi
+                return;
+            }
+
+            const maxBag = parseInt(opt.dataset.max);
+            const kodeCell = opt.dataset.cell;
+            selectedReservationMaxBag = maxBag;
+
+            const reservationData = currentReservations.find(r => String(r.id) === String(select.value));
+            selectedReservationProdukCodes = reservationData ? reservationData.produk_codes : [];
+
+            preview.innerHTML = `✓ Cell <b>${kodeCell}</b> dipilih, maksimal <b>${maxBag} Bag</b>`;
+            preview.style.color = "#0f7a3d";
+            qtyInput.setAttribute('max', Math.min(10, maxBag));
+            hint.innerText = `Maksimal ${Math.min(10, maxBag)} bag untuk reservasi Cell ini.`;
+
+            handleKodeItemInput(); // re-validasi kode item yang mungkin sudah keisi duluan
+        }
+
         function handleKodeItemInput() {
             const kode = document.getElementById('p_kode_item').value.trim();
             const previewDiv = document.getElementById('item_name_preview');
 
             if (!kode) { verifiedNamaItem = ""; previewDiv.innerText = ""; return; }
 
-            if (MASTER_ITEM_LOCAL[kode]) {
-                verifiedNamaItem = MASTER_ITEM_LOCAL[kode];
-                previewDiv.innerText = "✓ " + MASTER_ITEM_LOCAL[kode];
-                previewDiv.style.color = "#27ae60";
-            } else {
+            if (!MASTER_ITEM_LOCAL[kode]) {
                 verifiedNamaItem = "";
                 previewDiv.innerText = "❌ Kode belum terdaftar...";
                 previewDiv.style.color = "#c0392b";
+                return;
             }
+
+            // Kode item valid di Master Produk. Sekarang cek juga apakah
+            // produk ini terdaftar untuk Cell reservasi yang sedang dipilih
+            // (kalau reservasinya sudah dipilih) - validasi real-time,
+            // tanpa perlu submit dulu untuk tahu gagal.
+            if (selectedReservationProdukCodes !== null && !selectedReservationProdukCodes.includes(kode)) {
+                verifiedNamaItem = "";
+                previewDiv.innerHTML = `❌ "${MASTER_ITEM_LOCAL[kode]}" TIDAK terdaftar untuk Cell reservasi ini!`;
+                previewDiv.style.color = "#c0392b";
+                previewDiv.style.fontWeight = "bold";
+                return;
+            }
+
+            verifiedNamaItem = MASTER_ITEM_LOCAL[kode];
+            previewDiv.innerText = "✓ " + MASTER_ITEM_LOCAL[kode];
+            previewDiv.style.color = "#27ae60";
         }
 
         function handleKodeItemEnter(event) {
@@ -461,6 +653,13 @@
         function generateKgInputs() {
             let qty = parseInt(document.getElementById('p_qty').value) || 0;
             if (qty > 10) { alert("Maksimal 10 Bag!"); qty = 10; document.getElementById('p_qty').value = 10; }
+
+            if (selectedReservationMaxBag !== null && qty > selectedReservationMaxBag) {
+                alert(`Melebihi kapasitas reservasi! Maksimal ${selectedReservationMaxBag} bag untuk Cell ini.`);
+                qty = selectedReservationMaxBag;
+                document.getElementById('p_qty').value = qty;
+            }
+
             const container = document.getElementById('kgInputsContainer');
             container.innerHTML = `<small class="text-muted d-block mb-2">💡 Tips: Ketik tanpa desimal (cth: 265 → 26.5) & Tekan Enter untuk lanjut.</small>`;
             for (let i = 1; i <= qty; i++) {
@@ -494,24 +693,18 @@
             }
         }
 
-        function handleGudangEnter(event, nextId, isSubmit, colIdx) {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                if (isSubmit) { submitFinalGudang(colIdx); }
-                else if (nextId) { document.getElementById(nextId).focus(); }
-            }
-        }
-
         async function submitRole1() {
             const tglProd = document.getElementById('p_tanggal_produksi').value;
             const kodeItemAngka = document.getElementById('p_kode_item').value.trim();
             const trolleyInput = document.getElementById('p_trolly').value.trim();
+            const editColIdx = document.getElementById('edit_col_index').value;
+            const reservationId = document.getElementById('p_reservation_id').value;
 
             if (!tglProd) { alert("Pilih Tanggal Produksi terlebih dahulu!"); return; }
+            if (!editColIdx && !reservationId) { alert("Pilih Reservasi Cell dari Tally Gudang terlebih dahulu!"); return; }
             if (!trolleyInput) { alert("Masukkan Nomor Trolly terlebih dahulu!"); return; }
             if (!verifiedNamaItem) { alert("Masukkan Kode Item yang valid!"); return; }
 
-            const editColIdx = document.getElementById('edit_col_index').value;
             const targetPrefix = getKodeDatePrefix(tglProd);
             const isDuplicate = globalDataList.some(d => {
                 if (editColIdx && String(d.colIndex) === String(editColIdx)) return false;
@@ -539,6 +732,9 @@
                 jumlah_bag: parseInt(document.getElementById('p_qty').value),
                 kg_bags: kgBags,
             };
+            if (!editColIdx) {
+                payload.reservation_id = reservationId;
+            }
 
             try {
                 if (editColIdx) {
@@ -554,6 +750,7 @@
                     document.getElementById('p_tanggal_produksi').value = tglTerpilih;
                     document.getElementById('global_filter_tanggal').value = tglTerpilih;
                     syncAndFilterDate(tglTerpilih);
+                    loadReservationOptions();
                     document.getElementById('p_trolly').focus();
                 }
             } catch (err) {
@@ -573,26 +770,41 @@
             }
         }
 
-        async function submitFinalGudang(colIndex) {
-            const cell = document.getElementById(`cell_${colIndex}`).value;
-            if (!cell) { alert("Isi Lokasi Kode Cell Cold Storage!"); return; }
-
+        async function verifikasiSemuaBag(colIndex, jumlahBag, statusBaru) {
+            if (!confirm("Anda yakin ingin meloloskan SEMUA bag pada kolom ini?")) return;
+            document.body.style.cursor = 'wait';
             try {
-                await apiFetch(`/serah-terima/batches/${colIndex}/finalize`, {
+                await apiFetch(`/serah-terima/batches/${colIndex}/bag/verify-all`, {
                     method: 'POST',
-                    body: JSON.stringify({ kode_cell: cell }),
+                    body: JSON.stringify({ status: statusBaru }),
                 });
-                alert("Atribut Cell Gudang Berhasil Disimpan!");
+                alert("Semua bag dalam kolom ini berhasil diverifikasi!");
+                refreshData();
+            } catch (err) {
+                alert("Terjadi kesalahan saat memverifikasi massal: " + err.message);
+            } finally {
+                document.body.style.cursor = 'default';
+            }
+        }
+
+        // ============ APPROVAL GANDA: GUDANG (Admin/SPV) & SPV PRODUKSI ============
+
+        async function submitApproveAdminGudang(colIndex) {
+            if (!confirm("Approve batch ini dari sisi Gudang?")) return;
+            try {
+                await apiFetch(`/serah-terima/batches/${colIndex}/approve-admin-gudang`, { method: 'POST', body: JSON.stringify({}) });
+                alert("Approve Gudang berhasil! QR Gudang terbit.");
                 refreshData();
             } catch (err) {
                 alert(err.message);
             }
         }
 
-        async function submitRole3(colIndex) {
+        async function submitApproveSpv(colIndex) {
+            if (!confirm("Approve batch ini dari sisi SPV Produksi?")) return;
             try {
-                await apiFetch(`/serah-terima/batches/${colIndex}/approve`, { method: 'POST', body: JSON.stringify({}) });
-                alert("Dokumen Sah! QR Code Otorisasi Terbit.");
+                await apiFetch(`/serah-terima/batches/${colIndex}/approve-spv`, { method: 'POST', body: JSON.stringify({}) });
+                alert("Approve SPV Produksi berhasil! QR SPV terbit.");
                 refreshData();
             } catch (err) {
                 alert(err.message);
@@ -645,6 +857,15 @@
             document.getElementById('kgInputsContainer').innerHTML = `<small class="text-muted d-block mb-2">💡 Tips: Ketik tanpa desimal (cth: 265 -> 26.5) & Tekan Enter untuk lanjut.</small>`;
             document.getElementById('edit_col_index').value = "";
             verifiedNamaItem = "";
+
+            const resSelect = document.getElementById('p_reservation_id');
+            if (resSelect) resSelect.value = "";
+            selectedReservationMaxBag = null;
+            selectedReservationProdukCodes = null;
+            const preview = document.getElementById('reservation_info_preview');
+            if (preview) preview.innerText = "";
+            const hint = document.getElementById('qty_max_hint');
+            if (hint) hint.innerText = "";
         }
 
         function sethatToEditMode(colIndex) {
@@ -668,6 +889,14 @@
             document.getElementById('item_name_preview').innerText = "✓ " + data.namaItem;
             document.getElementById('p_qty').value = data.jumlahBag;
 
+            // Saat mode koreksi, dropdown reservasi disembunyikan/nonaktifkan
+            // karena Cell batch ini sudah fix dari reservasi awal - tidak ganti cell lewat sini.
+            const resSelect = document.getElementById('p_reservation_id');
+            if (resSelect) {
+                resSelect.innerHTML = `<option value="">(Cell: ${data.kodeCell || '-'} - tidak bisa diganti lewat koreksi)</option>`;
+                resSelect.disabled = true;
+            }
+
             generateKgInputs();
             for (let i = 1; i <= data.jumlahBag; i++) {
                 document.getElementById(`input_bag_${i}`).value = data.kgBags[i - 1];
@@ -680,6 +909,11 @@
             document.getElementById('formTitle').innerText = "Input Tally Produksi";
             document.getElementById('btnSubmitRole1').innerText = "Simpan & Geser Kolom";
             document.getElementById('btnCancelEdit').classList.add('d-none');
+
+            const resSelect = document.getElementById('p_reservation_id');
+            if (resSelect) resSelect.disabled = false;
+            loadReservationOptions();
+
             clearForm();
             const todayStr = new Date().toISOString().split('T')[0];
             document.getElementById('p_tanggal_produksi').value = todayStr;
@@ -816,6 +1050,7 @@
                 }
 
                 tableContent += `<tr class="table-secondary fw-bold"><td class="text-start">Total Bersih</td>` + targetData.map(d => `<td>${d.totalKg.toFixed(1)} Kg</td>`).join('') + `</tr>`;
+
                 tableContent += `<tr style="background-color: #f8fafc;"><td class="text-start fw-bold" style="color: var(--muted);">QR Tally Prod</td>`;
                 targetData.forEach(d => {
                     if (d.qrProdUrl) {
@@ -825,62 +1060,83 @@
                 });
                 tableContent += `</tr>`;
 
+                // --- Kode Cell (otomatis dari reservasi, bukan input manual lagi) ---
                 tableContent += `<tr style="background-color: var(--accent-soft);"><td class="text-start fw-bold" style="color: var(--accent-dark);">Kode Cell</td>`;
                 targetData.forEach(d => {
-                    if (!d.kodeCell && currentUser.role === 'tally_gudang') {
-                        tableContent += `<td>
-                                            <input type="text" id="cell_${d.colIndex}" class="form-control form-control-sm p-0 text-center mb-1" style="font-size:7pt;" placeholder="Cell" onkeydown="handleGudangEnter(event, null, true, ${d.colIndex})">
-                                            <button class="btn btn-primary btn-xs w-100 py-0 no-print" onclick="submitFinalGudang(${d.colIndex})">Sahkan Cell</button>
-                                         </td>`;
-                    } else { tableContent += `<td>${d.kodeCell ? `<span class="cell-chip">${d.kodeCell}</span>` : '-'}</td>`; }
-                });
-                tableContent += `</tr>`;
-
-                tableContent += `<tr style="background-color: var(--accent-soft);"><td class="text-start fw-bold" style="color: var(--accent-dark);">QR Tally Gudang</td>`;
-                targetData.forEach(d => {
-                    if (d.kodeCell && d.kodeCell !== "-") {
-                        let namaTallyWh = d.namaTallyWh || "WH TEAM";
-                        let qrGudangUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(d.id + '|CELL:' + d.kodeCell + '|BY:' + namaTallyWh)}`;
-                        tableContent += `<td><img src="${qrGudangUrl}" width="28" height="28"><br><span style="font-size:5.5pt; color:var(--accent-dark); font-weight:bold; display:block; text-transform:uppercase; max-width:75px; margin:0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${namaTallyWh}</span></td>`;
-                    } else {
-                        tableContent += `<td><span class="text-muted small" style="font-size:6pt;">Belum Sah</span></td>`;
+                    let info = d.kodeCell ? `<span class="cell-chip">${d.kodeCell}</span>` : '-';
+                    if (d.maxBagAllowed) {
+                        info += `<br><span style="font-size:5.2pt; color:var(--muted);">(reservasi maks ${d.maxBagAllowed} bag)</span>`;
                     }
+                    tableContent += `<td>${info}</td>`;
                 });
                 tableContent += `</tr>`;
 
-                tableContent += `<tr style="background-color: #fffaf0;"><td class="text-start fw-bold" style="color: var(--accent-dark);">Supervisor</td>`;
+                // --- Approval Gudang (Admin/SPV Gudang) - independen ---
+                tableContent += `<tr style="background-color: var(--blue-soft);"><td class="text-start fw-bold" style="color: var(--blue);">Gudang (Admin/SPV)</td>`;
                 targetData.forEach(d => {
-                    if (d.statusApprove === "VERIFIED & APPROVED") {
+                    let content;
+                    if (d.statusApproveAdminGudang === 'VERIFIED & APPROVED') {
+                        content = `<span style="font-size:6pt; display:block; color:var(--blue); font-weight:bold;">✓ APPROVED</span>
+                                    <img src="${d.qrAdminGudangUrl}" width="26" height="26">
+                                    <span style="font-size:5.5pt; display:block; text-transform:uppercase; max-width:75px; margin:0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${d.namaAdminGudang || ''}</span>`;
+                    } else if (['admin_gudang', 'supervisor_gudang'].includes(currentUser.role)) {
+                        content = `<button class="btn btn-primary btn-xs no-print fw-bold" onclick="submitApproveAdminGudang(${d.colIndex})">Approve Gudang</button>`;
+                    } else {
+                        content = `<span class="text-muted d-block" style="font-size:6.5pt;">Menunggu</span>`;
+                    }
+                    tableContent += `<td>${content}</td>`;
+                });
+                tableContent += `</tr>`;
+
+                // --- Approval SPV Produksi - independen ---
+                tableContent += `<tr style="background-color: var(--indigo-soft);"><td class="text-start fw-bold" style="color: var(--indigo);">SPV Produksi</td>`;
+                targetData.forEach(d => {
+                    let content;
+                    if (d.statusApproveSpv === 'VERIFIED & APPROVED') {
+                        content = `<span style="font-size:6pt; display:block; color:var(--indigo); font-weight:bold;">✓ APPROVED</span>
+                                    <img src="${d.qrSpvUrl}" width="26" height="26">
+                                    <span style="font-size:5.5pt; display:block; text-transform:uppercase; max-width:75px; margin:0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${d.namaSpv || ''}</span>`;
+                    } else if (currentUser.role === 'supervisor') {
+                        content = `<button class="btn btn-primary btn-xs no-print fw-bold" onclick="submitApproveSpv(${d.colIndex})">Approve SPV</button>`;
+                    } else {
+                        content = `<span class="text-muted d-block" style="font-size:6.5pt;">Menunggu</span>`;
+                    }
+                    tableContent += `<td>${content}</td>`;
+                });
+                tableContent += `</tr>`;
+
+                // --- Barcode Final - baru muncul kalau KEDUA approval di atas selesai ---
+                tableContent += `<tr style="background-color: #fffaf0;"><td class="text-start fw-bold" style="color: var(--accent-dark);">Barcode Final</td>`;
+                targetData.forEach(d => {
+                    if (d.statusApprove === 'VERIFIED & APPROVED' && d.barcodeUrl) {
                         tableContent += `<td class="card-neon-verified" style="padding: 2px 0;">
                                             <span style="font-size:6pt; display:block;">✓ APPROVED</span>
                                             <img src="${d.barcodeUrl}" class="mt-1" width="28" height="28">
                                          </td>`;
                     } else {
-                        // Lock hanya berlaku untuk tally_produksi. Gudang dianggap sudah
-                        // mulai proses kalau ada bag yang bukan PENDING lagi atau kode
-                        // cell sudah disahkan (sudah dihitung backend: d.isLockedByGudang).
-                        let gudangSudahProses = !!d.isLockedByGudang;
-
-                        let actionContent = `<span class="text-muted d-block" style="font-size:6.5pt;">Menunggu</span>`;
-                                if (currentUser.role === 'tally_produksi') {
-                                    if (!gudangSudahProses) {
-                                        actionContent += `<button class="btn btn-outline-warning btn-xs mt-1 no-print font-weight-bold" onclick="sethatToEditMode(${d.colIndex})">Edit</button>`;
-                                    } else {
-                                        actionContent += `<span class="d-block text-muted mt-1" style="font-size:6pt;">🔒 Terkunci (WH proses)</span>`;
-                                    }
-                                } else if (currentUser.role === 'supervisor') {
-                            // Supervisor tetap boleh edit & hapus kapan saja, terlepas
-                            // dari status gudang (hak override).
-                            actionContent = `
-                                <div class="d-flex flex-column gap-1">
-                                    <button class="btn btn-success btn-xs shadow py-1 px-1 no-print fw-bold" onclick="submitRole3(${d.colIndex})">Approve</button>
-                                    <button class="btn btn-outline-warning btn-xs no-print fw-bold" onclick="sethatToEditMode(${d.colIndex})">✏️ Edit</button>
-                                    <button class="btn btn-outline-danger btn-xs no-print fw-bold" onclick="hapusTrolly(${d.colIndex})">🗑️ Hapus</button>
-                                </div>
-                            `;
-                        }
-                        tableContent += `<td>${actionContent}</td>`;
+                        tableContent += `<td><span class="text-muted d-block" style="font-size:6pt;">Menunggu 2 approval</span></td>`;
                     }
+                });
+                tableContent += `</tr>`;
+
+                // --- Aksi (Edit Tally Produksi / Edit+Hapus Supervisor) - dipisah dari status approval ---
+                tableContent += `<tr class="table-light no-print"><td class="text-start fw-bold text-secondary">Aksi</td>`;
+                targetData.forEach(d => {
+                    let content = '-';
+                    if (currentUser.role === 'tally_produksi') {
+                        if (!d.isLockedByGudang) {
+                            content = `<button class="btn btn-outline-warning btn-xs no-print fw-bold" onclick="sethatToEditMode(${d.colIndex})">Edit</button>`;
+                        } else {
+                            content = `<span class="text-muted d-block" style="font-size:6pt;">🔒 Terkunci (WH proses)</span>`;
+                        }
+                    } else if (currentUser.role === 'supervisor') {
+                        content = `
+                            <div class="d-flex flex-column gap-1">
+                                <button class="btn btn-outline-warning btn-xs no-print fw-bold" onclick="sethatToEditMode(${d.colIndex})">✏️ Edit</button>
+                                <button class="btn btn-outline-danger btn-xs no-print fw-bold" onclick="hapusTrolly(${d.colIndex})">🗑️ Hapus</button>
+                            </div>`;
+                    }
+                    tableContent += `<td>${content}</td>`;
                 });
                 tableContent += `</tr></tbody>`;
 
@@ -895,23 +1151,6 @@
 
             window.scrollTo(0, currentScrollY);
             setTimeout(() => { container.style.minHeight = ''; }, 100);
-        }
-
-        async function verifikasiSemuaBag(colIndex, jumlahBag, statusBaru) {
-            if (!confirm("Anda yakin ingin meloloskan SEMUA bag pada kolom ini?")) return;
-            document.body.style.cursor = 'wait';
-            try {
-                await apiFetch(`/serah-terima/batches/${colIndex}/bag/verify-all`, {
-                    method: 'POST',
-                    body: JSON.stringify({ status: statusBaru }),
-                });
-                alert("Semua bag dalam kolom ini berhasil diverifikasi!");
-                refreshData();
-            } catch (err) {
-                alert("Terjadi kesalahan saat memverifikasi massal: " + err.message);
-            } finally {
-                document.body.style.cursor = 'default';
-            }
         }
 
         async function hapusTrolly(colIndex) {
@@ -982,6 +1221,8 @@
                         <th style="background-color: #2c3e50; color: white;">Jumlah Bag</th>
                         <th style="background-color: #2c3e50; color: white;">Kg</th>
                         <th style="background-color: #2c3e50; color: white;">Kode Cell</th>
+                        <th style="background-color: #2c3e50; color: white;">Status Gudang</th>
+                        <th style="background-color: #2c3e50; color: white;">Status SPV Produksi</th>
                     </tr>
                 </thead>
                 <tbody>`;
@@ -990,10 +1231,12 @@
             let kode = d.id || "-";
             let nama = d.namaItem || "-";
             let trolly = d.noTrolly || "-";
-            let jmlBag = d.jumlahBag || "0"; 
+            let jmlBag = d.jumlahBag || "0";
             let kg = d.totalKg ? d.totalKg.toFixed(1) : "0";
             let kodeCell = d.kodeCell || "-";
-            
+            let statusGudang = d.statusApproveAdminGudang || "-";
+            let statusSpv = d.statusApproveSpv || "-";
+
             tableHtml += `<tr>
                 <td>${tgl}</td>
                 <td>${kode}</td>
@@ -1002,6 +1245,8 @@
                 <td>${jmlBag}</td>
                 <td>${kg}</td>
                 <td>${kodeCell}</td>
+                <td>${statusGudang}</td>
+                <td>${statusSpv}</td>
             </tr>`;
             });
             tableHtml += `</tbody></table>`;
@@ -1023,6 +1268,16 @@
             const editColIndex = document.getElementById('edit_col_index').value;
             if (!editColIndex) {
                 refreshData();
+
+                // Reservasi juga ikut di-refresh berkala supaya TPR & TWH
+                // selalu lihat data terbaru tanpa perlu klik manual.
+                if (currentUser.role === 'tally_produksi') {
+                    loadReservationOptions();
+                }
+                if (currentUser.role === 'tally_gudang') {
+                    loadWhCellOptions();
+                    loadPendingReservationsList();
+                }
             }
         }, 30000);
     </script>

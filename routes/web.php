@@ -42,18 +42,33 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
         Route::post('/login', [SerahTerimaAuthController::class, 'login'])->name('login.attempt');
     });
 
-    Route::middleware(['auth:tally', 'role:tally_produksi,tally_gudang,supervisor', 'no-cache'])->group(function () {
+    // Role ditambah: admin_gudang & supervisor_gudang (approval kedua sisi
+    // gudang, sejajar SPV Produksi) supaya bisa akses halaman & endpoint
+    // approve-admin-gudang di bawah.
+    Route::middleware(['auth:tally', 'role:tally_produksi,tally_gudang,supervisor,admin_gudang,supervisor_gudang', 'no-cache'])->group(function () {
         Route::post('/logout', [SerahTerimaAuthController::class, 'logout'])->name('logout');
 
         Route::get('/', [SerahTerimaController::class, 'index'])->name('index');
         Route::get('/data', [SerahTerimaController::class, 'data'])->name('data');
 
+        // --- BARU: Reservasi Cell oleh TWH (sebelum TPR input batch) ---
+        Route::get('/cells', [SerahTerimaController::class, 'listCells'])->name('cells.index');
+        Route::post('/cell-reservations', [SerahTerimaController::class, 'storeCellReservation'])->name('cell-reservations.store');
+        Route::get('/cell-reservations', [SerahTerimaController::class, 'listCellReservations'])->name('cell-reservations.index');
+
         Route::post('/batches', [SerahTerimaController::class, 'store'])->name('batches.store');
         Route::put('/batches/{batch}', [SerahTerimaController::class, 'update'])->name('batches.update');
         Route::post('/batches/{batch}/bag/verify-all', [SerahTerimaController::class, 'verifyAllBags'])->name('batches.bag.verify-all');
         Route::post('/batches/{batch}/bag/{bagIndex}', [SerahTerimaController::class, 'updateBagStatus'])->name('batches.bag.update');
-        Route::post('/batches/{batch}/finalize', [SerahTerimaController::class, 'finalize'])->name('batches.finalize');
-        Route::post('/batches/{batch}/approve', [SerahTerimaController::class, 'approve'])->name('batches.approve');
+
+        // --- DIHAPUS: route finalize (kode_cell manual) sudah tidak dipakai,
+        // digantikan alur reservasi Cell di atas ---
+        // Route::post('/batches/{batch}/finalize', [SerahTerimaController::class, 'finalize'])->name('batches.finalize');
+
+        // --- DIUBAH: approve() lama dipecah jadi 2 approval independen ---
+        Route::post('/batches/{batch}/approve-admin-gudang', [SerahTerimaController::class, 'approveAdminGudang'])->name('batches.approve-admin-gudang');
+        Route::post('/batches/{batch}/approve-spv', [SerahTerimaController::class, 'approveSpv'])->name('batches.approve-spv');
+
         Route::delete('/batches/{batch}', [SerahTerimaController::class, 'destroy'])->name('batches.destroy');
     });
 });

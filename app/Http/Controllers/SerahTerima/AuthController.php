@@ -12,7 +12,9 @@ use App\Models\User;
 
 class AuthController extends Controller
 {
-    private const ALLOWED_ROLES = ['tally_produksi', 'tally_gudang', 'supervisor'];
+    // Ditambah 'admin_gudang' & 'supervisor_gudang' - approval kedua sisi
+    // gudang (sejajar SPV Produksi), butuh akses login ke modul ini juga.
+    private const ALLOWED_ROLES = ['tally_produksi', 'tally_gudang', 'supervisor', 'admin_gudang', 'supervisor_gudang'];
 
     /**
      * Menggantikan #loginPage di Index.html lama.

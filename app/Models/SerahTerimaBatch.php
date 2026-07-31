@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SerahTerimaBatch extends Model
 {
@@ -79,6 +80,12 @@ class SerahTerimaBatch extends Model
         'supervisor_user_id',
         'qr_prod_url',
         'barcode_url',
+        // --- Baru: approval ganda ---
+        'admin_gudang_user_id',
+        'status_approval_admin_gudang',
+        'qr_admin_gudang_url',
+        'status_approval_spv',
+        'qr_spv_url',
     ];
 
     protected function casts(): array
@@ -106,6 +113,22 @@ class SerahTerimaBatch extends Model
     public function supervisor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'supervisor_user_id');
+    }
+
+    /**
+     * Admin Gudang / Supervisor Gudang yang approve (QC kedua sisi gudang).
+     */
+    public function adminGudang(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_gudang_user_id');
+    }
+
+    /**
+     * Reservasi Cell yang dipakai batch ini (dibuat TWH sebelum TPR input).
+     */
+    public function cellReservation(): HasOne
+    {
+        return $this->hasOne(CellReservation::class, 'batch_id');
     }
 
     /**
