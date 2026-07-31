@@ -1217,6 +1217,7 @@
                         <th style="background-color: #2c3e50; color: white;">Tanggal</th>
                         <th style="background-color: #2c3e50; color: white;">Kode</th>
                         <th style="background-color: #2c3e50; color: white;">Nama Produk</th>
+                        <th style="background-color: #2c3e50; color: white;">Kode Produk</th>
                         <th style="background-color: #2c3e50; color: white;">Nomor Trolly</th>
                         <th style="background-color: #2c3e50; color: white;">Jumlah Bag</th>
                         <th style="background-color: #2c3e50; color: white;">Kg</th>
@@ -1230,6 +1231,7 @@
             let tgl = d.timestamp ? d.timestamp.split(" ")[0] : "-";
             let kode = d.id || "-";
             let nama = d.namaItem || "-";
+            let kodeProduk = d.kodeItem || "-";
             let trolly = d.noTrolly || "-";
             let jmlBag = d.jumlahBag || "0";
             let kg = d.totalKg ? d.totalKg.toFixed(1) : "0";
@@ -1241,6 +1243,7 @@
                 <td>${tgl}</td>
                 <td>${kode}</td>
                 <td>${nama}</td>
+                <td>${kodeProduk}</td>
                 <td>${trolly}</td>
                 <td>${jmlBag}</td>
                 <td>${kg}</td>

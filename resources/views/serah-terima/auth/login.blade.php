@@ -141,8 +141,9 @@
             @enderror
         </form>
 
-        <div class="text-center">
-            <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard</a>
+        <div class="text-center d-flex justify-content-center gap-3">
+            <a href="{{ route('dashboard') }}" class="back-link">← Dashboard Produksi</a>
+            <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Dashboard Warehouse</a>
         </div>
     </div>
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Warehouse\WarehouseDashboardController;
 use App\Http\Controllers\TallyPro\AuthController;
 use App\Http\Controllers\TallyPro\TallyInputController;
 use App\Http\Controllers\TallyPro\RekapController;
@@ -15,6 +16,11 @@ use App\Http\Controllers\It\AuthController as ItAuthController;
 use App\Http\Controllers\It\ItController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+
+// ==================== DASHBOARD WAREHOUSE ====================
+// Terbuka tanpa login (sama seperti dashboard utama) - proteksi login
+// ada di masing-masing menu tujuan (Inbound -> serahterima.login, dst).
+Route::get('/warehouse', [WarehouseDashboardController::class, 'index'])->name('warehouse.dashboard');
 
 // ==================== TALLY PRO ====================
 Route::prefix('tally-pro')->name('tally.')->group(function () {
