@@ -10,6 +10,8 @@ class Cell extends Model
 {
     protected $fillable = [
         'kode_cell',
+        'cold_storage',
+        'lantai',
         'kapasitas_max',
         'is_active',
     ];
