@@ -24,7 +24,7 @@ class WarehouseDashboardController extends Controller
                 "name" => "Stock Warehouse",
                 "icon" => "inventory_2",
                 "info" => "Monitoring stock barang di seluruh Cell Cold Storage secara real-time",
-                "url"  => "#",
+                "url"  => route('warehouse.stock.index'),
             ],
             [
                 "name" => "Outbound",
