@@ -62,6 +62,12 @@ class WarehouseDashboardController extends Controller
                 "info" => "Monitoring suhu ruang CS secara real-time",
                 "url"  => "http://10.60.22.21:3000/d/adhfkzm/cs-suhu-ruang?kiosk=true&orgId=1&from=now-24h&to=now&timezone=browser&refresh=1m",
             ],
+            [
+                "name" => "Riwayat Log Aktivitas",
+                "icon" => "manage_history",
+                "info" => "Log aktivitas seluruh sistem - Khusus Akses IT",
+                "url"  => route('it.login'),
+            ]
         ];
 
         // Kalau url null/kosong berarti belum aktif -> jadi "#"
