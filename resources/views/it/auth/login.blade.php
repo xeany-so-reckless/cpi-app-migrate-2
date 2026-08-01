@@ -43,9 +43,10 @@
         @enderror
       </form>
 
-      <div class="text-center mt-4">
-        <a href="{{ route('dashboard') }}" class="text-xs text-gray-400 hover:text-slate-700 transition">← Kembali ke Dashboard Utama</a>
-      </div>
+        <div class="text-center d-flex justify-content-center gap-3">
+            <a href="{{ route('dashboard') }}" class="back-link">← Dashboard Produksi</a>
+            <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Dashboard Warehouse</a>
+        </div>
     </div>
   </div>
 
