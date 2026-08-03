@@ -214,9 +214,6 @@
             <span>STOCK WAREHOUSE</span>
         </div>
         <div style="display:flex; align-items:center; gap:16px;">
-            <a href="{{ route('warehouse.dashboard') }}" class="back-link">
-                <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Kembali ke Warehouse Console
-            </a>
             <form id="logoutForm" method="POST" action="{{ route('warehouse.stock.logout') }}">
                 @csrf
                 <button type="submit" class="btn-reset" style="cursor:pointer;">Keluar</button>
