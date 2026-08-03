@@ -14,6 +14,9 @@ class StockController extends Controller
 {
     /**
      * Halaman utama Stock Warehouse - list per Cell + filter.
+     * Akses dibatasi lewat middleware route (auth:tally + role:admin_gudang,
+     * supervisor_gudang), bukan dicek manual disini - konsisten dengan
+     * pola SerahTerimaController.
      */
     public function index(): View
     {

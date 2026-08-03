@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Warehouse\WarehouseDashboardController;
 use App\Http\Controllers\Warehouse\StockController;
+use App\Http\Controllers\Warehouse\AuthController as WarehouseStockAuthController;
 use App\Http\Controllers\TallyPro\AuthController;
 use App\Http\Controllers\TallyPro\TallyInputController;
 use App\Http\Controllers\TallyPro\RekapController;
@@ -24,13 +25,19 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 Route::get('/warehouse', [WarehouseDashboardController::class, 'index'])->name('warehouse.dashboard');
 
 // ==================== STOCK WAREHOUSE ====================
-// Terbuka tanpa login juga (sama seperti dashboard warehouse & dashboard
-// produksi) - data kapasitas cell bukan data sensitif per-user, dan
-// server hanya diakses dari jaringan internal (10.60.22.31).
+// Khusus admin_gudang & supervisor_gudang (ADMG01, SPVG) - login terpisah
+// dari Serah Terima, walau akun & guard-nya sama (tabel users/tally).
 Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
-    Route::get('/', [StockController::class, 'index'])->name('index');
-    Route::get('/data', [StockController::class, 'data'])->name('data');
-    Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
+    Route::get('/login', [WarehouseStockAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [WarehouseStockAuthController::class, 'login'])->name('login.attempt');
+
+    Route::middleware(['auth:tally', 'role:admin_gudang,supervisor_gudang', 'no-cache'])->group(function () {
+        Route::post('/logout', [WarehouseStockAuthController::class, 'logout'])->name('logout');
+
+        Route::get('/', [StockController::class, 'index'])->name('index');
+        Route::get('/data', [StockController::class, 'data'])->name('data');
+        Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
+    });
 });
 
 // ==================== TALLY PRO ====================

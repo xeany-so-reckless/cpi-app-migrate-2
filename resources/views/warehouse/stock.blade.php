@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Stock Warehouse - CPI App Migrate</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0" />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -113,16 +114,22 @@
         }
         .filter-bar input { min-width: 220px; }
         .btn-reset {
-            background: transparent;
-            border: 1px solid var(--line);
-            color: var(--muted);
+            background: #dc3545;
+            border: 1px solid #dc3545;
+            color: #fff;
             border-radius: 8px;
             padding: 9px 14px;
             font-size: 0.8rem;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s ease;
         }
-        .btn-reset:hover { color: var(--text); border-color: var(--muted); }
+
+        .btn-reset:hover {
+            background: #bb2d3b;
+            border-color: #bb2d3b;
+            color: #fff;
+        }
 
         .table-section { padding: 0 5% 60px; }
         .table-wrapper {
@@ -206,9 +213,15 @@
             <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
             <span>STOCK WAREHOUSE</span>
         </div>
-        <a href="{{ route('warehouse.dashboard') }}" class="back-link">
-            <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Kembali ke Warehouse Console
-        </a>
+        <div style="display:flex; align-items:center; gap:16px;">
+            <a href="{{ route('warehouse.dashboard') }}" class="back-link">
+                <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Kembali ke Warehouse Console
+            </a>
+            <form id="logoutForm" method="POST" action="{{ route('warehouse.stock.logout') }}">
+                @csrf
+                <button type="submit" class="btn-reset" style="cursor:pointer;">Keluar</button>
+            </form>
+        </div>
     </nav>
 
     <div class="page-header">
@@ -251,7 +264,8 @@
                         <th>Kode Cell</th>
                         <th>Cold Storage</th>
                         <th>Lantai</th>
-                        <th>Produk</th>
+                        <th>Kode Produk</th>
+                        <th>Nama Produk</th>
                         <th class="num">Kapasitas</th>
                         <th class="num">Terpakai</th>
                         <th class="num">Sisa</th>
@@ -350,7 +364,10 @@
             }
 
             tbody.innerHTML = data.map(d => {
-                const produkChips = d.produk.length > 0
+                const kodeChips = d.produk.length > 0
+                    ? d.produk.map(p => `<span class="produk-chip">${p.code}</span>`).join('')
+                    : `<span class="produk-chip">-</span>`;
+                const namaChips = d.produk.length > 0
                     ? d.produk.map(p => `<span class="produk-chip">${p.name}</span>`).join('')
                     : `<span class="produk-chip">-</span>`;
 
@@ -361,7 +378,8 @@
                         <td><span class="cell-chip">${d.kodeCell}</span></td>
                         <td>${d.coldStorage ?? '-'}</td>
                         <td>${d.lantai ?? '-'}</td>
-                        <td>${produkChips}</td>
+                        <td>${kodeChips}</td>
+                        <td>${namaChips}</td>
                         <td class="num">${d.kapasitasMax}</td>
                         <td class="num">${d.terpakai}</td>
                         <td class="num">${d.sisa}</td>

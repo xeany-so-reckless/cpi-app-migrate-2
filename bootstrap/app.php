@@ -44,6 +44,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return route('it.login');
             }
 
+            if ($request->is('warehouse/stock*')) {
+                return route('warehouse.stock.login');
+            }
+
             return route('tally.login');
         });
     })
