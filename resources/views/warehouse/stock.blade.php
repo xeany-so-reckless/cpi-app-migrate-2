@@ -189,6 +189,22 @@
             border-radius: 5px;
             white-space: nowrap;
         }
+
+        .cell-status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            animation: dot-pulse 1.6s ease-in-out infinite;
+        }
+        .cell-status-dot.ok { background: var(--ice); box-shadow: 0 0 6px var(--ice); }
+        .cell-status-dot.warn { background: var(--hazard); box-shadow: 0 0 6px var(--hazard); }
+        .cell-status-dot.danger { background: #dc2626; box-shadow: 0 0 6px #dc2626; }
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .4; transform: scale(0.75); }
+        }
         .produk-chip {
             display: inline-block;
             font-size: 0.72rem;
@@ -418,7 +434,7 @@
 
                 return `
                     <tr>
-                        <td><span class="cell-chip">${d.kodeCell}</span></td>
+                        <td><span class="cell-status-dot ${pClass}"></span><span class="cell-chip">${d.kodeCell}</span></td>
                         <td>${d.coldStorage ?? '-'}</td>
                         <td>${d.lantai ?? '-'}</td>
                         <td>${kodeChips}</td>
