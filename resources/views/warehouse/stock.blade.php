@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -219,7 +220,7 @@
                 <span class="mono" style="font-size:0.78rem; color: var(--muted);">{{ $currentUser->name }}</span>
                 <form id="logoutForm" method="POST" action="{{ route('warehouse.stock.logout') }}">
                     @csrf
-                    <button type="submit" class="btn-reset" style="cursor:pointer;">Keluar</button>
+                    <button type="button" class="btn-reset" style="cursor:pointer;" onclick="confirmLogout()">Keluar</button>
                 </form>
             </div>
     </nav>
@@ -280,6 +281,24 @@
     </div>
 
     <script>
+
+        function confirmLogout() {
+    Swal.fire({
+        title: 'Keluar dari Sistem?',
+        html: '<div style="font-size:14px;color:#64798c;">Anda akan keluar dari <b>Stock Warehouse</b>.</div>',
+        icon: 'question',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: 'Ya, Keluar',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64798c',
+    }).then((result) => {
+        if (result.isConfirmed) {
+            document.getElementById('logoutForm').submit();
+        }
+    });
+}
         let allStockData = [];
 
         async function loadFilterOptions() {
