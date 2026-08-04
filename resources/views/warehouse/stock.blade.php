@@ -255,6 +255,10 @@
         <select id="filterLantai"><option value="">Semua Lantai</option></select>
         <select id="filterKategori"><option value="">Semua Kategori</option></select>
         <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
+        <button class="btn-reset" onclick="document.getElementById('excelUploadInput').click()">
+    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file</span> Upload Excel
+</button>
+<input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
     </div>
 
     <div class="table-section">
@@ -299,6 +303,7 @@
         }
     });
 }
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         let allStockData = [];
 
         async function loadFilterOptions() {
@@ -420,6 +425,54 @@
             document.getElementById('filterKategori').value = '';
             loadStockData();
         }
+
+        async function handleExcelUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    Swal.fire({
+        title: 'Memproses Excel...',
+        html: 'Mohon tunggu, sedang membaca & menyesuaikan data.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+        const res = await fetch(`{{ route('warehouse.stock.upload') }}`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrfToken },
+            body: formData,
+        });
+        const result = await res.json();
+
+        if (!res.ok) {
+            throw new Error(result.message || 'Gagal memproses file.');
+        }
+
+        let dilewatiHtml = '';
+        if (result.dilewati.length > 0) {
+            dilewatiHtml = `<div style="text-align:left; max-height:200px; overflow-y:auto; margin-top:12px; font-size:12px;">
+                <b>Dilewati (${result.dilewati.length}):</b>
+                <ul>${result.dilewati.map(d => `<li>Baris ${d.baris} (${d.kode_cell}): ${d.alasan}</li>`).join('')}</ul>
+            </div>`;
+        }
+
+        await Swal.fire({
+            title: 'Selesai!',
+            html: `<div>${result.berhasil} cell berhasil disesuaikan.</div>${dilewatiHtml}`,
+            icon: result.dilewati.length > 0 ? 'warning' : 'success',
+        });
+
+        loadStockData();
+    } catch (err) {
+        Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+    } finally {
+        input.value = '';
+    }
+}
 
         document.getElementById('filterSearch').addEventListener('input', debounce(loadStockData, 400));
         document.getElementById('filterColdStorage').addEventListener('change', loadStockData);

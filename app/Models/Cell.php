@@ -33,11 +33,27 @@ class Cell extends Model
         return $this->hasMany(CellReservation::class);
     }
 
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(CellStockAdjustment::class);
+    }
+
+    /**
+     * Total selisih dari semua penyesuaian (upload Excel) yang pernah ada
+     * untuk cell ini. Boleh negatif (kalau fisik lebih sedikit dari
+     * hitungan sistem) atau positif (fisik lebih banyak).
+     */
+    public function totalAdjustment(): int
+    {
+        return (int) $this->adjustments()->sum('selisih');
+    }
+
     /**
      * Sisa kapasitas (dalam bag) saat ini.
      * Terpakai = SUM bag dari reservasi yang sudah USED (jumlah_bag batch
      * sebenarnya) + reservasi yang masih PENDING (pakai max_bag_allowed,
-     * supaya tidak dobel-reservasi lebih dari fisik yang tersedia).
+     * supaya tidak dobel-reservasi lebih dari fisik yang tersedia)
+     * + total penyesuaian manual (upload Excel) yang pernah dilakukan.
      */
     public function sisaKapasitas(): int
     {
@@ -50,6 +66,8 @@ class Cell extends Model
             ->where('status', 'PENDING')
             ->sum('max_bag_allowed');
 
-        return max(0, $this->kapasitas_max - $terpakaiUsed - $terpakaiPending);
+        $adjustment = $this->totalAdjustment();
+
+        return max(0, $this->kapasitas_max - $terpakaiUsed - $terpakaiPending - $adjustment);
     }
 }

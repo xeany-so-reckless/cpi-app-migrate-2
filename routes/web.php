@@ -171,5 +171,6 @@ Route::prefix('it')->name('it.')->group(function () {
         Route::get('/', [ItController::class, 'index'])->name('index');
         Route::get('/data', [ItController::class, 'data'])->name('data');
         Route::get('/filter-options', [ItController::class, 'filterOptions'])->name('filter-options');
+         Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
     });
 });
