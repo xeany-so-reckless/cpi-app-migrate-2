@@ -132,6 +132,24 @@
             color: #fff;
         }
 
+                .btn-upload {
+            background: #16a34a;
+            border: 1px solid #16a34a;
+            color: #fff;
+            border-radius: 8px;
+            padding: 9px 14px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-upload:hover {
+            background: #15803d;
+            border-color: #15803d;
+            color: #fff;
+        }
+
         .table-section { padding: 0 5% 60px; }
         .table-wrapper {
             background: var(--surface);
@@ -255,8 +273,9 @@
         <select id="filterLantai"><option value="">Semua Lantai</option></select>
         <select id="filterKategori"><option value="">Semua Kategori</option></select>
         <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
-        <button class="btn-reset" onclick="document.getElementById('excelUploadInput').click()">
-    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file</span> Upload Excel
+        <button class="btn-upload" onclick="document.getElementById('excelUploadInput').click()">
+    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file
+        </span> Upload Excel
 </button>
 <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
     </div>
