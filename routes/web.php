@@ -37,6 +37,7 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/', [StockController::class, 'index'])->name('index');
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
+        Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
     });
 });
 
@@ -171,6 +172,5 @@ Route::prefix('it')->name('it.')->group(function () {
         Route::get('/', [ItController::class, 'index'])->name('index');
         Route::get('/data', [ItController::class, 'data'])->name('data');
         Route::get('/filter-options', [ItController::class, 'filterOptions'])->name('filter-options');
-         Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
     });
 });
