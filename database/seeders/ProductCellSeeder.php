@@ -13,16 +13,13 @@ class ProductCellSeeder extends Seeder
      * Key = kode produk di tabel `products` (kolom `code`).
      * Value = daftar kode_cell yang sah untuk produk tsb.
      *
-     * CATATAN: 1 produk (kode Excel "SBBM" / "SBB Mitra Fz", kategori
-     * BONELESS, 24 cell: 2A04-2A48 kolom genap) BELUM dimasukkan di sini
-     * karena produk ini belum ada di Master Produk (`products` table).
-     * Setelah produk itu ditambahkan, tambahkan baris berikut di
-     * $mapping (kode produk baru => cell-cell ini):
-     *   '2A04','2A05','2A06','2A10','2A11','2A12','2A16','2A17','2A18',
-     *   '2A22','2A23','2A24','2A28','2A29','2A30','2A34','2A35','2A36',
-     *   '2A40','2A41','2A42','2A46','2A47','2A48'
+     * Produk "SBB Mitra Fz" (kode Excel: SBBM, kategori Boneless) sudah
+     * ditambahkan ke Master Produk sebagai kode '71' (lihat
+     * BonelessProductSeeder), jadi 24 cell terkait (2A04-2A48 kolom genap)
+     * sudah dipetakan di $mapping seperti produk lain.
      *
-     * Wajib dijalankan SETELAH CellsSeeder dan seeder Products.
+     * Wajib dijalankan SETELAH CellsSeeder, seeder Products, DAN
+     * BonelessProductSeeder.
      */
     public function run(): void
     {
@@ -65,6 +62,7 @@ class ProductCellSeeder extends Seeder
             '52' => ['2A01', '2A02', '2A03', '2A07', '2A08', '2A09', '2A13', '2A14', '2A15', '2A19', '2A20', '2A21', '2A25', '2A26', '2A27', '2A31', '2A32', '2A33', '2A37', '2A38', '2A39', '2A43', '2A44', '2A45'],
             '64' => ['1A25', '1A26', '1A27', '1A28', '1A29', '1A30', '1A31', '1A32', '1A33', '1A34', '1A35', '1A36', '1A37', '1A38', '1A39', '1A40', '1A41', '1A42', '1A43', '1A44', '1A45', '1A46', '1A47', '1A48'],
             '67' => ['1A01', '1A02', '1A03', '1A04', '1A05', '1A06', '1A07', '1A08', '1A09', '1A10', '1A11', '1A12', '1A13', '1A14', '1A15', '1A16', '1A17', '1A18', '1A19', '1A20', '1A21', '1A22', '1A23', '1A24'],
+            '71' => ['2A04', '2A05', '2A06', '2A10', '2A11', '2A12', '2A16', '2A17', '2A18', '2A22', '2A23', '2A24', '2A28', '2A29', '2A30', '2A34', '2A35', '2A36', '2A40', '2A41', '2A42', '2A46', '2A47', '2A48'],
         ];
 
         $skippedProduk = [];
