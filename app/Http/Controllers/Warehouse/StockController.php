@@ -215,7 +215,7 @@ class StockController extends Controller
             if ($normalized === 'JUMLAH (BAG)' || $normalized === 'JUMLAH') {
                 $colJumlah = $colLetter;
             }
-            if ($normalized === 'JUMLAH (KG)') {
+            if ($normalized === 'JUMLAH (KG)' || $normalized === 'KG') {
                 $colJumlahKg = $colLetter;
             }
         }
