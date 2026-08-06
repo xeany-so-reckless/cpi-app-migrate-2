@@ -82,7 +82,27 @@ class StockController extends Controller
             ->select('cell_id', DB::raw('SUM(selisih) as total'))
             ->pluck('total', 'cell_id');
 
-        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg) {
+        // --- KG: dihitung terpisah dari bag. PENDING reservation TIDAK
+        // ikut dihitung disini (belum ada berat pasti sebelum TPR input
+        // kg per bag), beda dengan versi bag yang ikut hitung PENDING. ---
+        $usedKgAgg = DB::table('cell_reservations')
+            ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
+            ->where('cell_reservations.status', 'USED')
+            ->groupBy('cell_reservations.cell_id')
+            ->select('cell_reservations.cell_id', DB::raw('SUM(
+                serah_terima_batches.kg_bag_1 + serah_terima_batches.kg_bag_2 + serah_terima_batches.kg_bag_3 +
+                serah_terima_batches.kg_bag_4 + serah_terima_batches.kg_bag_5 + serah_terima_batches.kg_bag_6 +
+                serah_terima_batches.kg_bag_7 + serah_terima_batches.kg_bag_8 + serah_terima_batches.kg_bag_9 +
+                serah_terima_batches.kg_bag_10
+            ) as total'))
+            ->pluck('total', 'cell_id');
+
+        $adjustmentKgAgg = DB::table('cell_stock_adjustments')
+            ->groupBy('cell_id')
+            ->select('cell_id', DB::raw('SUM(selisih_kg) as total'))
+            ->pluck('total', 'cell_id');
+
+        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg, $usedKgAgg, $adjustmentKgAgg) {
             $used = (int) ($usedAgg[$c->id] ?? 0);
             $pending = (int) ($pendingAgg[$c->id] ?? 0);
             $adjustment = (int) ($adjustmentAgg[$c->id] ?? 0);
@@ -90,6 +110,14 @@ class StockController extends Controller
             $sisa = max(0, $c->kapasitas_max - $terpakai);
             $persenTerisi = $c->kapasitas_max > 0
                 ? round(($terpakai / $c->kapasitas_max) * 100, 1)
+                : 0;
+
+            $usedKg = (float) ($usedKgAgg[$c->id] ?? 0);
+            $adjustmentKg = (float) ($adjustmentKgAgg[$c->id] ?? 0);
+            $terpakaiKg = max(0, round($usedKg + $adjustmentKg, 2));
+            $sisaKg = $c->kapasitas_max_kg !== null ? max(0, round((float) $c->kapasitas_max_kg - $terpakaiKg, 2)) : null;
+            $persenTerisiKg = ($c->kapasitas_max_kg !== null && $c->kapasitas_max_kg > 0)
+                ? round(($terpakaiKg / $c->kapasitas_max_kg) * 100, 1)
                 : 0;
 
             return [
@@ -104,6 +132,10 @@ class StockController extends Controller
                 'terpakaiAdjustment' => $adjustment,
                 'sisa'           => $sisa,
                 'persenTerisi'   => $persenTerisi,
+                'kapasitasMaxKg' => $c->kapasitas_max_kg,
+                'terpakaiKg'     => $terpakaiKg,
+                'sisaKg'         => $sisaKg,
+                'persenTerisiKg' => $persenTerisiKg,
                 'produk'         => $c->products->map(fn (Product $p) => [
                     'code'     => $p->code,
                     'name'     => $p->name,
@@ -143,12 +175,12 @@ class StockController extends Controller
     /**
      * Upload Excel data real dari lapangan (SPV/Admin Gudang).
      * Format kolom wajib (header baris pertama, urutan bebas):
-     * KODE CELL, COLD STORAGE, LANTAI, KODE PRODUK, NAMA PRODUK,
-     * KAPASITAS, JUMLAH (BAG)
-     *
-     * Cuma kolom "KODE CELL" dan "JUMLAH (BAG)" yang benar-benar dipakai
-     * untuk hitung penyesuaian - kolom lain cuma informasi/referensi dari
-     * sisi Excel, tidak menimpa data master di sistem.
+     * KODE CELL, JUMLAH (BAG)
+     * Kolom opsional (kalau ada, ikut diproses buat penyesuaian kg):
+     * JUMLAH (KG)
+     * Kolom lain (COLD STORAGE, LANTAI, KODE PRODUK, NAMA PRODUK,
+     * KAPASITAS, KAPASITAS (KG)) cuma informasi/referensi dari sisi
+     * Excel, tidak menimpa data master di sistem.
      *
      * Baris dengan kode cell yang tidak ditemukan di sistem di-skip
      * (bukan gagal total), dan dilaporkan balik ke frontend.
@@ -174,6 +206,7 @@ class StockController extends Controller
         // tetap jalan walau urutan kolom di Excel-nya beda-beda.
         $colKodeCell = null;
         $colJumlah = null;
+        $colJumlahKg = null;
         foreach ($headerRow as $colLetter => $headerText) {
             $normalized = strtoupper(trim((string) $headerText));
             if ($normalized === 'KODE CELL') {
@@ -181,6 +214,9 @@ class StockController extends Controller
             }
             if ($normalized === 'JUMLAH (BAG)' || $normalized === 'JUMLAH') {
                 $colJumlah = $colLetter;
+            }
+            if ($normalized === 'JUMLAH (KG)') {
+                $colJumlahKg = $colLetter;
             }
         }
 
@@ -197,6 +233,7 @@ class StockController extends Controller
             $row = $rows[$rowKey];
             $kodeCell = trim((string) ($row[$colKodeCell] ?? ''));
             $jumlahRaw = $row[$colJumlah] ?? null;
+            $jumlahKgRaw = $colJumlahKg ? ($row[$colJumlahKg] ?? null) : null;
 
             if ($kodeCell === '') {
                 continue; // baris kosong, lewati diam-diam
@@ -217,11 +254,20 @@ class StockController extends Controller
             $terpakaiSebelum = $this->hitungTerpakaiSistem($cell);
             $selisih = $jumlahAktual - $terpakaiSebelum;
 
+            // KG opsional: kalau kolomnya tidak ada di Excel (atau kosong
+            // di baris ini), anggap tidak ada perubahan kg (selisih_kg=0).
+            $kgSebelum = $this->hitungKgTerpakaiSistem($cell);
+            $kgAktual = ($jumlahKgRaw !== null && $jumlahKgRaw !== '') ? (float) $jumlahKgRaw : $kgSebelum;
+            $selisihKg = round($kgAktual - $kgSebelum, 2);
+
             CellStockAdjustment::create([
                 'cell_id'               => $cell->id,
                 'jumlah_sistem_sebelum' => $terpakaiSebelum,
                 'jumlah_aktual'         => $jumlahAktual,
                 'selisih'               => $selisih,
+                'kg_sistem_sebelum'     => $kgSebelum,
+                'kg_aktual'             => $kgAktual,
+                'selisih_kg'            => $selisihKg,
                 'sumber'                => 'upload_excel',
                 'nama_file'             => $file->getClientOriginalName(),
                 'user_id'               => $user->id,
@@ -266,5 +312,27 @@ class StockController extends Controller
         $adjustment = $cell->totalAdjustment();
 
         return $used + $pending + $adjustment;
+    }
+
+    /**
+     * Versi KG dari hitungTerpakaiSistem() - dipakai sebagai baseline
+     * "kg_sistem_sebelum" saat upload Excel. PENDING reservation TIDAK
+     * ikut dihitung (belum ada berat pasti).
+     */
+    private function hitungKgTerpakaiSistem(Cell $cell): float
+    {
+        $usedKg = (float) DB::table('cell_reservations')
+            ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
+            ->where('cell_reservations.cell_id', $cell->id)
+            ->where('cell_reservations.status', 'USED')
+            ->selectRaw('COALESCE(SUM(
+                kg_bag_1 + kg_bag_2 + kg_bag_3 + kg_bag_4 + kg_bag_5 +
+                kg_bag_6 + kg_bag_7 + kg_bag_8 + kg_bag_9 + kg_bag_10
+            ), 0) as total')
+            ->value('total');
+
+        $adjustmentKg = $cell->totalAdjustmentKg();
+
+        return round($usedKg + $adjustmentKg, 2);
     }
 }

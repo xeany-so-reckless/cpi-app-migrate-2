@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Stock Warehouse - CPI App Migrate</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0" />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -125,14 +125,13 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-
-        .btn-reset:hover {
+        .btn-reset:hover { 
             background: #bb2d3b;
             border-color: #bb2d3b;
             color: #fff;
-        }
+         }
 
-                .btn-upload {
+        .btn-upload {
             background: #16a34a;
             border: 1px solid #16a34a;
             color: #fff;
@@ -189,22 +188,6 @@
             border-radius: 5px;
             white-space: nowrap;
         }
-
-        .cell-status-dot {
-            display: inline-block;
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            margin-right: 6px;
-            vertical-align: middle;
-            animation: dot-pulse 1.6s ease-in-out infinite;
-        }
-        .cell-status-dot.ok { background: var(--ice); box-shadow: 0 0 6px var(--ice); }
-        .cell-status-dot.warn { background: var(--hazard); box-shadow: 0 0 6px var(--hazard); }
-        .cell-status-dot.danger { background: #dc2626; box-shadow: 0 0 6px #dc2626; }
-        @keyframes dot-pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: .4; transform: scale(0.75); }
-        }
         .produk-chip {
             display: inline-block;
             font-size: 0.72rem;
@@ -239,29 +222,78 @@
         }
 
         .loading-state { text-align: center; padding: 50px; color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+
+        .cell-status-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            animation: dot-pulse 1.6s ease-in-out infinite;
+        }
+        .cell-status-dot.ok { background: var(--ice); box-shadow: 0 0 6px var(--ice); }
+        .cell-status-dot.warn { background: var(--hazard); box-shadow: 0 0 6px var(--hazard); }
+        .cell-status-dot.danger { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+        @keyframes dot-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: .4; transform: scale(0.75); }
+        }
+
+        .toggle-group {
+            display: inline-flex;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 3px;
+            gap: 3px;
+        }
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+        .toggle-btn.active { background: var(--ice); color: #05141a; }
+        .toggle-btn:not(.active):hover { color: var(--text); }
     </style>
 </head>
 <body>
-@php
-    $currentUser = auth()->guard('tally')->user();
-@endphp
+
+    @php
+        $currentUser = auth()->guard('tally')->user();
+    @endphp
+
     <nav>
         <div class="logo">
             <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
             <span>STOCK WAREHOUSE</span>
         </div>
-            <div style="display:flex; align-items:center; gap:16px;">
-                <span class="mono" style="font-size:0.78rem; color: var(--muted);">{{ $currentUser->name }}</span>
-                <form id="logoutForm" method="POST" action="{{ route('warehouse.stock.logout') }}">
-                    @csrf
-                    <button type="button" class="btn-reset" style="cursor:pointer;" onclick="confirmLogout()">Keluar</button>
-                </form>
-            </div>
+        <div style="display:flex; align-items:center; gap:16px;">
+            <span class="mono" style="font-size:0.78rem; color: var(--muted);">{{ $currentUser->name }}</span>
+            <form id="logoutForm" method="POST" action="{{ route('warehouse.stock.logout') }}">
+                @csrf
+                <button type="button" class="btn-reset" style="cursor:pointer;" onclick="confirmLogout()">Keluar</button>
+            </form>
+        </div>
     </nav>
 
     <div class="page-header">
         <div class="page-eyebrow">Real-time Monitoring</div>
         <div class="page-title">Stock Warehouse</div>
+    </div>
+
+    <div style="padding: 0 5% 16px; display:flex; justify-content:flex-end;">
+        <div class="toggle-group">
+            <button class="toggle-btn active" id="btnViewBag" onclick="setViewMode('bag')">BY BAG</button>
+            <button class="toggle-btn" id="btnViewKg" onclick="setViewMode('kg')">BY KG</button>
+        </div>
     </div>
 
     <div class="stat-strip" id="statStrip">
@@ -270,11 +302,11 @@
             <div class="stat-value" id="statTotalCell">-</div>
         </div>
         <div class="stat-box ice">
-            <div class="stat-label">Total Kapasitas (Bag)</div>
+            <div class="stat-label">Total Kapasitas (<span id="unitLabel1">Bag</span>)</div>
             <div class="stat-value" id="statTotalKapasitas">-</div>
         </div>
         <div class="stat-box">
-            <div class="stat-label">Total Terpakai (Bag)</div>
+            <div class="stat-label">Total Terpakai (<span id="unitLabel2">Bag</span>)</div>
             <div class="stat-value" id="statTotalTerpakai">-</div>
         </div>
         <div class="stat-box warn">
@@ -290,10 +322,9 @@
         <select id="filterKategori"><option value="">Semua Kategori</option></select>
         <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
         <button class="btn-upload" onclick="document.getElementById('excelUploadInput').click()">
-    <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file
-        </span> Upload Excel
-</button>
-<input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
+            <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file</span> Upload Excel
+        </button>
+        <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
     </div>
 
     <div class="table-section">
@@ -306,40 +337,103 @@
                         <th>Lantai</th>
                         <th>Kode Produk</th>
                         <th>Nama Produk</th>
-                        <th class="num">Kapasitas</th>
-                        <th class="num">Terpakai</th>
-                        <th class="num">Sisa</th>
+                        <th class="num">Kapasitas (<span id="unitLabel3">Bag</span>)</th>
+                        <th class="num">Terpakai (<span id="unitLabel4">Bag</span>)</th>
+                        <th class="num">Sisa (<span id="unitLabel5">Bag</span>)</th>
                         <th style="width: 160px;">% Terisi</th>
                     </tr>
                 </thead>
                 <tbody id="stockTableBody">
-                    <tr><td colspan="8" class="loading-state">Memuat data...</td></tr>
+                    <tr><td colspan="9" class="loading-state">Memuat data...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <script>
-
-        function confirmLogout() {
-    Swal.fire({
-        title: 'Keluar dari Sistem?',
-        html: '<div style="font-size:14px;color:#64798c;">Anda akan keluar dari <b>Stock Warehouse</b>.</div>',
-        icon: 'question',
-        showCancelButton: true,
-        reverseButtons: true,
-        confirmButtonText: 'Ya, Keluar',
-        cancelButtonText: 'Batal',
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#64798c',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            document.getElementById('logoutForm').submit();
-        }
-    });
-}
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         let allStockData = [];
+        let viewMode = 'bag'; // 'bag' atau 'kg'
+
+        function confirmLogout() {
+            Swal.fire({
+                title: 'Keluar dari Sistem?',
+                html: '<div style="font-size:14px;color:#64798c;">Anda akan keluar dari <b>Stock Warehouse</b>.</div>',
+                icon: 'question',
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonText: 'Ya, Keluar',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#64798c',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('logoutForm').submit();
+                }
+            });
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            document.getElementById('btnViewBag').classList.toggle('active', mode === 'bag');
+            document.getElementById('btnViewKg').classList.toggle('active', mode === 'kg');
+
+            const unitText = mode === 'bag' ? 'Bag' : 'Kg';
+            ['unitLabel1', 'unitLabel2', 'unitLabel3', 'unitLabel4', 'unitLabel5'].forEach(id => {
+                document.getElementById(id).innerText = unitText;
+            });
+
+            renderStats(allStockData);
+            renderTable(allStockData);
+        }
+
+        async function handleExcelUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            Swal.fire({
+                title: 'Memproses Excel...',
+                html: 'Mohon tunggu, sedang membaca & menyesuaikan data.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            try {
+                const res = await fetch(`{{ route('warehouse.stock.upload') }}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    body: formData,
+                });
+                const result = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(result.message || 'Gagal memproses file.');
+                }
+
+                let dilewatiHtml = '';
+                if (result.dilewati.length > 0) {
+                    dilewatiHtml = `<div style="text-align:left; max-height:200px; overflow-y:auto; margin-top:12px; font-size:12px;">
+                        <b>Dilewati (${result.dilewati.length}):</b>
+                        <ul>${result.dilewati.map(d => `<li>Baris ${d.baris} (${d.kode_cell}): ${d.alasan}</li>`).join('')}</ul>
+                    </div>`;
+                }
+
+                await Swal.fire({
+                    title: 'Selesai!',
+                    html: `<div>${result.berhasil} cell berhasil disesuaikan.</div>${dilewatiHtml}`,
+                    icon: result.dilewati.length > 0 ? 'warning' : 'success',
+                });
+
+                loadStockData();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            } finally {
+                input.value = '';
+            }
+        }
 
         async function loadFilterOptions() {
             try {
@@ -382,7 +476,7 @@
 
         async function loadStockData() {
             const tbody = document.getElementById('stockTableBody');
-            tbody.innerHTML = `<tr><td colspan="8" class="loading-state">Memuat data...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" class="loading-state">Memuat data...</td></tr>`;
 
             try {
                 const qs = buildQueryParams();
@@ -392,19 +486,27 @@
                 renderTable(data);
                 renderStats(data);
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
             }
         }
 
         function renderStats(data) {
             const totalCell = data.length;
-            const totalKapasitas = data.reduce((a, b) => a + b.kapasitasMax, 0);
-            const totalTerpakai = data.reduce((a, b) => a + b.terpakai, 0);
-            const cellPenuh = data.filter(d => d.persenTerisi > 90).length;
+            let totalKapasitas, totalTerpakai, cellPenuh;
+
+            if (viewMode === 'bag') {
+                totalKapasitas = data.reduce((a, b) => a + Number(b.kapasitasMax || 0), 0);
+                totalTerpakai = data.reduce((a, b) => a + Number(b.terpakai || 0), 0);
+                cellPenuh = data.filter(d => d.persenTerisi > 90).length;
+            } else {
+                totalKapasitas = data.reduce((a, b) => a + Number(b.kapasitasMaxKg || 0), 0);
+                totalTerpakai = data.reduce((a, b) => a + Number(b.terpakaiKg || 0), 0);
+                cellPenuh = data.filter(d => d.persenTerisiKg > 90).length;
+            }
 
             document.getElementById('statTotalCell').innerText = totalCell.toLocaleString('id-ID');
-            document.getElementById('statTotalKapasitas').innerText = totalKapasitas.toLocaleString('id-ID');
-            document.getElementById('statTotalTerpakai').innerText = totalTerpakai.toLocaleString('id-ID');
+            document.getElementById('statTotalKapasitas').innerText = totalKapasitas.toLocaleString('id-ID', { maximumFractionDigits: 1 });
+            document.getElementById('statTotalTerpakai').innerText = totalTerpakai.toLocaleString('id-ID', { maximumFractionDigits: 1 });
             document.getElementById('statCellPenuh').innerText = cellPenuh.toLocaleString('id-ID');
         }
 
@@ -418,7 +520,7 @@
             const tbody = document.getElementById('stockTableBody');
 
             if (data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Tidak ada cell yang cocok dengan filter ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Tidak ada cell yang cocok dengan filter ini.</td></tr>`;
                 return;
             }
 
@@ -430,7 +532,22 @@
                     ? d.produk.map(p => `<span class="produk-chip">${p.name}</span>`).join('')
                     : `<span class="produk-chip">-</span>`;
 
-                const pClass = progressClass(d.persenTerisi);
+                const fmt = (v) => (v === null || v === undefined || v === '-') ? '-' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+
+                let kapasitas, terpakai, sisa, persen;
+                if (viewMode === 'bag') {
+                    kapasitas = fmt(d.kapasitasMax);
+                    terpakai = fmt(d.terpakai);
+                    sisa = fmt(d.sisa);
+                    persen = d.persenTerisi;
+                } else {
+                    kapasitas = fmt(d.kapasitasMaxKg);
+                    terpakai = fmt(d.terpakaiKg);
+                    sisa = fmt(d.sisaKg);
+                    persen = d.persenTerisiKg ?? 0;
+                }
+
+                const pClass = progressClass(persen);
 
                 return `
                     <tr>
@@ -439,13 +556,13 @@
                         <td>${d.lantai ?? '-'}</td>
                         <td>${kodeChips}</td>
                         <td>${namaChips}</td>
-                        <td class="num">${d.kapasitasMax}</td>
-                        <td class="num">${d.terpakai}</td>
-                        <td class="num">${d.sisa}</td>
+                        <td class="num">${kapasitas}</td>
+                        <td class="num">${terpakai}</td>
+                        <td class="num">${sisa}</td>
                         <td>
-                            <span class="persen-label">${d.persenTerisi}%</span>
+                            <span class="persen-label">${persen}%</span>
                             <div class="progress-track">
-                                <div class="progress-fill ${pClass}" style="width: ${Math.min(100, d.persenTerisi)}%;"></div>
+                                <div class="progress-fill ${pClass}" style="width: ${Math.min(100, persen)}%;"></div>
                             </div>
                         </td>
                     </tr>
@@ -460,54 +577,6 @@
             document.getElementById('filterKategori').value = '';
             loadStockData();
         }
-
-        async function handleExcelUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    Swal.fire({
-        title: 'Memproses Excel...',
-        html: 'Mohon tunggu, sedang membaca & menyesuaikan data.',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading(),
-    });
-
-    try {
-        const res = await fetch(`{{ route('warehouse.stock.upload') }}`, {
-            method: 'POST',
-            headers: { 'X-CSRF-TOKEN': csrfToken },
-            body: formData,
-        });
-        const result = await res.json();
-
-        if (!res.ok) {
-            throw new Error(result.message || 'Gagal memproses file.');
-        }
-
-        let dilewatiHtml = '';
-        if (result.dilewati.length > 0) {
-            dilewatiHtml = `<div style="text-align:left; max-height:200px; overflow-y:auto; margin-top:12px; font-size:12px;">
-                <b>Dilewati (${result.dilewati.length}):</b>
-                <ul>${result.dilewati.map(d => `<li>Baris ${d.baris} (${d.kode_cell}): ${d.alasan}</li>`).join('')}</ul>
-            </div>`;
-        }
-
-        await Swal.fire({
-            title: 'Selesai!',
-            html: `<div>${result.berhasil} cell berhasil disesuaikan.</div>${dilewatiHtml}`,
-            icon: result.dilewati.length > 0 ? 'warning' : 'success',
-        });
-
-        loadStockData();
-    } catch (err) {
-        Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
-    } finally {
-        input.value = '';
-    }
-}
 
         document.getElementById('filterSearch').addEventListener('input', debounce(loadStockData, 400));
         document.getElementById('filterColdStorage').addEventListener('change', loadStockData);

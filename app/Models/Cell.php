@@ -13,6 +13,7 @@ class Cell extends Model
         'cold_storage',
         'lantai',
         'kapasitas_max',
+        'kapasitas_max_kg',
         'is_active',
     ];
 
@@ -46,6 +47,45 @@ class Cell extends Model
     public function totalAdjustment(): int
     {
         return (int) $this->adjustments()->sum('selisih');
+    }
+
+    /**
+     * Total selisih KG dari semua penyesuaian (upload Excel) - dipakai
+     * untuk hitung total kg per cell, dikombinasikan dengan kg dari batch
+     * Inbound asli (kg_bag_1..10 di serah_terima_batches).
+     */
+    public function totalAdjustmentKg(): float
+    {
+        return (float) $this->adjustments()->sum('selisih_kg');
+    }
+
+    /**
+     * Total kg terpakai saat ini. Beda dengan versi bag, disini kg
+     * PENDING reservation TIDAK dihitung (karena belum ada berat pasti
+     * sebelum TPR input kg per bag-nya) - cuma dari batch yang statusnya
+     * sudah USED (kg_bag_1..10 asli) + penyesuaian kg dari upload Excel.
+     */
+    public function terpakaiKg(): float
+    {
+        $usedKg = $this->reservations()
+            ->where('status', 'USED')
+            ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
+            ->selectRaw('COALESCE(SUM(
+                kg_bag_1 + kg_bag_2 + kg_bag_3 + kg_bag_4 + kg_bag_5 +
+                kg_bag_6 + kg_bag_7 + kg_bag_8 + kg_bag_9 + kg_bag_10
+            ), 0) as total')
+            ->value('total');
+
+        return (float) $usedKg + $this->totalAdjustmentKg();
+    }
+
+    public function sisaKapasitasKg(): float
+    {
+        if ($this->kapasitas_max_kg === null) {
+            return 0;
+        }
+
+        return max(0, (float) $this->kapasitas_max_kg - $this->terpakaiKg());
     }
 
     /**
