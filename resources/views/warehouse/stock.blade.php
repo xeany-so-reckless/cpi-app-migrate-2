@@ -494,10 +494,19 @@
                     lantaiSelect.innerHTML += `<option value="${v}">${v}</option>`;
                 });
 
-                const kategoriSelect = document.getElementById('filterKategori');
-                opts.kategori.forEach(v => {
-                    kategoriSelect.innerHTML += `<option value="${v}">${v}</option>`;
-                });
+const kategoriLabels = {
+    'kw1': 'Premium',
+    'kw2': 'Super',
+};
+const kategoriDihapus = ['bahan_baku'];
+
+const kategoriSelect = document.getElementById('filterKategori');
+opts.kategori
+    .filter(v => !kategoriDihapus.includes(v))
+    .forEach(v => {
+        const label = kategoriLabels[v] || v;
+        kategoriSelect.innerHTML += `<option value="${v}">${label}</option>`;
+    });
             } catch (err) {
                 console.error('Gagal memuat filter options:', err);
             }
