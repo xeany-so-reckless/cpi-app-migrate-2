@@ -130,8 +130,7 @@
             border-color: #bb2d3b;
             color: #fff;
          }
-
-        .btn-upload {
+                .btn-upload {
             background: #16a34a;
             border: 1px solid #16a34a;
             color: #fff;
@@ -262,6 +261,50 @@
         }
         .toggle-btn.active { background: var(--ice); color: #05141a; }
         .toggle-btn:not(.active):hover { color: var(--text); }
+
+        .cell-row { cursor: pointer; }
+        .cell-row:hover { background: var(--surface-hover); }
+        .expand-icon {
+            font-size: 16px !important;
+            vertical-align: middle;
+            color: var(--muted-dim);
+            transition: transform .15s ease;
+        }
+        .expand-icon.open { transform: rotate(180deg); color: var(--ice-text); }
+
+        .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--line); background: #f7fafc; }
+        .warna-breakdown { display: flex; gap: 10px; padding: 14px 16px; flex-wrap: wrap; }
+        .warna-card {
+            flex: 1;
+            min-width: 130px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--wc);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+        .warna-card .label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--wc);
+            margin-bottom: 4px;
+        }
+        .warna-card .value {
+            font-family: 'Barlow Condensed', sans-serif;
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: var(--text);
+        }
+        .warna-card .sub {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .warna-empty { padding: 14px 16px; font-size: 0.8rem; color: var(--muted); font-style: italic; }
     </style>
 </head>
 <body>
@@ -353,6 +396,7 @@
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         let allStockData = [];
+        let expandedCells = new Set();
         let viewMode = 'bag'; // 'bag' atau 'kg'
 
         function confirmLogout() {
@@ -548,10 +592,14 @@
                 }
 
                 const pClass = progressClass(persen);
+                const isExpanded = expandedCells.has(d.id);
 
-                return `
-                    <tr>
-                        <td><span class="cell-status-dot ${pClass}"></span><span class="cell-chip">${d.kodeCell}</span></td>
+                const mainRow = `
+                    <tr class="cell-row" onclick="toggleExpand(${d.id})">
+                        <td>
+                            <span class="material-symbols-outlined expand-icon ${isExpanded ? 'open' : ''}">expand_more</span>
+                            <span class="cell-status-dot ${pClass}"></span><span class="cell-chip">${d.kodeCell}</span>
+                        </td>
                         <td>${d.coldStorage ?? '-'}</td>
                         <td>${d.lantai ?? '-'}</td>
                         <td>${kodeChips}</td>
@@ -567,7 +615,50 @@
                         </td>
                     </tr>
                 `;
+
+                const detailRow = isExpanded ? `
+                    <tr class="detail-row">
+                        <td colspan="9">${renderWarnaBreakdown(d.breakdownWarna)}</td>
+                    </tr>
+                ` : '';
+
+                return mainRow + detailRow;
             }).join('');
+        }
+
+        function toggleExpand(cellId) {
+            if (expandedCells.has(cellId)) {
+                expandedCells.delete(cellId);
+            } else {
+                expandedCells.add(cellId);
+            }
+            renderTable(allStockData);
+        }
+
+        function renderWarnaBreakdown(w) {
+            if (!w) return `<div class="warna-empty">Belum ada data breakdown warna untuk cell ini.</div>`;
+
+            const fmt = (v) => Number(v || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+            const total = (w.merah?.bag || 0) + (w.biru?.bag || 0) + (w.hijau?.bag || 0) + (w.kuning?.bag || 0);
+
+            if (total === 0) {
+                return `<div class="warna-empty">Belum ada breakdown warna untuk cell ini (upload Excel dengan kolom BAG MERAH/BIRU/HIJAU/KUNING).</div>`;
+            }
+
+            const cards = [
+                { key: 'merah', label: 'Merah (Jan-Mar)', color: '#ef4444' },
+                { key: 'biru', label: 'Biru (Apr-Jun)', color: '#3b82f6' },
+                { key: 'hijau', label: 'Hijau (Jul-Sep)', color: '#22c55e' },
+                { key: 'kuning', label: 'Kuning (Okt-Des)', color: '#eab308' },
+            ];
+
+            return `<div class="warna-breakdown">` + cards.map(c => `
+                <div class="warna-card" style="--wc: ${c.color};">
+                    <div class="label">${c.label}</div>
+                    <div class="value">${fmt(w[c.key]?.bag)} Bag</div>
+                    <div class="sub">${fmt(w[c.key]?.kg)} Kg</div>
+                </div>
+            `).join('') + `</div>`;
         }
 
         function resetFilters() {

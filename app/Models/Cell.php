@@ -89,6 +89,36 @@ class Cell extends Model
     }
 
     /**
+     * Breakdown stock per warna (kuartal produksi), gabungan dari semua
+     * penyesuaian (upload Excel) yang pernah ada untuk cell ini.
+     * Dipakai buat tampilan "klik cell -> lihat rincian per warna".
+     *
+     * Merah = Jan-Mar, Biru = Apr-Jun, Hijau = Jul-Sep, Kuning = Okt-Des.
+     */
+    public function breakdownWarna(): array
+    {
+        $row = $this->adjustments()
+            ->selectRaw('
+                COALESCE(SUM(bag_merah), 0) as bag_merah,
+                COALESCE(SUM(bag_biru), 0) as bag_biru,
+                COALESCE(SUM(bag_hijau), 0) as bag_hijau,
+                COALESCE(SUM(bag_kuning), 0) as bag_kuning,
+                COALESCE(SUM(kg_merah), 0) as kg_merah,
+                COALESCE(SUM(kg_biru), 0) as kg_biru,
+                COALESCE(SUM(kg_hijau), 0) as kg_hijau,
+                COALESCE(SUM(kg_kuning), 0) as kg_kuning
+            ')
+            ->first();
+
+        return [
+            'merah'  => ['bag' => (int) $row->bag_merah, 'kg' => (float) $row->kg_merah],
+            'biru'   => ['bag' => (int) $row->bag_biru, 'kg' => (float) $row->kg_biru],
+            'hijau'  => ['bag' => (int) $row->bag_hijau, 'kg' => (float) $row->kg_hijau],
+            'kuning' => ['bag' => (int) $row->bag_kuning, 'kg' => (float) $row->kg_kuning],
+        ];
+    }
+
+    /**
      * Sisa kapasitas (dalam bag) saat ini.
      * Terpakai = SUM bag dari reservasi yang sudah USED (jumlah_bag batch
      * sebenarnya) + reservasi yang masih PENDING (pakai max_bag_allowed,

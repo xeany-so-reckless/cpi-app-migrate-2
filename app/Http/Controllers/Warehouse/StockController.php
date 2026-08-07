@@ -102,7 +102,25 @@ class StockController extends Controller
             ->select('cell_id', DB::raw('SUM(selisih_kg) as total'))
             ->pluck('total', 'cell_id');
 
-        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg, $usedKgAgg, $adjustmentKgAgg) {
+        // --- Breakdown warna (kuartal produksi), gabungan dari semua
+        // penyesuaian yang pernah ada untuk tiap cell. ---
+        $warnaAgg = DB::table('cell_stock_adjustments')
+            ->groupBy('cell_id')
+            ->select(
+                'cell_id',
+                DB::raw('SUM(bag_merah) as bag_merah'),
+                DB::raw('SUM(bag_biru) as bag_biru'),
+                DB::raw('SUM(bag_hijau) as bag_hijau'),
+                DB::raw('SUM(bag_kuning) as bag_kuning'),
+                DB::raw('SUM(kg_merah) as kg_merah'),
+                DB::raw('SUM(kg_biru) as kg_biru'),
+                DB::raw('SUM(kg_hijau) as kg_hijau'),
+                DB::raw('SUM(kg_kuning) as kg_kuning'),
+            )
+            ->get()
+            ->keyBy('cell_id');
+
+        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg, $usedKgAgg, $adjustmentKgAgg, $warnaAgg) {
             $used = (int) ($usedAgg[$c->id] ?? 0);
             $pending = (int) ($pendingAgg[$c->id] ?? 0);
             $adjustment = (int) ($adjustmentAgg[$c->id] ?? 0);
@@ -120,6 +138,14 @@ class StockController extends Controller
                 ? round(($terpakaiKg / $c->kapasitas_max_kg) * 100, 1)
                 : 0;
 
+            $w = $warnaAgg[$c->id] ?? null;
+            $breakdownWarna = [
+                'merah'  => ['bag' => (int) ($w->bag_merah ?? 0), 'kg' => (float) ($w->kg_merah ?? 0)],
+                'biru'   => ['bag' => (int) ($w->bag_biru ?? 0), 'kg' => (float) ($w->kg_biru ?? 0)],
+                'hijau'  => ['bag' => (int) ($w->bag_hijau ?? 0), 'kg' => (float) ($w->kg_hijau ?? 0)],
+                'kuning' => ['bag' => (int) ($w->bag_kuning ?? 0), 'kg' => (float) ($w->kg_kuning ?? 0)],
+            ];
+
             return [
                 'id'             => $c->id,
                 'kodeCell'       => $c->kode_cell,
@@ -136,6 +162,7 @@ class StockController extends Controller
                 'terpakaiKg'     => $terpakaiKg,
                 'sisaKg'         => $sisaKg,
                 'persenTerisiKg' => $persenTerisiKg,
+                'breakdownWarna' => $breakdownWarna,
                 'produk'         => $c->products->map(fn (Product $p) => [
                     'code'     => $p->code,
                     'name'     => $p->name,
@@ -176,8 +203,12 @@ class StockController extends Controller
      * Upload Excel data real dari lapangan (SPV/Admin Gudang).
      * Format kolom wajib (header baris pertama, urutan bebas):
      * KODE CELL, JUMLAH (BAG)
-     * Kolom opsional (kalau ada, ikut diproses buat penyesuaian kg):
-     * JUMLAH (KG)
+     * Kolom opsional (kalau ada, ikut diproses):
+     * JUMLAH (KG) - total kg
+     * BAG MERAH, BAG BIRU, BAG HIJAU, BAG KUNING - breakdown bag per kuartal
+     * KG MERAH, KG BIRU, KG HIJAU, KG KUNING - breakdown kg per kuartal
+     * (Merah=Jan-Mar, Biru=Apr-Jun, Hijau=Jul-Sep, Kuning=Okt-Des)
+     *
      * Kolom lain (COLD STORAGE, LANTAI, KODE PRODUK, NAMA PRODUK,
      * KAPASITAS, KAPASITAS (KG)) cuma informasi/referensi dari sisi
      * Excel, tidak menimpa data master di sistem.
@@ -207,6 +238,14 @@ class StockController extends Controller
         $colKodeCell = null;
         $colJumlah = null;
         $colJumlahKg = null;
+        $colBagMerah = null;
+        $colBagBiru = null;
+        $colBagHijau = null;
+        $colBagKuning = null;
+        $colKgMerah = null;
+        $colKgBiru = null;
+        $colKgHijau = null;
+        $colKgKuning = null;
         foreach ($headerRow as $colLetter => $headerText) {
             $normalized = strtoupper(trim((string) $headerText));
             if ($normalized === 'KODE CELL') {
@@ -217,6 +256,30 @@ class StockController extends Controller
             }
             if ($normalized === 'JUMLAH (KG)' || $normalized === 'KG') {
                 $colJumlahKg = $colLetter;
+            }
+            if ($normalized === 'BAG MERAH') {
+                $colBagMerah = $colLetter;
+            }
+            if ($normalized === 'BAG BIRU') {
+                $colBagBiru = $colLetter;
+            }
+            if ($normalized === 'BAG HIJAU') {
+                $colBagHijau = $colLetter;
+            }
+            if ($normalized === 'BAG KUNING') {
+                $colBagKuning = $colLetter;
+            }
+            if ($normalized === 'KG MERAH') {
+                $colKgMerah = $colLetter;
+            }
+            if ($normalized === 'KG BIRU') {
+                $colKgBiru = $colLetter;
+            }
+            if ($normalized === 'KG HIJAU') {
+                $colKgHijau = $colLetter;
+            }
+            if ($normalized === 'KG KUNING') {
+                $colKgKuning = $colLetter;
             }
         }
 
@@ -260,6 +323,13 @@ class StockController extends Controller
             $kgAktual = ($jumlahKgRaw !== null && $jumlahKgRaw !== '') ? (float) $jumlahKgRaw : $kgSebelum;
             $selisihKg = round($kgAktual - $kgSebelum, 2);
 
+            // Breakdown warna - semua opsional, default 0 kalau kolomnya
+            // tidak ada di Excel atau kosong di baris ini.
+            $readInt = fn ($colLetter) => ($colLetter && isset($row[$colLetter]) && $row[$colLetter] !== '')
+                ? (int) $row[$colLetter] : 0;
+            $readFloat = fn ($colLetter) => ($colLetter && isset($row[$colLetter]) && $row[$colLetter] !== '')
+                ? (float) $row[$colLetter] : 0;
+
             CellStockAdjustment::create([
                 'cell_id'               => $cell->id,
                 'jumlah_sistem_sebelum' => $terpakaiSebelum,
@@ -268,6 +338,14 @@ class StockController extends Controller
                 'kg_sistem_sebelum'     => $kgSebelum,
                 'kg_aktual'             => $kgAktual,
                 'selisih_kg'            => $selisihKg,
+                'bag_merah'             => $readInt($colBagMerah),
+                'bag_biru'              => $readInt($colBagBiru),
+                'bag_hijau'             => $readInt($colBagHijau),
+                'bag_kuning'            => $readInt($colBagKuning),
+                'kg_merah'              => $readFloat($colKgMerah),
+                'kg_biru'               => $readFloat($colKgBiru),
+                'kg_hijau'              => $readFloat($colKgHijau),
+                'kg_kuning'             => $readFloat($colKgKuning),
                 'sumber'                => 'upload_excel',
                 'nama_file'             => $file->getClientOriginalName(),
                 'user_id'               => $user->id,
