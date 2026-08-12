@@ -38,6 +38,7 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
         Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
+        Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
     });
 });
 

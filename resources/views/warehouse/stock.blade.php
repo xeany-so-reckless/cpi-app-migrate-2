@@ -272,7 +272,7 @@
         }
         .expand-icon.open { transform: rotate(180deg); color: var(--ice-text); }
 
-        .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--line); background: #f7fafc; }
+        .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--line); background: #0e1620; }
         .warna-breakdown { display: flex; gap: 10px; padding: 14px 16px; flex-wrap: wrap; }
         .warna-card {
             flex: 1;
@@ -397,6 +397,7 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         let allStockData = [];
         let expandedCells = new Set();
+        let batchCache = {}; // cellId -> array batch (hasil fetch on-demand)
         let viewMode = 'bag'; // 'bag' atau 'kg'
 
         function confirmLogout() {
@@ -626,23 +627,88 @@ opts.kategori
                 `;
 
                 const detailRow = isExpanded ? `
-                    <tr class="detail-row">
-                        <td colspan="9">${renderWarnaBreakdown(d.breakdownWarna)}</td>
-                    </tr>
-                ` : '';
+    <tr class="detail-row">
+        <td colspan="9">
+            ${renderWarnaBreakdown(d.breakdownWarna)}
+            <div style="padding: 4px 16px 16px;">
+                <div class="section-label" style="margin-bottom:8px;">Batch Asli (Inbound)</div>
+                <div id="batchList-${d.id}">
+                    <div class="warna-empty">Memuat data batch...</div>
+                </div>
+            </div>
+        </td>
+    </tr>
+` : '';
 
                 return mainRow + detailRow;
             }).join('');
         }
 
         function toggleExpand(cellId) {
-            if (expandedCells.has(cellId)) {
-                expandedCells.delete(cellId);
-            } else {
-                expandedCells.add(cellId);
-            }
-            renderTable(allStockData);
-        }
+    if (expandedCells.has(cellId)) {
+        expandedCells.delete(cellId);
+        renderTable(allStockData);
+        return;
+    }
+    expandedCells.add(cellId);
+    renderTable(allStockData);
+    loadBatchesForCell(cellId);
+}
+
+async function loadBatchesForCell(cellId) {
+    if (batchCache[cellId]) {
+        renderBatchListInto(cellId, batchCache[cellId]);
+        return;
+    }
+    try {
+        const res = await fetch(`{{ url('warehouse/stock') }}/${cellId}/batches`);
+        const data = await res.json();
+        batchCache[cellId] = data;
+        renderBatchListInto(cellId, data);
+    } catch (err) {
+        const container = document.getElementById(`batchList-${cellId}`);
+        if (container) container.innerHTML = `<div class="warna-empty">Gagal memuat data batch: ${err.message}</div>`;
+    }
+}
+
+function renderBatchListInto(cellId, batches) {
+    const container = document.getElementById(`batchList-${cellId}`);
+    if (!container) return;
+    container.innerHTML = renderBatchTable(batches);
+}
+
+function renderBatchTable(batches) {
+    if (!batches || batches.length === 0) {
+        return `<div class="warna-empty">Belum ada batch asli (Inbound) yang tercatat untuk cell ini.</div>`;
+    }
+
+    const rows = batches.map(b => `
+        <tr>
+            <td class="mono" style="font-size:0.75rem;">${b.kodeProduksi}</td>
+            <td style="font-size:0.75rem;">${b.noTrolly}</td>
+            <td style="font-size:0.75rem;">${b.tanggalProduksi ?? '-'}</td>
+            <td class="num" style="font-size:0.75rem;">${b.jumlahBag}</td>
+            <td style="font-size:0.68rem; color:var(--muted);">${b.kgBags.map(k => Number(k).toLocaleString('id-ID', {maximumFractionDigits:1})).join(', ')}</td>
+            <td class="num" style="font-size:0.75rem; font-weight:700;">${Number(b.totalKg).toLocaleString('id-ID', {maximumFractionDigits:1})}</td>
+        </tr>
+    `).join('');
+
+    return `
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kode Produksi</th>
+                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">No Trolly</th>
+                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Tanggal</th>
+                    <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Jumlah Bag</th>
+                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kg per Bag</th>
+                    <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Total Kg</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
 
         function renderWarnaBreakdown(w) {
             if (!w) return `<div class="warna-empty">Belum ada data breakdown warna untuk cell ini.</div>`;

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Warehouse;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cell;
+use App\Models\CellReservation;
 use App\Models\CellStockAdjustment;
 use App\Models\Product;
 use App\Support\ActivityLogger;
@@ -120,7 +121,36 @@ class StockController extends Controller
             ->get()
             ->keyBy('cell_id');
 
-        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg, $usedKgAgg, $adjustmentKgAgg, $warnaAgg) {
+        // --- Breakdown warna dari batch ASLI Inbound - dihitung otomatis
+        // dari tanggal_produksi tiap batch (Merah=Jan-Mar, Biru=Apr-Jun,
+        // Hijau=Jul-Sep, Kuning=Okt-Des), lalu DIGABUNG dengan hasil
+        // upload Excel di atas. Jadi cell yang isinya murni dari Inbound
+        // (belum pernah di-upload-Excel-kan) tetap punya breakdown warna. ---
+        $kgExpr = 'serah_terima_batches.kg_bag_1 + serah_terima_batches.kg_bag_2 + serah_terima_batches.kg_bag_3 + '.
+            'serah_terima_batches.kg_bag_4 + serah_terima_batches.kg_bag_5 + serah_terima_batches.kg_bag_6 + '.
+            'serah_terima_batches.kg_bag_7 + serah_terima_batches.kg_bag_8 + serah_terima_batches.kg_bag_9 + '.
+            'serah_terima_batches.kg_bag_10';
+
+        $batchWarnaAgg = DB::table('cell_reservations')
+            ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
+            ->where('cell_reservations.status', 'USED')
+            ->whereNotNull('serah_terima_batches.tanggal_produksi')
+            ->groupBy('cell_reservations.cell_id')
+            ->select(
+                'cell_reservations.cell_id',
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 1 AND 3 THEN serah_terima_batches.jumlah_bag ELSE 0 END) as bag_merah"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 4 AND 6 THEN serah_terima_batches.jumlah_bag ELSE 0 END) as bag_biru"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 7 AND 9 THEN serah_terima_batches.jumlah_bag ELSE 0 END) as bag_hijau"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 10 AND 12 THEN serah_terima_batches.jumlah_bag ELSE 0 END) as bag_kuning"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 1 AND 3 THEN ({$kgExpr}) ELSE 0 END) as kg_merah"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 4 AND 6 THEN ({$kgExpr}) ELSE 0 END) as kg_biru"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 7 AND 9 THEN ({$kgExpr}) ELSE 0 END) as kg_hijau"),
+                DB::raw("SUM(CASE WHEN MONTH(serah_terima_batches.tanggal_produksi) BETWEEN 10 AND 12 THEN ({$kgExpr}) ELSE 0 END) as kg_kuning"),
+            )
+            ->get()
+            ->keyBy('cell_id');
+
+        $data = $cells->map(function (Cell $c) use ($usedAgg, $pendingAgg, $adjustmentAgg, $usedKgAgg, $adjustmentKgAgg, $warnaAgg, $batchWarnaAgg) {
             $used = (int) ($usedAgg[$c->id] ?? 0);
             $pending = (int) ($pendingAgg[$c->id] ?? 0);
             $adjustment = (int) ($adjustmentAgg[$c->id] ?? 0);
@@ -139,11 +169,24 @@ class StockController extends Controller
                 : 0;
 
             $w = $warnaAgg[$c->id] ?? null;
+            $bw = $batchWarnaAgg[$c->id] ?? null;
             $breakdownWarna = [
-                'merah'  => ['bag' => (int) ($w->bag_merah ?? 0), 'kg' => (float) ($w->kg_merah ?? 0)],
-                'biru'   => ['bag' => (int) ($w->bag_biru ?? 0), 'kg' => (float) ($w->kg_biru ?? 0)],
-                'hijau'  => ['bag' => (int) ($w->bag_hijau ?? 0), 'kg' => (float) ($w->kg_hijau ?? 0)],
-                'kuning' => ['bag' => (int) ($w->bag_kuning ?? 0), 'kg' => (float) ($w->kg_kuning ?? 0)],
+                'merah'  => [
+                    'bag' => (int) ($w->bag_merah ?? 0) + (int) ($bw->bag_merah ?? 0),
+                    'kg'  => round((float) ($w->kg_merah ?? 0) + (float) ($bw->kg_merah ?? 0), 2),
+                ],
+                'biru'   => [
+                    'bag' => (int) ($w->bag_biru ?? 0) + (int) ($bw->bag_biru ?? 0),
+                    'kg'  => round((float) ($w->kg_biru ?? 0) + (float) ($bw->kg_biru ?? 0), 2),
+                ],
+                'hijau'  => [
+                    'bag' => (int) ($w->bag_hijau ?? 0) + (int) ($bw->bag_hijau ?? 0),
+                    'kg'  => round((float) ($w->kg_hijau ?? 0) + (float) ($bw->kg_hijau ?? 0), 2),
+                ],
+                'kuning' => [
+                    'bag' => (int) ($w->bag_kuning ?? 0) + (int) ($bw->bag_kuning ?? 0),
+                    'kg'  => round((float) ($w->kg_kuning ?? 0) + (float) ($bw->kg_kuning ?? 0), 2),
+                ],
             ];
 
             return [
@@ -197,6 +240,37 @@ class StockController extends Controller
                 ->orderBy('category')
                 ->pluck('category'),
         ]);
+    }
+
+    /**
+     * BARU - Daftar batch ASLI (dari Inbound/Serah Terima) yang pernah
+     * ditempatkan di Cell ini, lewat reservasi yang statusnya USED.
+     * Dipanggil on-demand (bukan sekaligus di data()) - baru diambil pas
+     * user klik expand cell tertentu, biar tidak berat kalau 636 cell
+     * sekaligus dimuat semua.
+     */
+    public function batches(Cell $cell): JsonResponse
+    {
+        $batches = $cell->reservations()
+            ->where('status', 'USED')
+            ->with('batch')
+            ->get()
+            ->filter(fn (CellReservation $r) => $r->batch !== null)
+            ->map(function (CellReservation $r) {
+                $batch = $r->batch;
+
+                return [
+                    'kodeProduksi'    => $batch->kode_produksi,
+                    'noTrolly'        => $batch->no_trolly,
+                    'tanggalProduksi' => optional($batch->tanggal_produksi)->format('d/m/Y'),
+                    'jumlahBag'       => $batch->jumlah_bag,
+                    'kgBags'          => array_slice($batch->kg_bags_array, 0, $batch->jumlah_bag),
+                    'totalKg'         => $batch->total_kg,
+                ];
+            })
+            ->values();
+
+        return response()->json($batches);
     }
 
     /**
