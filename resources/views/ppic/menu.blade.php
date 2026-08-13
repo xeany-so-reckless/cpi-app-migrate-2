@@ -68,9 +68,6 @@
             <span>PPIC</span>
         </div>
         <div style="display:flex; align-items:center; gap:16px;">
-            <a href="{{ route('dashboard') }}" class="back-link">
-                <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Dashboard Produksi
-            </a>
             <span style="font-size:0.8rem; color: var(--muted); font-family:'JetBrains Mono',monospace;">{{ auth()->guard('tally')->user()->name }}</span>
             <form id="logoutForm" method="POST" action="{{ route('ppic.logout') }}">
                 @csrf
