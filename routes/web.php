@@ -16,6 +16,11 @@ use App\Http\Controllers\LbReport\LbReportController;
 use App\Http\Controllers\ProduksiDashboard\ProduksiDashboardController;
 use App\Http\Controllers\It\AuthController as ItAuthController;
 use App\Http\Controllers\It\ItController;
+use App\Http\Controllers\Ppic\AuthController as PpicAuthController;
+use App\Http\Controllers\Ppic\PpicController;
+use App\Http\Controllers\Ppic\PlanningController;
+use App\Http\Controllers\Ppic\PurchaseOrderController;
+use App\Http\Controllers\Ppic\PpicDashboardController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -37,8 +42,6 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/', [StockController::class, 'index'])->name('index');
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
-        Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
-        Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
     });
 });
 
@@ -173,5 +176,41 @@ Route::prefix('it')->name('it.')->group(function () {
         Route::get('/', [ItController::class, 'index'])->name('index');
         Route::get('/data', [ItController::class, 'data'])->name('data');
         Route::get('/filter-options', [ItController::class, 'filterOptions'])->name('filter-options');
+    });
+});
+
+// ==================== PPIC ====================
+// Login terpisah, khusus role 'ppic' (akun PPIC01).
+Route::prefix('ppic')->name('ppic.')->group(function () {
+
+    Route::get('/login', [PpicAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [PpicAuthController::class, 'login'])->name('login.attempt');
+
+    Route::middleware(['auth:tally', 'role:ppic', 'no-cache'])->group(function () {
+        Route::post('/logout', [PpicAuthController::class, 'logout'])->name('logout');
+
+        Route::get('/', [PpicController::class, 'index'])->name('index');
+
+        // --- Planning vs Aktual ---
+        Route::prefix('planning')->name('planning.')->group(function () {
+            Route::get('/', [PlanningController::class, 'index'])->name('index');
+            Route::get('/data', [PlanningController::class, 'data'])->name('data');
+            Route::post('/', [PlanningController::class, 'store'])->name('store');
+            Route::delete('/{plan}', [PlanningController::class, 'destroy'])->name('destroy');
+        });
+
+        // --- Input PO ---
+        Route::prefix('purchase-order')->name('purchase-order.')->group(function () {
+            Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
+            Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
+            Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
+            Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
+        });
+
+        // --- Dashboard ---
+        Route::prefix('dashboard')->name('dashboard.')->group(function () {
+            Route::get('/', [PpicDashboardController::class, 'index'])->name('index');
+            Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
+        });
     });
 });

@@ -78,7 +78,13 @@ class DashboardController extends Controller
                 "icon" => "table_chart",
                 "info" => "Sistem input Uniformity Harian, dan pelaporan data Hasil Uniformity tiap Bulan",
                 "url"  => route('uniformity.index'),
-            ]
+            ],
+                        [
+    "name" => "PPIC",
+    "icon" => "precision_manufacturing",
+    "info" => "Sistem perencanaan, pengendalian, dan pelaporan produksi",
+    "url"  => route('ppic.login'),
+]
         ];
 
         // Kalau url null berarti belum aktif -> jadi "#"
