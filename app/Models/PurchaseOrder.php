@@ -11,6 +11,7 @@ class PurchaseOrder extends Model
         'jenis_po',
         'nomor_po',
         'tanggal',
+        'produk_id',
         'user_id',
     ];
 
@@ -24,5 +25,10 @@ class PurchaseOrder extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'produk_id');
     }
 }

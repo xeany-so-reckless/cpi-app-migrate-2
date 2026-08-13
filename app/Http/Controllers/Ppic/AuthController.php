@@ -17,6 +17,7 @@ class AuthController extends Controller
     public function showLogin(): View|RedirectResponse
     {
         $user = Auth::guard('tally')->user();
+        /** @var User|null $user */
         if ($user && $user->hasAnyRole(self::ALLOWED_ROLES)) {
             return redirect()->route('ppic.index');
         }
