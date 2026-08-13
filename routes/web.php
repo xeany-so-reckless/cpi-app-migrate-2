@@ -42,6 +42,12 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/', [StockController::class, 'index'])->name('index');
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
+
+            // Baru: upload Excel penyesuaian stock cell
+    Route::post('/upload', [StockController::class, 'upload'])->name('upload');
+
+    // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
+    Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
     });
 });
 
