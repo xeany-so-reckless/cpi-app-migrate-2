@@ -24,18 +24,22 @@ class LbReportController extends Controller
     }
 
     /**
-     * BARU - Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
+     * Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
      * "No PO" di form Sebelum Bongkar. Tidak difilter jenis PO (semua
      * jenis ditampilkan).
+     *
+     * jumlahRit ikut dikirim supaya frontend bisa generate dropdown
+     * "RIT-01".."RIT-{jumlah_rit}" begitu PO dipilih.
      */
     public function listPurchaseOrders(): JsonResponse
     {
         $list = PurchaseOrder::orderByDesc('tanggal')
-            ->get(['nomor_po', 'jenis_po', 'tanggal'])
+            ->get(['nomor_po', 'jenis_po', 'tanggal', 'jumlah_rit'])
             ->map(fn (PurchaseOrder $po) => [
-                'nomorPo' => $po->nomor_po,
-                'jenisPo' => $po->jenis_po,
-                'tanggal' => $po->tanggal->format('d/m/Y'),
+                'nomorPo'   => $po->nomor_po,
+                'jenisPo'   => $po->jenis_po,
+                'tanggal'   => $po->tanggal->format('d/m/Y'),
+                'jumlahRit' => $po->jumlah_rit,
             ]);
 
         return response()->json($list);
@@ -245,6 +249,24 @@ class LbReportController extends Controller
         ]);
 
         $noRit = strtoupper(trim($data['no_rit']));
+        $noPo = strtoupper(trim($data['no_po']));
+
+        $po = PurchaseOrder::where('nomor_po', $noPo)->first();
+        $jumlahRitPo = $po->jumlah_rit ?? 0;
+
+        if ($jumlahRitPo < 1) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => "PO '{$noPo}' belum memiliki Jumlah Rit yang valid. Hubungi PPIC untuk melengkapi data PO.",
+            ], 422);
+        }
+
+        if (! preg_match('/^RIT-(\d+)$/', $noRit, $match) || (int) $match[1] < 1 || (int) $match[1] > $jumlahRitPo) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => "Nomor Rit '{$noRit}' tidak valid untuk PO '{$noPo}'. PO ini hanya punya {$jumlahRitPo} rit (RIT-01 s/d RIT-".str_pad($jumlahRitPo, 2, '0', STR_PAD_LEFT).").",
+            ], 422);
+        }
 
         $duplikat = LbPenerimaan::where('tanggal', $data['tanggal'])
             ->where('no_rit', $noRit)

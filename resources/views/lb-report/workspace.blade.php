@@ -92,11 +92,16 @@
     <form id="formSebelum" onsubmit="submitSebelum(this); return false;" class="auto-enter">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-6">
         <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Tanggal</label><input type="date" name="tanggal" class="w-full border rounded-xl p-3 focus:ring-2 focus:ring-blue-200 outline-none" required></div>
-        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Nomor Rit</label><input type="text" name="no_rit" placeholder="RIT-01" class="w-full border rounded-xl p-3 uppercase focus:ring-2 focus:ring-blue-200 outline-none" required></div>
         <div class="md:col-span-2"><label class="block text-xs font-bold text-gray-500 mb-1.5">Nomor PO (Production Order By SAP)</label>
 <select name="no_po" id="dropdown_no_po" class="w-full border rounded-xl p-3 font-bold uppercase text-blue-600 bg-blue-50 focus:ring-2 focus:ring-blue-300 outline-none shadow-inner" required>
     <option value="">-- Memuat daftar PO... --</option>
 </select>
+</div>
+<div>
+    <label class="block text-xs font-bold text-gray-500 mb-1.5">Nomor Rit</label>
+    <select name="no_rit" id="dropdown_no_rit" class="w-full border rounded-xl p-3 font-bold uppercase focus:ring-2 focus:ring-blue-200 outline-none" required disabled>
+        <option value="">-- Pilih PO terlebih dahulu --</option>
+    </select>
 </div>
 
         <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Area</label>
@@ -445,11 +450,15 @@
 
   {{-- ============ SECTION: SEBELUM BONGKAR ============ --}}
   @if ($canSebelum)
-  async function loadDaftarPO() {
+let daftarPOCache = [];
+
+async function loadDaftarPO() {
     const select = document.getElementById('dropdown_no_po');
     if (!select) return;
     try {
         const list = await apiFetch('{{ route("lbreport.purchase-orders") }}');
+        daftarPOCache = list;
+
         if (list.length === 0) {
             select.innerHTML = `<option value="">-- Belum ada PO tercatat di PPIC --</option>`;
             return;
@@ -457,9 +466,34 @@
         select.innerHTML = `<option value="">-- Pilih Nomor PO --</option>` + list.map(po =>
             `<option value="${po.nomorPo}">${po.nomorPo} (${po.jenisPo} - ${po.tanggal})</option>`
         ).join('');
+
+        select.addEventListener('change', generateDropdownRit);
     } catch (err) {
         select.innerHTML = `<option value="">Gagal memuat daftar PO</option>`;
     }
+}
+
+function generateDropdownRit() {
+    const selectPo = document.getElementById('dropdown_no_po');
+    const selectRit = document.getElementById('dropdown_no_rit');
+    if (!selectRit) return;
+
+    const nomorPoTerpilih = selectPo.value;
+    const po = daftarPOCache.find(p => p.nomorPo === nomorPoTerpilih);
+
+    if (!po || !po.jumlahRit || po.jumlahRit < 1) {
+        selectRit.innerHTML = `<option value="">-- PO ini belum punya Jumlah Rit --</option>`;
+        selectRit.disabled = true;
+        return;
+    }
+
+    let options = `<option value="">-- Pilih Nomor Rit --</option>`;
+    for (let i = 1; i <= po.jumlahRit; i++) {
+        const kodeRit = 'RIT-' + String(i).padStart(2, '0');
+        options += `<option value="${kodeRit}">${kodeRit}</option>`;
+    }
+    selectRit.innerHTML = options;
+    selectRit.disabled = false;
 }
 
 
