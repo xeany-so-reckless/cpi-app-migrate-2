@@ -5,6 +5,7 @@ namespace App\Http\Controllers\LbReport;
 use App\Http\Controllers\Controller;
 use App\Models\LbHanging;
 use App\Models\LbPenerimaan;
+use App\Models\PurchaseOrder;
 use App\Models\UniformityRit;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +21,24 @@ class LbReportController extends Controller
     public function dashboard(): View
     {
         return view('lb-report.dashboard');
+    }
+
+    /**
+     * BARU - Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
+     * "No PO" di form Sebelum Bongkar. Tidak difilter jenis PO (semua
+     * jenis ditampilkan).
+     */
+    public function listPurchaseOrders(): JsonResponse
+    {
+        $list = PurchaseOrder::orderByDesc('tanggal')
+            ->get(['nomor_po', 'jenis_po', 'tanggal'])
+            ->map(fn (PurchaseOrder $po) => [
+                'nomorPo' => $po->nomor_po,
+                'jenisPo' => $po->jenis_po,
+                'tanggal' => $po->tanggal->format('d/m/Y'),
+            ]);
+
+        return response()->json($list);
     }
 
     /**
@@ -222,7 +241,7 @@ class LbReportController extends Controller
             'ekor_dta'       => ['required', 'integer', 'min:0'],
             'no_dta'         => ['nullable', 'string'],
             'no_sppa'        => ['nullable', 'string'],
-            'no_po'          => ['required', 'string'],
+            'no_po'          => ['required', 'string', 'exists:purchase_orders,nomor_po'],
         ]);
 
         $noRit = strtoupper(trim($data['no_rit']));

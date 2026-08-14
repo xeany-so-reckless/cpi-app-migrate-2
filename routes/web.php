@@ -132,6 +132,7 @@ Route::prefix('report-lb')->name('lbreport.')->group(function () {
     Route::get('/rekap-data', [LbReportController::class, 'rekap'])->name('rekap-data');
     Route::get('/detail', [LbReportController::class, 'detail'])->name('detail');
     Route::get('/raw-data', [LbReportController::class, 'rawData'])->name('raw-data');
+    Route::get('/purchase-orders', [LbReportController::class, 'listPurchaseOrders'])->name('purchase-orders');
 
     Route::middleware('guest.lbreport')->group(function () {
         Route::get('/login', [LbReportAuthController::class, 'showLogin'])->name('login');
