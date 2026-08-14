@@ -11,6 +11,7 @@ class PurchaseOrder extends Model
         'jenis_po',
         'nomor_po',
         'tanggal',
+        'jumlah_rit',
         'produk_id',
         'user_id',
     ];

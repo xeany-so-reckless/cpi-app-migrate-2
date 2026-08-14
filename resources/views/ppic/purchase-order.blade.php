@@ -104,6 +104,9 @@
             <label>Nomor PO</label>
             <input type="text" id="f_nomor_po" class="form-control" placeholder="Contoh: PO-2026-001">
 
+            <label>Jumlah Rit</label>
+            <input type="number" id="f_jumlah_rit" class="form-control" placeholder="Contoh: 3" min="1">
+
             <div id="produkWrapper" style="display:none;">
                 <label>Nama Produk</label>
                 <select id="f_produk" class="form-control">
@@ -132,13 +135,14 @@
                             <th>Nomor PO</th>
                             <th>Jenis PO</th>
                             <th>Produk</th>
+                            <th>Jumlah Rit</th>
                             <th>Tanggal</th>
                             <th>Diinput Oleh</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="5" class="loading-state">Memuat data...</td></tr>
+                        <tr><td colspan="7" class="loading-state">Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -169,16 +173,23 @@
         async function submitPo() {
             const jenisPo = document.getElementById('f_jenis_po').value;
             const produkId = document.getElementById('f_produk').value;
+            const jumlahRit = document.getElementById('f_jumlah_rit').value;
 
             const payload = {
                 jenis_po: jenisPo,
                 nomor_po: document.getElementById('f_nomor_po').value.trim(),
                 tanggal: document.getElementById('f_tanggal').value,
+                jumlah_rit: jumlahRit ? parseInt(jumlahRit, 10) : null,
                 produk_id: jenisPo === 'FEHM' ? produkId : null,
             };
 
             if (!payload.jenis_po || !payload.nomor_po || !payload.tanggal) {
                 Swal.fire({ title: 'Lengkapi Data', text: 'Semua field wajib diisi!', icon: 'warning', confirmButtonColor: '#4f46e5' });
+                return;
+            }
+
+            if (!payload.jumlah_rit || payload.jumlah_rit < 1) {
+                Swal.fire({ title: 'Lengkapi Data', text: 'Jumlah Rit wajib diisi, minimal 1!', icon: 'warning', confirmButtonColor: '#4f46e5' });
                 return;
             }
 
@@ -195,6 +206,7 @@
                 const res = await apiFetch(`{{ route('ppic.purchase-order.store') }}`, { method: 'POST', body: JSON.stringify(payload) });
                 Swal.fire({ title: 'Tersimpan!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
                 document.getElementById('f_nomor_po').value = '';
+                document.getElementById('f_jumlah_rit').value = '';
                 document.getElementById('f_produk').value = '';
                 loadData();
             } catch (err) {
@@ -212,7 +224,7 @@
                 const qs = search ? `?search=${encodeURIComponent(search)}` : '';
                 const data = await apiFetch(`{{ route('ppic.purchase-order.data') }}${qs}`);
                 if (data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Belum ada PO tercatat.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada PO tercatat.</td></tr>`;
                     return;
                 }
                 tbody.innerHTML = data.map(d => `
@@ -220,13 +232,14 @@
                         <td><span class="po-chip">${d.nomorPo}</span></td>
                         <td>${d.jenisPo}</td>
                         <td>${d.namaProduk ?? '-'}</td>
+                        <td>${d.jumlahRit ?? '-'}</td>
                         <td>${d.tanggalLabel}</td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
                         <td><button class="btn-icon" onclick="hapusPo(${d.id})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button></td>
                     </tr>
                 `).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="5" class="empty-state">Gagal memuat: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Gagal memuat: ${err.message}</td></tr>`;
             }
         }
 
