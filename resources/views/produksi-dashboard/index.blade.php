@@ -108,6 +108,7 @@
         <table class="w-full text-left text-xs border-collapse">
           <thead>
             <tr class="bg-gray-100 text-gray-600 uppercase font-semibold border-b border-gray-200">
+              <th class="p-2.5">No PO</th>
               <th class="p-2.5">Tanggal</th>
               <th class="p-2.5">Kg DTA</th>
               <th class="p-2.5">Ekor DTA</th>
@@ -154,8 +155,16 @@
         <form id="prodForm" onsubmit="submitForm(event)" class="space-y-4 text-sm text-gray-700">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-gray-600 mb-1 font-medium">Tanggal Produksi</label>
-              <input type="date" name="tanggal" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" />
+              <label class="block text-gray-600 mb-1 font-medium">No PO</label>
+              <select name="noPo" id="inputNoPo" required onchange="onNoPoChange(this.value)"
+                class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none">
+                <option value="">-- Pilih No PO --</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-gray-600 mb-1 font-medium">Tanggal (otomatis dari PO)</label>
+              <input type="text" id="inputTanggalInfo" disabled placeholder="-"
+                class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 text-gray-500" />
             </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-gray-200 pt-3">
@@ -166,8 +175,8 @@
             <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" name="kgTitikNol" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Kg FG + BP Others</label><input type="number" step="any" name="kgFgBp" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" name="kgByProduct" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">% KW 2 / Griller PR</label><input type="number" step="any" name="pctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py=1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-5<PASSWORD>">% Defect Proses</label><input type="number" step="any" name="pctDefect" required class="w-full bg-gray-5<PASSWORD> border border-gray-3<PASSWORD> rounded px-3 py=1.5 focus:border-blue-5<PASSWORD> focus:outline-none" /></div>
+            <div><label class="block text-gray-500 mb-1">% KW 2 / Griller PR</label><input type="number" step="any" name="pctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
+            <div><label class="block text-gray-500 mb-1">% Defect Proses</label><input type="number" step="any" name="pctDefect" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-200 pt-3">
             <div><label class="block text-gray-500 mb-1">Prod Griller</label><input type="number" step="any" name="prodGriller" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5" /></div>
@@ -188,10 +197,16 @@
         <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
       </div>
       <form id="editRowForm" onsubmit="submitRowEdit(event)" class="text-sm space-y-4 text-gray-700">
-        <input type="hidden" id="editOldTanggal" />
-        <div>
-          <label class="block text-gray-600 mb-1 font-semibold">Tanggal Produksi (Kunci Utama)</label>
-          <input type="date" id="editTanggal" disabled class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 font-medium text-gray-500" />
+        <input type="hidden" id="editOldNoPo" />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-600 mb-1 font-semibold">No PO (Kunci Utama)</label>
+            <input type="text" id="editNoPo" disabled class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 font-medium text-gray-500" />
+          </div>
+          <div>
+            <label class="block text-gray-600 mb-1 font-semibold">Tanggal Produksi</label>
+            <input type="text" id="editTanggal" disabled class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 font-medium text-gray-500" />
+          </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-gray-100 pt-3">
           <div><label class="block text-gray-500 mb-1">Kg DTA</label><input type="number" step="any" id="editKgDta" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
@@ -222,6 +237,7 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
     let rawDataGlobal = [];
+    let poListGlobal = [];
     let charts = {};
     let hasEditAccess = false;
     let hasInputAccess = false;
@@ -252,6 +268,7 @@
     window.onload = function() {
       document.getElementById('datePicker').value = new Date().toISOString().substring(0, 10);
       loadData();
+      loadPurchaseOrders('inputNoPo');
       setInterval(checkUpdates, 10000);
     };
 
@@ -263,6 +280,27 @@
       } catch (err) {
         console.error(err);
       }
+    }
+
+    // BARU - Load daftar No PO dari PPIC untuk dropdown form Input.
+    // Dipanggil saat halaman pertama kali load, dan setiap kali tab
+    // Input dibuka lagi, supaya PO baru dari PPIC ikut muncul.
+    async function loadPurchaseOrders(selectId) {
+      try {
+        poListGlobal = await apiFetch('{{ route('produksi-dashboard.purchase-orders') }}');
+        const select = document.getElementById(selectId);
+        select.innerHTML = '<option value="">-- Pilih No PO --</option>' +
+          poListGlobal.map(po => `<option value="${po.nomorPo}">${po.nomorPo} (${po.jenisPo} - ${po.tanggal})</option>`).join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // BARU - Tampilkan tanggal PO otomatis sebagai info (read-only),
+    // bukan input manual. Tanggal asli tetap dihitung ulang di server.
+    function onNoPoChange(nomorPo) {
+      const po = poListGlobal.find(p => p.nomorPo === nomorPo);
+      document.getElementById('inputTanggalInfo').value = po ? po.tanggal : '';
     }
 
     async function checkUpdates() {
@@ -303,6 +341,10 @@
           document.getElementById(tabs[k].btn).className = `py-2 px-4 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-300`;
         }
       });
+
+      // BARU - Refresh daftar No PO tiap kali tab Input dibuka, biar
+      // PO yang baru diinput PPIC ikut kebawa tanpa perlu reload halaman.
+      if (tab === 'input') loadPurchaseOrders('inputNoPo');
     }
 
     async function verifyInputAccess() {
@@ -357,7 +399,7 @@
 
       const payload = {
         ...activeCredentials,
-        tanggal: form.tanggal.value,
+        no_po: form.noPo.value,
         kg_dta: form.kgDta.value,
         ekor_dta: form.ekorDta.value,
         kg_netto: form.kgNetto.value,
@@ -377,7 +419,9 @@
         const res = await apiFetch('{{ route('produksi-dashboard.store') }}', { method: 'POST', body: JSON.stringify(payload) });
         alert(res.message);
         form.reset();
+        document.getElementById('inputTanggalInfo').value = '';
         loadData();
+        loadPurchaseOrders('inputNoPo');
         switchTab('grafik');
       } catch (err) {
         alert(err.message);
@@ -386,11 +430,12 @@
       }
     }
 
-    function openEditModal(tanggal) {
-      const record = rawDataGlobal.find(d => d.tanggal === tanggal);
+    function openEditModal(noPo) {
+      const record = rawDataGlobal.find(d => d.noPo === noPo);
       if (!record) return;
 
-      document.getElementById('editOldTanggal').value = record.tanggal;
+      document.getElementById('editOldNoPo').value = record.noPo;
+      document.getElementById('editNoPo').value = record.noPo;
       document.getElementById('editTanggal').value = record.tanggal;
       document.getElementById('editKgDta').value = record.kgDta;
       document.getElementById('editEkorDta').value = record.ekorDta;
@@ -422,7 +467,7 @@
 
       const payload = {
         ...activeCredentials,
-        tanggal: document.getElementById('editOldTanggal').value,
+        no_po: document.getElementById('editOldNoPo').value,
         kg_dta: parseFloat(document.getElementById('editKgDta').value) || 0,
         ekor_dta: parseInt(document.getElementById('editEkorDta').value) || 0,
         kg_netto: parseFloat(document.getElementById('editKgNetto').value) || 0,
@@ -615,7 +660,7 @@
       }
 
       if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="15" class="text-center p-4 text-gray-400">Tidak ada baris data.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="16" class="text-center p-4 text-gray-400">Tidak ada baris data.</td></tr>`;
         return;
       }
 
@@ -626,6 +671,7 @@
 
         tbody.innerHTML += `
           <tr class="hover:bg-gray-50 transition">
+            <td class="p-2.5 font-semibold text-blue-600">${d.noPo}</td>
             <td class="p-2.5 font-medium text-gray-800">${displayDate}</td>
             <td class="p-2.5">${d.kgDta.toLocaleString()}</td>
             <td class="p-2.5">${d.ekorDta.toLocaleString()}</td>
@@ -641,7 +687,7 @@
             <td class="p-2.5">${d.pctDefect}%</td>
             <td class="p-2.5 font-bold text-gray-800">${d.totalHasil.toLocaleString()}</td>
             <td class="p-2.5 text-center action-column ${hiddenClass}">
-              <button onclick="openEditModal('${d.tanggal}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded text-[10px] transition">Edit Baris</button>
+              <button onclick="openEditModal('${d.noPo}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded text-[10px] transition">Edit Baris</button>
             </td>
           </tr>
         `;

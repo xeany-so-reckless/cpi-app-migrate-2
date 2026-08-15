@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProduksiHarian extends Model
 {
@@ -10,6 +11,7 @@ class ProduksiHarian extends Model
 
     protected $fillable = [
         'tanggal',
+        'no_po',
         'kg_dta',
         'ekor_dta',
         'kg_netto',
@@ -30,6 +32,16 @@ class ProduksiHarian extends Model
         return [
             'tanggal' => 'date',
         ];
+    }
+
+    /**
+     * Relasi ke PO (PPIC) yang jadi dasar tanggal & kunci unik laporan
+     * produksi ini. Key custom karena purchase_orders pakai nomor_po,
+     * bukan id, sebagai identitas PO.
+     */
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class, 'no_po', 'nomor_po');
     }
 
     /**
@@ -56,6 +68,7 @@ class ProduksiHarian extends Model
 
         return [
             'tanggal'        => $tanggalStr,
+            'noPo'           => $this->no_po,
             'bulan'          => substr($tanggalStr, 0, 7),
             'tahun'          => substr($tanggalStr, 0, 4),
             'kgDta'          => (float) $this->kg_dta,

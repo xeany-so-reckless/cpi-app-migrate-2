@@ -4,6 +4,7 @@ namespace App\Http\Controllers\ProduksiDashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProduksiHarian;
+use App\Models\PurchaseOrder;
 use App\Models\User;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -50,6 +51,26 @@ class ProduksiDashboardController extends Controller
     }
 
     /**
+     * BARU - Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
+     * "No PO" di form Input (menggantikan input tanggal manual). Tidak
+     * difilter jenis PO (semua jenis ditampilkan), dan tidak difilter
+     * yang sudah dipakai - validasi "PO sudah dipakai" dilakukan di
+     * store() supaya pesan errornya jelas, bukan cuma hilang dari list.
+     */
+    public function listPurchaseOrders(): JsonResponse
+    {
+        $list = PurchaseOrder::orderByDesc('tanggal')
+            ->get(['nomor_po', 'jenis_po', 'tanggal'])
+            ->map(fn (PurchaseOrder $po) => [
+                'nomorPo' => $po->nomor_po,
+                'jenisPo' => $po->jenis_po,
+                'tanggal' => $po->tanggal->format('Y-m-d'),
+            ]);
+
+        return response()->json($list);
+    }
+
+    /**
      * Menggantikan pengecekan akun admin/spv hardcode (USERS object) di JS
      * lama. Dipakai untuk membuka gerbang tab Input DAN tombol Edit -
      * modul ini tidak punya sesi login penuh (tidak ada halaman login
@@ -80,8 +101,8 @@ class ProduksiDashboardController extends Controller
      * cuma sekali di gerbang awal - supaya request ini benar-benar
      * tervalidasi di server, bukan cuma dikunci di tampilan browser.
      *
-     * Ditambah validasi duplikat tanggal (tidak ada di kode asli, sesuai
-     * keputusan bisnis - dulu bisa dobel kalau tanggal sama diinput 2x).
+     * DIUBAH: kunci unik sekarang no_po (bukan tanggal lagi). Tanggal
+     * otomatis diambil dari tanggal PO yang dipilih, bukan input manual.
      */
     public function store(Request $request): JsonResponse
     {
@@ -92,11 +113,11 @@ class ProduksiDashboardController extends Controller
 
         $data = $this->validatedPayload($request);
 
-        $duplikat = ProduksiHarian::where('tanggal', $data['tanggal'])->exists();
+        $duplikat = ProduksiHarian::where('no_po', $data['no_po'])->exists();
         if ($duplikat) {
             return response()->json([
                 'success' => false,
-                'message' => "Data untuk tanggal {$data['tanggal']} sudah pernah diinput! Gunakan fitur Edit kalau ingin mengoreksi.",
+                'message' => "PO '{$data['no_po']}' sudah pernah diinput! Gunakan fitur Edit kalau ingin mengoreksi.",
             ], 422);
         }
 
@@ -105,7 +126,7 @@ class ProduksiDashboardController extends Controller
         ActivityLogger::log(
             'produksi_dashboard',
             'create',
-            "{$user->employee_code} ({$user->name}) input data produksi tanggal {$data['tanggal']}",
+            "{$user->employee_code} ({$user->name}) input data produksi PO {$data['no_po']} (tanggal {$data['tanggal']})",
             $user
         );
 
@@ -117,6 +138,8 @@ class ProduksiDashboardController extends Controller
 
     /**
      * Menggantikan updateFullProductionData() di code.gs. Role: supervisor.
+     *
+     * DIUBAH: pencarian row sekarang berdasar no_po (bukan tanggal lagi).
      */
     public function update(Request $request): JsonResponse
     {
@@ -127,12 +150,12 @@ class ProduksiDashboardController extends Controller
 
         $data = $this->validatedPayload($request);
 
-        $row = ProduksiHarian::where('tanggal', $data['tanggal'])->first();
+        $row = ProduksiHarian::where('no_po', $data['no_po'])->first();
 
         if (! $row) {
             return response()->json([
                 'success' => false,
-                'message' => "Gagal update: Data dengan tanggal {$data['tanggal']} tidak ditemukan.",
+                'message' => "Gagal update: Data dengan PO {$data['no_po']} tidak ditemukan.",
             ], 404);
         }
 
@@ -141,13 +164,13 @@ class ProduksiDashboardController extends Controller
         ActivityLogger::log(
             'produksi_dashboard',
             'update',
-            "{$user->employee_code} ({$user->name}) edit data produksi tanggal {$data['tanggal']}",
+            "{$user->employee_code} ({$user->name}) edit data produksi PO {$data['no_po']}",
             $user
         );
 
         return response()->json([
             'success' => true,
-            'message' => "Data produksi tanggal {$data['tanggal']} berhasil diperbarui secara menyeluruh!",
+            'message' => "Data produksi PO {$data['no_po']} berhasil diperbarui secara menyeluruh!",
         ]);
     }
 
@@ -172,10 +195,14 @@ class ProduksiDashboardController extends Controller
         return $user;
     }
 
+    /**
+     * DIUBAH: tanggal tidak lagi diinput manual - wajib pilih no_po,
+     * lalu tanggal otomatis diambil dari tanggal PO tersebut.
+     */
     private function validatedPayload(Request $request): array
     {
-        return $request->validate([
-            'tanggal'       => ['required', 'date'],
+        $data = $request->validate([
+            'no_po'         => ['required', 'string', 'exists:purchase_orders,nomor_po'],
             'kg_dta'        => ['required', 'numeric', 'min:0'],
             'ekor_dta'      => ['required', 'integer', 'min:0'],
             'kg_netto'      => ['required', 'numeric', 'min:0'],
@@ -190,5 +217,10 @@ class ProduksiDashboardController extends Controller
             'prod_marinasi' => ['required', 'numeric', 'min:0'],
             'total_hasil'   => ['required', 'numeric', 'min:0'],
         ]);
+
+        $po = PurchaseOrder::where('nomor_po', $data['no_po'])->first();
+        $data['tanggal'] = $po->tanggal->format('Y-m-d');
+
+        return $data;
     }
 }
