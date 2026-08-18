@@ -118,6 +118,7 @@
               <th class="p-2.5">Kg Susut</th>
               <th class="p-2.5">% Susut</th>
               <th class="p-2.5">Kg TN</th>
+              <th class="p-2.5">Kg BD</th>
               <th class="p-2.5">Kg FG+BP</th>
               <th class="p-2.5">Kg BP</th>
               <th class="p-2.5">% KW2</th>
@@ -160,6 +161,7 @@
                 class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none">
                 <option value="">-- Pilih No PO --</option>
               </select>
+              <div id="poSummaryWarning" class="hidden mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5"></div>
             </div>
             <div>
               <label class="block text-gray-600 mb-1 font-medium">Tanggal (otomatis dari PO)</label>
@@ -173,6 +175,7 @@
             <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" name="kgNetto" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Ayam Mati (Ekor)</label><input type="number" name="ayamMati" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" name="kgTitikNol" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" name="kgBuluDarah" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Kg FG + BP Others</label><input type="number" step="any" name="kgFgBp" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" name="kgByProduct" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
             <div><label class="block text-gray-500 mb-1">% KW 2 / Griller PR</label><input type="number" step="any" name="pctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
@@ -214,6 +217,7 @@
           <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" id="editKgNetto" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
           <div><label class="block text-gray-500 mb-1">Ayam Mati (Ek)</label><input type="number" id="editAyamMati" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
           <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" id="editKgTitikNol" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" id="editKgBuluDarah" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
           <div><label class="block text-gray-500 mb-1">Kg FG + BP Oth</label><input type="number" step="any" id="editKgFgBp" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
           <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" id="editKgByProduct" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
           <div><label class="block text-gray-500 mb-1">% KW 2 / Pr</label><input type="number" step="any" id="editPctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
@@ -296,11 +300,44 @@
       }
     }
 
-    // BARU - Tampilkan tanggal PO otomatis sebagai info (read-only),
-    // bukan input manual. Tanggal asli tetap dihitung ulang di server.
-    function onNoPoChange(nomorPo) {
+    // DIUBAH: sekarang async - selain isi info tanggal, juga auto-fill
+    // 4 field (Kg DTA, Ekor DTA, Kg Netto, Ayam Mati) dari data Report
+    // Harian Bahan Baku LB terkait PO ini. Field tetap BISA diedit manual
+    // kalau perlu koreksi - tidak dikunci disabled.
+    async function onNoPoChange(nomorPo) {
       const po = poListGlobal.find(p => p.nomorPo === nomorPo);
       document.getElementById('inputTanggalInfo').value = po ? po.tanggal : '';
+
+      const form = document.getElementById('prodForm');
+      const warningEl = document.getElementById('poSummaryWarning');
+      warningEl.classList.add('hidden');
+
+      if (!nomorPo) {
+        form.kgDta.value = '';
+        form.ekorDta.value = '';
+        form.kgNetto.value = '';
+        form.ayamMati.value = '';
+        return;
+      }
+
+      try {
+        const summary = await apiFetch(`{{ route('produksi-dashboard.po-summary') }}?no_po=${encodeURIComponent(nomorPo)}`);
+
+        form.kgDta.value = summary.kgDta;
+        form.ekorDta.value = summary.ekorDta;
+        form.kgNetto.value = summary.kgNetto;
+        form.ayamMati.value = summary.ayamMati;
+
+        if (summary.ritSelesai < summary.totalRit) {
+          warningEl.textContent = `Data LB untuk PO ini belum lengkap - ${summary.ritSelesai} dari ${summary.totalRit} rit yang sudah Setelah Bongkar. Kg Netto & Ayam Mati kemungkinan belum final, silakan cek ulang sebelum simpan.`;
+          warningEl.classList.remove('hidden');
+        } else if (summary.totalRit === 0) {
+          warningEl.textContent = `Belum ada data Report LB sama sekali untuk PO ini. Semua field di bawah perlu diisi manual.`;
+          warningEl.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error(err);
+      }
     }
 
     async function checkUpdates() {
@@ -405,6 +442,7 @@
         kg_netto: form.kgNetto.value,
         ayam_mati: form.ayamMati.value,
         kg_titik_nol: form.kgTitikNol.value,
+        kg_bulu_darah: form.kgBuluDarah.value,
         kg_fg_bp: form.kgFgBp.value,
         kg_by_product: form.kgByProduct.value,
         pct_kw2: form.pctKw2.value,
@@ -420,6 +458,7 @@
         alert(res.message);
         form.reset();
         document.getElementById('inputTanggalInfo').value = '';
+        document.getElementById('poSummaryWarning').classList.add('hidden');
         loadData();
         loadPurchaseOrders('inputNoPo');
         switchTab('grafik');
@@ -442,6 +481,7 @@
       document.getElementById('editKgNetto').value = record.kgNetto;
       document.getElementById('editAyamMati').value = record.ayamMati;
       document.getElementById('editKgTitikNol').value = record.kgTitikNol;
+      document.getElementById('editKgBuluDarah').value = record.kgBuluDarah;
       document.getElementById('editKgFgBp').value = record.kgFgBp;
       document.getElementById('editKgByProduct').value = record.kgByProduct;
       document.getElementById('editPctKw2').value = record.pctKw2;
@@ -473,6 +513,7 @@
         kg_netto: parseFloat(document.getElementById('editKgNetto').value) || 0,
         ayam_mati: parseInt(document.getElementById('editAyamMati').value) || 0,
         kg_titik_nol: parseFloat(document.getElementById('editKgTitikNol').value) || 0,
+        kg_bulu_darah: parseFloat(document.getElementById('editKgBuluDarah').value) || 0,
         kg_fg_bp: parseFloat(document.getElementById('editKgFgBp').value) || 0,
         kg_by_product: parseFloat(document.getElementById('editKgByProduct').value) || 0,
         pct_kw2: parseFloat(document.getElementById('editPctKw2').value) || 0,
@@ -660,7 +701,7 @@
       }
 
       if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="16" class="text-center p-4 text-gray-400">Tidak ada baris data.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="17" class="text-center p-4 text-gray-400">Tidak ada baris data.</td></tr>`;
         return;
       }
 
@@ -681,6 +722,7 @@
             <td class="p-2.5">${d.kgSusut.toLocaleString()}</td>
             <td class="p-2.5 text-rose-600 font-medium">${d.pctSusut.toFixed(2)}%</td>
             <td class="p-2.5">${d.kgTitikNol.toLocaleString()}</td>
+            <td class="p-2.5">${d.kgBuluDarah.toLocaleString()}</td>
             <td class="p-2.5">${d.kgFgBp.toLocaleString()}</td>
             <td class="p-2.5">${d.kgByProduct.toLocaleString()}</td>
             <td class="p-2.5">${d.pctKw2}%</td>

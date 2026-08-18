@@ -165,6 +165,7 @@ Route::prefix('produksi-dashboard')->name('produksi-dashboard.')->group(function
     Route::get('/data', [ProduksiDashboardController::class, 'data'])->name('data');
     Route::get('/latest-update', [ProduksiDashboardController::class, 'latestUpdateInfo'])->name('latest-update');
     Route::get('/purchase-orders', [ProduksiDashboardController::class, 'listPurchaseOrders'])->name('purchase-orders');
+    Route::get('/po-summary', [ProduksiDashboardController::class, 'poSummary'])->name('po-summary'); // BARU
     Route::post('/verify-signature', [ProduksiDashboardController::class, 'verifySignature'])->name('verify-signature');
     Route::post('/store', [ProduksiDashboardController::class, 'store'])->name('store');
     Route::post('/update', [ProduksiDashboardController::class, 'update'])->name('update');

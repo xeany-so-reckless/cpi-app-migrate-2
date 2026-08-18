@@ -572,7 +572,7 @@ class LbReportController extends Controller
 
     private function authorizeRole(Request $request, array $roles): void
     {
-        if (! $request->user('tally')->hasAnyRoles($roles)) {
+        if (! $request->user('tally')->hasAnyRole($roles)) {
             abort(403, 'Anda tidak memiliki akses untuk aksi ini.');
         }
     }

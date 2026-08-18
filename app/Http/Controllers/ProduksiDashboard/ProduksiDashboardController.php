@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\ProduksiDashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\LbPenerimaan;
 use App\Models\ProduksiHarian;
 use App\Models\PurchaseOrder;
 use App\Models\User;
@@ -68,6 +69,48 @@ class ProduksiDashboardController extends Controller
             ]);
 
         return response()->json($list);
+    }
+
+    /**
+     * BARU - Ringkasan angka dari Report Harian Bahan Baku LB untuk 1 PO,
+     * dipakai auto-fill 4 field di form Input Produksi begitu No PO
+     * dipilih (kg_dta, ekor_dta, kg_netto, ayam_mati).
+     *
+     * kg_dta & ekor_dta di-SUM dari SEMUA rit PO ini (data sudah ada
+     * sejak tahap "Sebelum Bongkar").
+     *
+     * kg_netto & ayam_mati di-SUM HANYA dari rit yang statusnya sudah
+     * lewat "Setelah Bongkar" (status != 'Proses Bongkar') - sama seperti
+     * logic PpicPlan::recalculateAktual(), supaya konsisten dengan angka
+     * Aktual yang tampil di PPIC.
+     *
+     * totalRit & ritSelesai ikut dikirim supaya frontend bisa kasih
+     * warning kalau datanya masih sebagian (belum semua rit "Setelah
+     * Bongkar" diinput).
+     */
+    public function poSummary(Request $request): JsonResponse
+    {
+        $noPo = strtoupper(trim($request->query('no_po', '')));
+
+        $totalRit = LbPenerimaan::where('no_po', $noPo)->count();
+
+        $totalSebelum = LbPenerimaan::where('no_po', $noPo)
+            ->selectRaw('SUM(kg_dta) as total_kg_dta, SUM(ekor_dta) as total_ekor_dta')
+            ->first();
+
+        $totalSetelah = LbPenerimaan::where('no_po', $noPo)
+            ->where('status', '!=', 'Proses Bongkar')
+            ->selectRaw('SUM(kg_netto) as total_kg_netto, SUM(ayam_mati) as total_ayam_mati, COUNT(*) as rit_selesai')
+            ->first();
+
+        return response()->json([
+            'kgDta'      => (float) ($totalSebelum->total_kg_dta ?? 0),
+            'ekorDta'    => (int) ($totalSebelum->total_ekor_dta ?? 0),
+            'kgNetto'    => (float) ($totalSetelah->total_kg_netto ?? 0),
+            'ayamMati'   => (int) ($totalSetelah->total_ayam_mati ?? 0),
+            'totalRit'   => $totalRit,
+            'ritSelesai' => (int) ($totalSetelah->rit_selesai ?? 0),
+        ]);
     }
 
     /**
@@ -198,6 +241,9 @@ class ProduksiDashboardController extends Controller
     /**
      * DIUBAH: tanggal tidak lagi diinput manual - wajib pilih no_po,
      * lalu tanggal otomatis diambil dari tanggal PO tersebut.
+     *
+     * DIUBAH: tambah kg_bulu_darah (input manual, tidak ada sumber
+     * otomatis dari data LB Report - lihat komentar poSummary() nanti).
      */
     private function validatedPayload(Request $request): array
     {
@@ -208,6 +254,7 @@ class ProduksiDashboardController extends Controller
             'kg_netto'      => ['required', 'numeric', 'min:0'],
             'ayam_mati'     => ['required', 'integer', 'min:0'],
             'kg_titik_nol'  => ['required', 'numeric', 'min:0'],
+            'kg_bulu_darah' => ['required', 'numeric', 'min:0'],
             'kg_fg_bp'      => ['required', 'numeric', 'min:0'],
             'kg_by_product' => ['required', 'numeric', 'min:0'],
             'pct_kw2'       => ['required', 'numeric', 'min:0'],
