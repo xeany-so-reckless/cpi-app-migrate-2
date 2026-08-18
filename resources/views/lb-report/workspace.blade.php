@@ -102,6 +102,8 @@
     <select name="no_rit" id="dropdown_no_rit" class="w-full border rounded-xl p-3 font-bold uppercase focus:ring-2 focus:ring-blue-200 outline-none" required disabled>
         <option value="">-- Pilih PO terlebih dahulu --</option>
     </select>
+    <input type="text" name="no_rit" id="input_no_rit" placeholder="Contoh: RIT-01"
+        class="hidden w-full border rounded-xl p-3 font-bold uppercase focus:ring-2 focus:ring-blue-200 outline-none" disabled>
 </div>
 
         <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Area</label>
@@ -476,24 +478,51 @@ async function loadDaftarPO() {
 function generateDropdownRit() {
     const selectPo = document.getElementById('dropdown_no_po');
     const selectRit = document.getElementById('dropdown_no_rit');
-    if (!selectRit) return;
+    const inputRit = document.getElementById('input_no_rit');
+    if (!selectRit || !inputRit) return;
 
     const nomorPoTerpilih = selectPo.value;
     const po = daftarPOCache.find(p => p.nomorPo === nomorPoTerpilih);
 
-    if (!po || !po.jumlahRit || po.jumlahRit < 1) {
-        selectRit.innerHTML = `<option value="">-- PO ini belum punya Jumlah Rit --</option>`;
+    if (!po) {
+        selectRit.classList.remove('hidden');
         selectRit.disabled = true;
+        selectRit.innerHTML = `<option value="">-- Pilih PO terlebih dahulu --</option>`;
+        inputRit.classList.add('hidden');
+        inputRit.disabled = true;
+        inputRit.value = '';
         return;
     }
 
-    let options = `<option value="">-- Pilih Nomor Rit --</option>`;
-    for (let i = 1; i <= po.jumlahRit; i++) {
-        const kodeRit = 'RIT-' + String(i).padStart(2, '0');
-        options += `<option value="${kodeRit}">${kodeRit}</option>`;
+    if (po.jenisPo === 'FEHM') {
+        inputRit.classList.add('hidden');
+        inputRit.disabled = true;
+        inputRit.value = '';
+
+        selectRit.classList.remove('hidden');
+
+        if (!po.jumlahRit || po.jumlahRit < 1) {
+            selectRit.innerHTML = `<option value="">-- PO ini belum punya Jumlah Rit --</option>`;
+            selectRit.disabled = true;
+            return;
+        }
+
+        let options = `<option value="">-- Pilih Nomor Rit --</option>`;
+        for (let i = 1; i <= po.jumlahRit; i++) {
+            const kodeRit = 'RIT-' + String(i).padStart(2, '0');
+            options += `<option value="${kodeRit}">${kodeRit}</option>`;
+        }
+        selectRit.innerHTML = options;
+        selectRit.disabled = false;
+    } else {
+        selectRit.classList.add('hidden');
+        selectRit.disabled = true;
+        selectRit.innerHTML = `<option value="">-- Pilih PO terlebih dahulu --</option>`;
+
+        inputRit.classList.remove('hidden');
+        inputRit.disabled = false;
+        inputRit.value = '';
     }
-    selectRit.innerHTML = options;
-    selectRit.disabled = false;
 }
 
 
@@ -509,6 +538,7 @@ function generateDropdownRit() {
       alert(res.message);
       form.reset();
       document.querySelector('#formSebelum [name="tanggal"]').value = new Date().toISOString().split('T')[0];
+      generateDropdownRit();
     } catch (err) {
       alert("Error: " + err.message);
     } finally {

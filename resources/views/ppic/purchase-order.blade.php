@@ -104,8 +104,10 @@
             <label>Nomor PO</label>
             <input type="text" id="f_nomor_po" class="form-control" placeholder="Contoh: PO-2026-001">
 
-            <label>Jumlah Rit</label>
-            <input type="number" id="f_jumlah_rit" class="form-control" placeholder="Contoh: 3" min="1">
+                        <div id="jumlahRitWrapper">
+                <label>Jumlah Rit</label>
+                <input type="number" id="f_jumlah_rit" class="form-control" placeholder="Contoh: 3" min="1">
+            </div>
 
             <div id="produkWrapper" style="display:none;">
                 <label>Nama Produk</label>
@@ -163,11 +165,16 @@
             return data;
         }
 
-        function toggleProdukField() {
+                function toggleProdukField() {
             const jenis = document.getElementById('f_jenis_po').value;
             const wrapper = document.getElementById('produkWrapper');
+            const jumlahRitWrapper = document.getElementById('jumlahRitWrapper');
+
             wrapper.style.display = jenis === 'FEHM' ? 'block' : 'none';
             if (jenis !== 'FEHM') document.getElementById('f_produk').value = '';
+
+            jumlahRitWrapper.style.display = jenis === 'FEHM' ? 'block' : 'none';
+            if (jenis !== 'FEHM') document.getElementById('f_jumlah_rit').value = '';
         }
 
         async function submitPo() {
@@ -188,7 +195,7 @@
                 return;
             }
 
-            if (!payload.jumlah_rit || payload.jumlah_rit < 1) {
+                        if (jenisPo === 'FEHM' && (!payload.jumlah_rit || payload.jumlah_rit < 1)) {
                 Swal.fire({ title: 'Lengkapi Data', text: 'Jumlah Rit wajib diisi, minimal 1!', icon: 'warning', confirmButtonColor: '#4f46e5' });
                 return;
             }

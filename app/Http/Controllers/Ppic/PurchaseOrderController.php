@@ -42,13 +42,20 @@ class PurchaseOrderController extends Controller
         return response()->json($orders);
     }
 
+    /**
+     * DIUBAH: jumlah_rit sekarang cuma WAJIB untuk jenis_po = FEHM.
+     * Untuk jenis PO lain, jumlah rit tidak diketahui di depan oleh PPIC
+     * - nomor rit ditentukan mandiri oleh tim LB Report saat truk datang
+     * (lihat LbReportController::storeSebelum()), jadi PPIC tidak perlu
+     * dan tidak bisa menentukannya di sini.
+     */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'jenis_po'   => ['required', 'string', 'max:100'],
             'nomor_po'   => ['required', 'string', 'max:100', 'unique:purchase_orders,nomor_po'],
             'tanggal'    => ['required', 'date'],
-            'jumlah_rit' => ['required', 'integer', 'min:1'],
+            'jumlah_rit' => ['required_if:jenis_po,FEHM', 'nullable', 'integer', 'min:1'],
             'produk_id'  => ['required_if:jenis_po,FEHM', 'nullable', 'exists:products,id'],
         ]);
 
@@ -58,7 +65,10 @@ class PurchaseOrderController extends Controller
             'jenis_po'   => $data['jenis_po'],
             'nomor_po'   => $data['nomor_po'],
             'tanggal'    => $data['tanggal'],
-            'jumlah_rit' => $data['jumlah_rit'],
+            // Kolom jumlah_rit di DB default 0 (unsignedInteger, tidak
+            // nullable) - untuk non-FEHM yang tidak mengisi, jatuhkan ke
+            // 0 secara eksplisit supaya tidak "Undefined array key".
+            'jumlah_rit' => $data['jumlah_rit'] ?? 0,
             'produk_id'  => $data['produk_id'] ?? null,
             'user_id'    => $user->id,
         ]);

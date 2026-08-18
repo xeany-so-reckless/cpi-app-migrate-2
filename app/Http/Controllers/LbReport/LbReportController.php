@@ -253,20 +253,37 @@ class LbReportController extends Controller
         $noPo = strtoupper(trim($data['no_po']));
 
         $po = PurchaseOrder::where('nomor_po', $noPo)->first();
-        $jumlahRitPo = $po->jumlah_rit ?? 0;
 
-        if ($jumlahRitPo < 1) {
+        if (! preg_match('/^RIT-(\d+)$/', $noRit)) {
             return response()->json([
                 'status'  => 'error',
-                'message' => "PO '{$noPo}' belum memiliki Jumlah Rit yang valid. Hubungi PPIC untuk melengkapi data PO.",
+                'message' => "Nomor Rit '{$noRit}' tidak valid. Format harus RIT-xx (contoh: RIT-01).",
             ], 422);
         }
 
-        if (! preg_match('/^RIT-(\d+)$/', $noRit, $match) || (int) $match[1] < 1 || (int) $match[1] > $jumlahRitPo) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => "Nomor Rit '{$noRit}' tidak valid untuk PO '{$noPo}'. PO ini hanya punya {$jumlahRitPo} rit (RIT-01 s/d RIT-".str_pad($jumlahRitPo, 2, '0', STR_PAD_LEFT).").",
-            ], 422);
+        // DIUBAH: batas jumlah rit HANYA berlaku untuk PO jenis FEHM,
+        // dimana PPIC sudah menentukan jumlah_rit di depan. Untuk jenis
+        // PO lain, PPIC tidak tahu akan ada berapa rit - nomor rit
+        // ditentukan mandiri oleh tim LB Report saat truk datang, jadi
+        // tidak ada validasi batas maksimal di sini.
+        if ($po->jenis_po === 'FEHM') {
+            $jumlahRitPo = $po->jumlah_rit ?? 0;
+
+            if ($jumlahRitPo < 1) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "PO '{$noPo}' belum memiliki Jumlah Rit yang valid. Hubungi PPIC untuk melengkapi data PO.",
+                ], 422);
+            }
+
+            preg_match('/^RIT-(\d+)$/', $noRit, $match);
+
+            if ((int) $match[1] < 1 || (int) $match[1] > $jumlahRitPo) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "Nomor Rit '{$noRit}' tidak valid untuk PO '{$noPo}'. PO ini hanya punya {$jumlahRitPo} rit (RIT-01 s/d RIT-".str_pad($jumlahRitPo, 2, '0', STR_PAD_LEFT).").",
+                ], 422);
+            }
         }
 
         $duplikat = LbPenerimaan::where('tanggal', $data['tanggal'])
@@ -572,7 +589,7 @@ class LbReportController extends Controller
 
     private function authorizeRole(Request $request, array $roles): void
     {
-        if (! $request->user('tally')->hasAnyRole($roles)) {
+        if (! $request->user('tally')->hasAnyRoles($roles)) {
             abort(403, 'Anda tidak memiliki akses untuk aksi ini.');
         }
     }
