@@ -70,4 +70,34 @@ class PpicPlan extends Model
 
         return round(($this->selisih_kg / $this->plan_kg) * 100, 2);
     }
+
+    /**
+     * BARU - Hitung ulang Aktual Ekor & Kg untuk 1 tanggal, bersumber
+     * dari LbPenerimaan (Report Harian Bahan Baku LB). Cuma rit yang
+     * SUDAH lewat tahap Setelah Bongkar (status != 'Proses Bongkar')
+     * yang dihitung - rit yang masih menunggu Setelah Bongkar diabaikan
+     * dulu dari Aktual.
+     *
+     * Selalu hitung ULANG PENUH (SUM langsung dari tabel), bukan nambah
+     * incremental, supaya tetap akurat walau ada rit yang direvisi
+     * berkali-kali atau dihapus.
+     *
+     * Dipanggil dari:
+     * - PlanningController::store() -> saat PPIC bikin baris Plan baru
+     *   untuk tanggal yang mungkin sudah ada data LB duluan.
+     * - LbReportController::storeSetelah() -> setiap kali data Setelah
+     *   Bongkar disimpan/diubah, untuk sinkronisasi real-time.
+     */
+    public static function recalculateAktual(string $tanggal): array
+    {
+        $totals = LbPenerimaan::where('tanggal', $tanggal)
+            ->where('status', '!=', 'Proses Bongkar')
+            ->selectRaw('SUM(ekor_netto) as total_ekor, SUM(kg_netto) as total_kg')
+            ->first();
+
+        return [
+            'aktual_ekor' => (int) ($totals->total_ekor ?? 0),
+            'aktual_kg'   => (float) ($totals->total_kg ?? 0),
+        ];
+    }
 }

@@ -50,39 +50,56 @@ class PlanningController extends Controller
     }
 
     /**
-     * Simpan/update data 1 tanggal. Karena tanggal UNIQUE di tabel,
+     * Simpan/update data Plan 1 tanggal. Karena tanggal UNIQUE di tabel,
      * pakai updateOrCreate - kalau tanggal itu sudah ada datanya,
      * otomatis di-update (bukan bikin baris baru/duplikat).
+     *
+     * DIUBAH: aktual_ekor & aktual_kg TIDAK LAGI diinput manual oleh
+     * PPIC - dihapus dari validasi. Kolom itu sekarang murni hasil
+     * sinkronisasi otomatis dari Report Harian Bahan Baku LB (lihat
+     * PpicPlan::recalculateAktual() & LbReportController::storeSetelah()).
+     *
+     * Kalau baris tanggal ini SUDAH ADA, Aktual yang sudah tersimpan
+     * (hasil sinkron dari LB) TIDAK disentuh sama sekali di sini - PPIC
+     * cuma boleh ubah Plan & Keterangan lewat form ini.
+     *
+     * Kalau baris tanggal ini BELUM ADA (baru pertama kali PPIC input
+     * Plan untuk tanggal itu), Aktual dihitung dulu dari data LB yang
+     * mungkin sudah lebih dulu ada untuk tanggal tersebut - supaya tidak
+     * start dari 0 kalau ternyata datanya sudah lengkap di sisi LB.
      */
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'tanggal'     => ['required', 'date'],
-            'plan_ekor'   => ['required', 'integer', 'min:0'],
-            'aktual_ekor' => ['required', 'integer', 'min:0'],
-            'plan_kg'     => ['required', 'numeric', 'min:0'],
-            'aktual_kg'   => ['required', 'numeric', 'min:0'],
-            'keterangan'  => ['nullable', 'string', 'max:2000'],
+            'tanggal'    => ['required', 'date'],
+            'plan_ekor'  => ['required', 'integer', 'min:0'],
+            'plan_kg'    => ['required', 'numeric', 'min:0'],
+            'keterangan' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $user = $request->user('tally');
+        $sudahAda = PpicPlan::where('tanggal', $data['tanggal'])->exists();
 
         $plan = PpicPlan::updateOrCreate(
             ['tanggal' => $data['tanggal']],
-            [
-                'plan_ekor'   => $data['plan_ekor'],
-                'aktual_ekor' => $data['aktual_ekor'],
-                'plan_kg'     => $data['plan_kg'],
-                'aktual_kg'   => $data['aktual_kg'],
-                'keterangan'  => $data['keterangan'] ?? null,
-                'user_id'     => $user->id,
-            ]
+            array_merge(
+                [
+                    'plan_ekor'  => $data['plan_ekor'],
+                    'plan_kg'    => $data['plan_kg'],
+                    'keterangan' => $data['keterangan'] ?? null,
+                    'user_id'    => $user->id,
+                ],
+                // Baris baru -> tarik Aktual dari data LB yang mungkin
+                // sudah ada duluan. Baris sudah ada -> Aktual tersimpan
+                // tidak diubah sama sekali di sini.
+                $sudahAda ? [] : PpicPlan::recalculateAktual($data['tanggal'])
+            )
         );
 
         ActivityLogger::log(
             'ppic',
             $plan->wasRecentlyCreated ? 'create' : 'update',
-            "{$user->employee_code} ({$user->name}) ".($plan->wasRecentlyCreated ? 'menambah' : 'memperbarui')." data Planning vs Aktual tanggal {$data['tanggal']}",
+            "{$user->employee_code} ({$user->name}) ".($plan->wasRecentlyCreated ? 'menambah' : 'memperbarui')." data Planning tanggal {$data['tanggal']}",
             $user
         );
 

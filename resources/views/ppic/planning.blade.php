@@ -38,6 +38,7 @@
 
         .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
         .card h5 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 1.2rem; text-transform: uppercase; margin-bottom: 16px; }
+        .card-note { font-size: 0.72rem; color: var(--muted-dim); margin: -10px 0 16px; line-height: 1.4; }
 
         label { font-weight: 700; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; display: block; }
         .form-control {
@@ -99,19 +100,8 @@
                     <input type="number" id="f_plan_ekor" class="form-control" min="0">
                 </div>
                 <div>
-                    <label>Aktual Ekor</label>
-                    <input type="number" id="f_aktual_ekor" class="form-control" min="0">
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div>
                     <label>Plan KG</label>
                     <input type="number" step="0.01" id="f_plan_kg" class="form-control" min="0">
-                </div>
-                <div>
-                    <label>Aktual KG</label>
-                    <input type="number" step="0.01" id="f_aktual_kg" class="form-control" min="0">
                 </div>
             </div>
 
@@ -119,6 +109,7 @@
             <textarea id="f_keterangan" class="form-control" placeholder="Catatan tambahan..."></textarea>
 
             <button class="btn-primary" onclick="submitPlan()">Simpan</button>
+            <div class="card-note">Aktual Ekor & Aktual Kg terisi otomatis dari Report Harian Bahan Baku LB setelah data Setelah Bongkar diinput - tidak diinput manual di sini.</div>
         </div>
 
         <div class="table-wrapper">
@@ -160,13 +151,14 @@
             return data;
         }
 
+        // DIUBAH: aktual_ekor & aktual_kg dihapus dari payload - sekarang
+        // otomatis terisi di backend dari Report Harian Bahan Baku LB,
+        // bukan input manual PPIC lagi.
         async function submitPlan() {
             const payload = {
                 tanggal: document.getElementById('f_tanggal').value,
                 plan_ekor: parseInt(document.getElementById('f_plan_ekor').value) || 0,
-                aktual_ekor: parseInt(document.getElementById('f_aktual_ekor').value) || 0,
                 plan_kg: parseFloat(document.getElementById('f_plan_kg').value) || 0,
-                aktual_kg: parseFloat(document.getElementById('f_aktual_kg').value) || 0,
                 keterangan: document.getElementById('f_keterangan').value || null,
             };
 

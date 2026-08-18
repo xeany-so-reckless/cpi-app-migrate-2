@@ -5,6 +5,7 @@ namespace App\Http\Controllers\LbReport;
 use App\Http\Controllers\Controller;
 use App\Models\LbHanging;
 use App\Models\LbPenerimaan;
+use App\Models\PpicPlan;
 use App\Models\PurchaseOrder;
 use App\Models\UniformityRit;
 use App\Support\ActivityLogger;
@@ -402,6 +403,12 @@ class LbReportController extends Controller
             'keterangan'     => $data['keterangan'] ?? null,
         ]);
 
+        // BARU - sinkronkan Aktual Ekor/Kg di PPIC Planning vs Aktual
+        // setiap kali data Setelah Bongkar disimpan/diubah. Pakai
+        // $penerimaan->tanggal (bukan $data['tanggal_update'] mentah)
+        // supaya formatnya konsisten dengan yang tersimpan di kolom.
+        $this->syncAktualPlanning($request, $penerimaan->tanggal->format('Y-m-d'));
+
         ActivityLogger::log(
             'report_lb',
             'update',
@@ -568,6 +575,33 @@ class LbReportController extends Controller
         if (! $request->user('tally')->hasAnyRoles($roles)) {
             abort(403, 'Anda tidak memiliki akses untuk aksi ini.');
         }
+    }
+
+    /**
+     * BARU - Sinkronisasi Aktual Ekor/Kg di PpicPlan (Planning vs
+     * Aktual PPIC) untuk 1 tanggal, dipanggil setiap kali data Setelah
+     * Bongkar disimpan/diubah lewat storeSetelah().
+     *
+     * Kalau baris Plan tanggal itu SUDAH ADA (PPIC sudah input Plan-nya),
+     * cuma aktual_ekor/aktual_kg yang diupdate - plan_ekor/plan_kg/
+     * keterangan/user_id milik PPIC tidak disentuh.
+     *
+     * Kalau baris Plan tanggal itu BELUM ADA sama sekali, dibuatkan baris
+     * baru dengan plan_ekor/plan_kg default 0 (menunggu PPIC melengkapi
+     * belakangan) - user_id diisi dari user LB yang sedang input, supaya
+     * kolom wajib (foreign key, NOT NULL) tetap valid.
+     */
+    private function syncAktualPlanning(Request $request, string $tanggal): void
+    {
+        $sudahAda = PpicPlan::where('tanggal', $tanggal)->exists();
+
+        PpicPlan::updateOrCreate(
+            ['tanggal' => $tanggal],
+            array_merge(
+                PpicPlan::recalculateAktual($tanggal),
+                $sudahAda ? [] : ['user_id' => $request->user('tally')->id]
+            )
+        );
     }
 
     private function emptyRekap(): array
