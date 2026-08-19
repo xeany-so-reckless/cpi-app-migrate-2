@@ -266,7 +266,7 @@ class LbReportController extends Controller
         // PO lain, PPIC tidak tahu akan ada berapa rit - nomor rit
         // ditentukan mandiri oleh tim LB Report saat truk datang, jadi
         // tidak ada validasi batas maksimal di sini.
-        if ($po->jenis_po === 'FEHM') {
+        if ($po->jenis_po === 'FEH0') {
             $jumlahRitPo = $po->jumlah_rit ?? 0;
 
             if ($jumlahRitPo < 1) {

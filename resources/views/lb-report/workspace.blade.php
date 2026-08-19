@@ -494,7 +494,7 @@ function generateDropdownRit() {
         return;
     }
 
-    if (po.jenisPo === 'FEHM') {
+    if (po.jenisPo === 'FEH0') {
         inputRit.classList.add('hidden');
         inputRit.disabled = true;
         inputRit.value = '';

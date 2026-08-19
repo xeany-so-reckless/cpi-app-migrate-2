@@ -166,16 +166,16 @@
         }
 
                 function toggleProdukField() {
-            const jenis = document.getElementById('f_jenis_po').value;
-            const wrapper = document.getElementById('produkWrapper');
-            const jumlahRitWrapper = document.getElementById('jumlahRitWrapper');
+    const jenis = document.getElementById('f_jenis_po').value;
+    const wrapper = document.getElementById('produkWrapper');
+    const jumlahRitWrapper = document.getElementById('jumlahRitWrapper');
 
-            wrapper.style.display = jenis === 'FEHM' ? 'block' : 'none';
-            if (jenis !== 'FEHM') document.getElementById('f_produk').value = '';
+    wrapper.style.display = jenis === 'FEHM' ? 'block' : 'none';
+    if (jenis !== 'FEHM') document.getElementById('f_produk').value = '';
 
-            jumlahRitWrapper.style.display = jenis === 'FEHM' ? 'block' : 'none';
-            if (jenis !== 'FEHM') document.getElementById('f_jumlah_rit').value = '';
-        }
+    jumlahRitWrapper.style.display = jenis === 'FEH0' ? 'block' : 'none';
+    if (jenis !== 'FEH0') document.getElementById('f_jumlah_rit').value = '';
+}
 
         async function submitPo() {
             const jenisPo = document.getElementById('f_jenis_po').value;
@@ -195,7 +195,7 @@
                 return;
             }
 
-                        if (jenisPo === 'FEHM' && (!payload.jumlah_rit || payload.jumlah_rit < 1)) {
+                        if (jenisPo === 'FEH0' && (!payload.jumlah_rit || payload.jumlah_rit < 1)) {
                 Swal.fire({ title: 'Lengkapi Data', text: 'Jumlah Rit wajib diisi, minimal 1!', icon: 'warning', confirmButtonColor: '#4f46e5' });
                 return;
             }
