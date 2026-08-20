@@ -212,8 +212,10 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
         Route::prefix('purchase-order')->name('purchase-order.')->group(function () {
     Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
     Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
+    Route::get('/trashed', [PurchaseOrderController::class, 'trashed'])->name('trashed'); // BARU
     Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
-    Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco'); // BARU
+    Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco');
+    Route::post('/{id}/restore', [PurchaseOrderController::class, 'restore'])->name('restore'); // BARU
     Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
 });
 

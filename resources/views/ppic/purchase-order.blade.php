@@ -101,7 +101,7 @@
         <div class="page-title">Input PO</div>
     </div>
 
-    <div class="layout">
+        <div class="layout">
         <div class="card">
             <h5>PO Baru</h5>
             <label>Jenis PO</label>
@@ -116,7 +116,7 @@
             <label>Nomor PO</label>
             <input type="text" id="f_nomor_po" class="form-control" placeholder="Contoh: PO-2026-001">
 
-                        <div id="jumlahRitWrapper">
+            <div id="jumlahRitWrapper">
                 <label>Jumlah Rit</label>
                 <input type="number" id="f_jumlah_rit" class="form-control" placeholder="Contoh: 3" min="1">
             </div>
@@ -139,8 +139,9 @@
         </div>
 
         <div>
-            <div class="search-bar">
-                <input type="text" id="searchInput" placeholder="Cari nomor PO atau jenis...">
+            <div class="search-bar" style="display:flex; gap:10px; align-items:center;">
+                <input type="text" id="searchInput" placeholder="Cari nomor PO atau jenis..." style="flex:1;">
+                <button type="button" onclick="toggleTrashedView()" id="btnToggleTrashed" style="white-space:nowrap; height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; padding:0 14px; font-size:0.8rem; font-weight:700; color:var(--muted); cursor:pointer;">Riwayat Terhapus</button>
             </div>
             <div class="table-wrapper">
                 <table>
@@ -158,6 +159,25 @@
                     </thead>
                     <tbody id="tableBody">
                         <tr><td colspan="8" class="loading-state">Memuat data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="trashedWrapper" class="table-wrapper" style="display:none; margin-top:16px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nomor PO</th>
+                            <th>Jenis PO</th>
+                            <th>Produk</th>
+                            <th>Tanggal</th>
+                            <th>Dihapus Pada</th>
+                            <th>Diinput Oleh</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="trashedTableBody">
+                        <tr><td colspan="7" class="loading-state">Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -259,7 +279,7 @@
                             <button class="btn-teco" onclick="toggleTeco(${d.id})">${d.isTeco ? 'Buka Lagi' : 'Tandai TECO'}</button>
                         </td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
-                        <td><button class="btn-icon" onclick="hapusPo(${d.id})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button></td>
+                                                <td>${d.isTeco ? '' : `<button class="btn-icon" onclick="hapusPo(${d.id})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>`}</td>
                     </tr>
                 `).join('');
             } catch (err) {
@@ -287,6 +307,51 @@
             try {
                 const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}/toggle-teco`, { method: 'POST' });
                 Swal.fire({ title: 'Berhasil!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
+                loadData();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            }
+        }
+
+                let trashedVisible = false;
+
+        function toggleTrashedView() {
+            trashedVisible = !trashedVisible;
+            document.getElementById('trashedWrapper').style.display = trashedVisible ? 'block' : 'none';
+            document.getElementById('btnToggleTrashed').textContent = trashedVisible ? 'Tutup Riwayat Terhapus' : 'Riwayat Terhapus';
+            if (trashedVisible) loadTrashed();
+        }
+
+        async function loadTrashed() {
+            const tbody = document.getElementById('trashedTableBody');
+            tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Memuat data...</td></tr>`;
+            try {
+                const data = await apiFetch(`{{ route('ppic.purchase-order.trashed') }}`);
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Tidak ada PO yang terhapus.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = data.map(d => `
+                    <tr>
+                        <td><span class="po-chip">${d.nomorPo}</span></td>
+                        <td>${d.jenisPo}</td>
+                        <td>${d.namaProduk ?? '-'}</td>
+                        <td>${d.tanggalLabel}</td>
+                        <td style="font-size:0.78rem; color:var(--muted);">${d.deletedAtLabel ?? '-'}</td>
+                        <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
+                        <td><button class="btn-teco" onclick="restorePo(${d.id})">Restore</button></td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Gagal memuat: ${err.message}</td></tr>`;
+            }
+        }
+
+        async function restorePo(id) {
+            try {
+                const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}/restore`, { method: 'POST' });
+                Swal.fire({ title: 'Dipulihkan!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
+                loadTrashed();
                 loadData();
             } catch (err) {
                 Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
