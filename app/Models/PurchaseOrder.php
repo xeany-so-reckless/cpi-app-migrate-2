@@ -20,6 +20,7 @@ class PurchaseOrder extends Model
     {
         return [
             'tanggal' => 'date',
+            'teco_at' => 'datetime',
         ];
     }
 
@@ -31,5 +32,16 @@ class PurchaseOrder extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'produk_id');
+    }
+
+    /**
+     * BARU - True kalau PO ini sudah ditandai TECO (Technically Complete,
+     * istilah SAP) oleh PPIC. PO yang TECO otomatis hilang dari dropdown
+     * "Nomor PO" di form Sebelum Bongkar (LB Report) - lihat
+     * LbReportController::listPurchaseOrders().
+     */
+    public function isTeco(): bool
+    {
+        return $this->teco_at !== null;
     }
 }

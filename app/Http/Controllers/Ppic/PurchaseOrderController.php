@@ -37,6 +37,8 @@ class PurchaseOrderController extends Controller
             'tanggal'      => $po->tanggal->format('Y-m-d'),
             'tanggalLabel' => $po->tanggal->format('d/m/Y'),
             'namaUser'     => $po->user->name ?? '-',
+            'isTeco'       => $po->isTeco(),
+            'tecoAtLabel'  => $po->teco_at?->format('d/m/Y H:i'),
         ]);
 
         return response()->json($orders);
@@ -55,7 +57,7 @@ class PurchaseOrderController extends Controller
             'jenis_po'   => ['required', 'string', 'max:100'],
             'nomor_po'   => ['required', 'string', 'max:100', 'unique:purchase_orders,nomor_po'],
             'tanggal'    => ['required', 'date'],
-            'jumlah_rit' => ['required_if:jenis_po,FEH0', 'nullable', 'integer', 'min:1'],
+            'jumlah_rit' => ['required_if:jenis_po,FEHM', 'nullable', 'integer', 'min:1'],
             'produk_id'  => ['required_if:jenis_po,FEHM', 'nullable', 'exists:products,id'],
         ]);
 
@@ -98,5 +100,41 @@ class PurchaseOrderController extends Controller
         );
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * BARU - Toggle status TECO (Technically Complete, istilah SAP) PO.
+     * Kalau belum TECO -> ditandai TECO (teco_at diisi waktu sekarang).
+     * Kalau sudah TECO -> dibuka lagi / unTECO (teco_at dikosongkan).
+     *
+     * Efek TECO: PO hilang dari dropdown "Nomor PO" di form Sebelum
+     * Bongkar (LB Report) - lihat LbReportController::listPurchaseOrders().
+     * Tidak ada proteksi tambahan di level server submit LB Report -
+     * murni penyaringan tampilan dropdown sesuai keputusan bisnis.
+     * Tidak berpengaruh ke Dashboard Produksi Bulanan.
+     */
+    public function toggleTeco(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
+    {
+        $user = $request->user('tally');
+        $akanTeco = ! $purchaseOrder->isTeco();
+
+        $purchaseOrder->forceFill([
+            'teco_at' => $akanTeco ? now() : null,
+        ])->save();
+
+        ActivityLogger::log(
+            'ppic',
+            'update',
+            "{$user->employee_code} ({$user->name}) ".($akanTeco ? 'menandai' : 'membuka kembali')." PO {$purchaseOrder->nomor_po} ".($akanTeco ? 'sebagai TECO' : 'dari status TECO'),
+            $user
+        );
+
+        return response()->json([
+            'success' => true,
+            'isTeco'  => $purchaseOrder->isTeco(),
+            'message' => $akanTeco
+                ? "PO {$purchaseOrder->nomor_po} berhasil ditandai TECO."
+                : "PO {$purchaseOrder->nomor_po} berhasil dibuka kembali dari status TECO.",
+        ]);
     }
 }

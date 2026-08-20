@@ -210,11 +210,12 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
 
         // --- Input PO ---
         Route::prefix('purchase-order')->name('purchase-order.')->group(function () {
-            Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
-            Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
-            Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
-            Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
-        });
+    Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
+    Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
+    Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
+    Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco'); // BARU
+    Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
+});
 
         // --- Dashboard ---
         Route::prefix('dashboard')->name('dashboard.')->group(function () {

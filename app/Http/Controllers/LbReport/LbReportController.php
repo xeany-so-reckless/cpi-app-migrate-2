@@ -34,7 +34,12 @@ class LbReportController extends Controller
      */
     public function listPurchaseOrders(): JsonResponse
     {
-        $list = PurchaseOrder::orderByDesc('tanggal')
+        // DIUBAH: PO yang sudah TECO (Technically Complete, ditandai
+        // PPIC) dikeluarkan dari daftar - PO yang sudah ditutup PPIC
+        // tidak boleh lagi dipilih untuk input rit baru. Lihat
+        // PurchaseOrderController::toggleTeco().
+        $list = PurchaseOrder::whereNull('teco_at')
+            ->orderByDesc('tanggal')
             ->get(['nomor_po', 'jenis_po', 'tanggal', 'jumlah_rit'])
             ->map(fn (PurchaseOrder $po) => [
                 'nomorPo'   => $po->nomor_po,
@@ -266,7 +271,7 @@ class LbReportController extends Controller
         // PO lain, PPIC tidak tahu akan ada berapa rit - nomor rit
         // ditentukan mandiri oleh tim LB Report saat truk datang, jadi
         // tidak ada validasi batas maksimal di sini.
-        if ($po->jenis_po === 'FEH0') {
+        if ($po->jenis_po === 'FEHM') {
             $jumlahRitPo = $po->jumlah_rit ?? 0;
 
             if ($jumlahRitPo < 1) {

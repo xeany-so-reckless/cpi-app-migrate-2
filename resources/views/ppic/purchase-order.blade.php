@@ -67,6 +67,18 @@
             font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.78rem; color: var(--primary);
             background: var(--primary-soft); padding: 3px 8px; border-radius: 5px;
         }
+
+                .status-badge {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.7rem;
+            padding: 3px 8px; border-radius: 5px; white-space: nowrap;
+        }
+        .status-aktif { color: #16a34a; background: #f0fdf4; }
+        .status-teco { color: var(--danger); background: #fef2f2; }
+        .btn-teco {
+            border: 1px solid var(--line); background: #fff; border-radius: 6px;
+            padding: 4px 10px; font-size: 0.72rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+        }
+        .btn-teco:hover { background: var(--surface-hover); }
         .empty-state, .loading-state { text-align: center; padding: 50px 20px; color: var(--muted); font-size: 0.85rem; }
         .btn-icon { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; }
         .btn-icon:hover { color: var(--danger); background: #fef2f2; }
@@ -139,12 +151,13 @@
                             <th>Produk</th>
                             <th>Jumlah Rit</th>
                             <th>Tanggal</th>
+                            <th>Status</th>
                             <th>Diinput Oleh</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
-                        <tr><td colspan="7" class="loading-state">Memuat data...</td></tr>
+                        <tr><td colspan="8" class="loading-state">Memuat data...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -231,7 +244,7 @@
                 const qs = search ? `?search=${encodeURIComponent(search)}` : '';
                 const data = await apiFetch(`{{ route('ppic.purchase-order.data') }}${qs}`);
                 if (data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada PO tercatat.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Belum ada PO tercatat.</td></tr>`;
                     return;
                 }
                 tbody.innerHTML = data.map(d => `
@@ -241,12 +254,16 @@
                         <td>${d.namaProduk ?? '-'}</td>
                         <td>${d.jumlahRit ?? '-'}</td>
                         <td>${d.tanggalLabel}</td>
+                        <td>
+                            <span class="status-badge ${d.isTeco ? 'status-teco' : 'status-aktif'}">${d.isTeco ? 'TECO' : 'AKTIF'}</span>
+                            <button class="btn-teco" onclick="toggleTeco(${d.id})">${d.isTeco ? 'Buka Lagi' : 'Tandai TECO'}</button>
+                        </td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
                         <td><button class="btn-icon" onclick="hapusPo(${d.id})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button></td>
                     </tr>
                 `).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Gagal memuat: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Gagal memuat: ${err.message}</td></tr>`;
             }
         }
 
@@ -263,6 +280,16 @@
                 loadData();
             } catch (err) {
                 Swal.fire({ title: 'Gagal Menghapus', text: err.message, icon: 'error' });
+            }
+        }
+
+                async function toggleTeco(id) {
+            try {
+                const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}/toggle-teco`, { method: 'POST' });
+                Swal.fire({ title: 'Berhasil!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
+                loadData();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
             }
         }
 
