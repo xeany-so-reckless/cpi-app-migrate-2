@@ -57,7 +57,7 @@ class PurchaseOrderController extends Controller
             'jenis_po'   => ['required', 'string', 'max:100'],
             'nomor_po'   => ['required', 'string', 'max:100', 'unique:purchase_orders,nomor_po'],
             'tanggal'    => ['required', 'date'],
-            'jumlah_rit' => ['required_if:jenis_po,FEHM', 'nullable', 'integer', 'min:1'],
+            'jumlah_rit' => ['required_if:jenis_po,FEH0', 'nullable', 'integer', 'min:1'],
             'produk_id'  => ['required_if:jenis_po,FEHM', 'nullable', 'exists:products,id'],
         ]);
 
