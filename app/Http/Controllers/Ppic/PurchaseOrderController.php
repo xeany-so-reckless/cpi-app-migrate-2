@@ -137,7 +137,7 @@ class PurchaseOrderController extends Controller
 
         $purchaseOrder->forceFill([
     'teco_at' => $akanTeco ? now() : null,
-])->save();
+        ])->save();
 
         ActivityLogger::log(
             'ppic',
@@ -204,4 +204,41 @@ class PurchaseOrderController extends Controller
             'message' => "PO {$purchaseOrder->nomor_po} berhasil dipulihkan.",
         ]);
     }
+
+    /**
+     * BARU - Hapus PO secara PERMANEN (beneran hilang dari database,
+     * bukan soft delete). Hanya bisa dilakukan terhadap PO yang sudah
+     * di-soft-delete lebih dulu (harus lewat Riwayat Terhapus) - jaga-jaga
+     * supaya tidak sengaja menghapus permanen PO yang masih aktif.
+     *
+     * Setelah dihapus permanen, nomor_po otomatis lepas dan bisa dipakai
+     * ulang untuk PO baru (karena barisnya sudah benar-benar hilang,
+     * constraint unique tidak lagi mendeteksinya).
+     */
+    public function forceDeletePermanent(Request $request, int $id): JsonResponse
+    {
+        $purchaseOrder = PurchaseOrder::onlyTrashed()->findOrFail($id);
+        $user = $request->user('tally');
+        $nomorPo = $purchaseOrder->nomor_po;
+
+        $purchaseOrder->forceDelete();
+
+        ActivityLogger::log(
+            'ppic',
+            'delete',
+            "{$user->employee_code} ({$user->name}) menghapus PERMANEN PO: {$nomorPo}",
+            $user
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "PO {$nomorPo} berhasil dihapus permanen.",
+        ]);
+    }
 }
+
+
+
+
+
+

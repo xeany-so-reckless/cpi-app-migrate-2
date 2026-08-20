@@ -339,7 +339,10 @@
                         <td>${d.tanggalLabel}</td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.deletedAtLabel ?? '-'}</td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
-                        <td><button class="btn-teco" onclick="restorePo(${d.id})">Restore</button></td>
+                        <td style="display:flex; gap:6px;">
+                            <button class="btn-teco" onclick="restorePo(${d.id})">Restore</button>
+                            <button class="btn-teco" style="color:var(--danger); border-color:#fecaca;" onclick="forceDeletePo(${d.id})">Hapus Permanen</button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (err) {
@@ -353,6 +356,23 @@
                 Swal.fire({ title: 'Dipulihkan!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
                 loadTrashed();
                 loadData();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            }
+        }
+
+                async function forceDeletePo(id) {
+            const result = await Swal.fire({
+                title: 'Hapus Permanen?', text: 'PO ini akan hilang total dan TIDAK BISA dikembalikan lagi.', icon: 'warning',
+                showCancelButton: true, confirmButtonText: 'Ya, Hapus Permanen', cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626', cancelButtonColor: '#6b7280',
+            });
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}/force`, { method: 'DELETE' });
+                Swal.fire({ title: 'Terhapus!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
+                loadTrashed();
             } catch (err) {
                 Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
             }
