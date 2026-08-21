@@ -28,6 +28,13 @@ class PurchaseOrderController extends Controller
             });
         }
 
+        // BARU - filter bulan (format: yyyy-MM), bisa dipakai bareng
+        // search. Konsisten dengan pola filter bulan di
+        // PlanningController::data().
+        if ($request->filled('bulan')) {
+            $query->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$request->query('bulan')]);
+        }
+
         $orders = $query->get()->map(fn (PurchaseOrder $po) => [
             'id'           => $po->id,
             'jenisPo'      => $po->jenis_po,
@@ -135,7 +142,7 @@ class PurchaseOrderController extends Controller
         $user = $request->user('tally');
         $akanTeco = ! $purchaseOrder->isTeco();
 
-        $purchaseOrder->forceFill([
+                $purchaseOrder->forceFill([
     'teco_at' => $akanTeco ? now() : null,
         ])->save();
 
@@ -236,6 +243,9 @@ class PurchaseOrderController extends Controller
         ]);
     }
 }
+
+
+
 
 
 

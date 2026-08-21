@@ -50,7 +50,7 @@
         .btn-primary:disabled { background: var(--muted); cursor: not-allowed; opacity: 0.7; }
 
         .search-bar { padding: 0 0 14px; }
-        .search-bar input {
+                .search-bar input#searchInput {
             width: 100%; height: 42px; border-radius: 8px; border: 1px solid var(--line); padding: 0 14px; font-size: 0.85rem;
         }
 
@@ -67,7 +67,6 @@
             font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.78rem; color: var(--primary);
             background: var(--primary-soft); padding: 3px 8px; border-radius: 5px;
         }
-
                 .status-badge {
             font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.7rem;
             padding: 3px 8px; border-radius: 5px; white-space: nowrap;
@@ -101,7 +100,7 @@
         <div class="page-title">Input PO</div>
     </div>
 
-        <div class="layout">
+    <div class="layout">
         <div class="card">
             <h5>PO Baru</h5>
             <label>Jenis PO</label>
@@ -139,8 +138,9 @@
         </div>
 
         <div>
-            <div class="search-bar" style="display:flex; gap:10px; align-items:center;">
+                        <div class="search-bar" style="display:flex; gap:10px; align-items:center;">
                 <input type="text" id="searchInput" placeholder="Cari nomor PO atau jenis..." style="flex:1;">
+                <input type="month" id="filterBulan" style="height:42px; border-radius:8px; border:1px solid var(--line); padding:0 12px; font-size:0.85rem; color:var(--text);">
                 <button type="button" onclick="toggleTrashedView()" id="btnToggleTrashed" style="white-space:nowrap; height:42px; border-radius:8px; border:1px solid var(--line); background:#fff; padding:0 14px; font-size:0.8rem; font-weight:700; color:var(--muted); cursor:pointer;">Riwayat Terhapus</button>
             </div>
             <div class="table-wrapper">
@@ -257,17 +257,23 @@
             }
         }
 
-        async function loadData() {
+                async function loadData() {
             const tbody = document.getElementById('tableBody');
             const search = document.getElementById('searchInput').value.trim();
+            const bulan = document.getElementById('filterBulan').value;
+
+            const params = new URLSearchParams();
+            if (search) params.set('search', search);
+            if (bulan) params.set('bulan', bulan);
+            const qs = params.toString() ? `?${params.toString()}` : '';
+
             try {
-                const qs = search ? `?search=${encodeURIComponent(search)}` : '';
                 const data = await apiFetch(`{{ route('ppic.purchase-order.data') }}${qs}`);
                 if (data.length === 0) {
                     tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Belum ada PO tercatat.</td></tr>`;
                     return;
                 }
-                tbody.innerHTML = data.map(d => `
+                                tbody.innerHTML = data.map(d => `
                     <tr>
                         <td><span class="po-chip">${d.nomorPo}</span></td>
                         <td>${d.jenisPo}</td>
@@ -378,11 +384,13 @@
             }
         }
 
-        let searchTimer;
+                let searchTimer;
         document.getElementById('searchInput').addEventListener('input', () => {
             clearTimeout(searchTimer);
             searchTimer = setTimeout(loadData, 400);
         });
+
+        document.getElementById('filterBulan').addEventListener('change', loadData);
 
         loadData();
     </script>
