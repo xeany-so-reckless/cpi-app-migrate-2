@@ -84,7 +84,14 @@ class DashboardController extends Controller
     "icon" => "precision_manufacturing",
     "info" => "Sistem perencanaan, pengendalian, dan pelaporan produksi",
     "url"  => route('ppic.login'),
+],
+            [
+    "name" => "Produk Fresh",
+    "icon" => "restaurant",
+    "info" => "Sistem pengelolaan dan produksi produk fresh",
+    "url"  => route('produksifresh.login'),
 ]
+
         ];
 
         // Kalau url null berarti belum aktif -> jadi "#"
