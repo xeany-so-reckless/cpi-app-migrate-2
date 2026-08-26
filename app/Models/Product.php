@@ -15,6 +15,8 @@ class Product extends Model
         'category',
         'display_order',
         'is_active',
+        'type',
+        'category_code',
     ];
 
     protected function casts(): array
@@ -40,6 +42,22 @@ class Product extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * BARU - Untuk modul Produksi Fresh. type di sini BEDA dengan
+     * kolom `category` yang sudah ada (dipakai modul lain seperti
+     * Tally Pro) - type khusus menandai produk ini boleh diinput lewat
+     * form Fresh tipe "Main Product" atau "By Product".
+     */
+    public function scopeMain(Builder $query): Builder
+    {
+        return $query->where('type', 'main');
+    }
+
+    public function scopeByProduct(Builder $query): Builder
+    {
+        return $query->where('type', 'byproduct');
     }
 
     /**

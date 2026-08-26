@@ -21,6 +21,9 @@ use App\Http\Controllers\Ppic\PpicController;
 use App\Http\Controllers\Ppic\PlanningController;
 use App\Http\Controllers\Ppic\PurchaseOrderController;
 use App\Http\Controllers\Ppic\PpicDashboardController;
+use App\Http\Controllers\ProduksiFresh\AuthController as ProduksiFreshAuthController;
+use App\Http\Controllers\ProduksiFresh\ProduksiFreshController;
+
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -154,6 +157,24 @@ Route::prefix('report-lb')->name('lbreport.')->group(function () {
         Route::get('/ekor-netto-hanging', [LbReportController::class, 'ekorNettoHanging'])->name('ekor-netto-hanging');
         Route::get('/detail-hanging', [LbReportController::class, 'detailHangingLengkap'])->name('detail-hanging');
         Route::get('/ritase', [LbReportController::class, 'ritase'])->name('ritase');
+    });
+});
+
+// ==================== PRODUKSI FRESH ====================
+Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
+
+    Route::middleware('guest.produksifresh')->group(function () {
+        Route::get('/login', [ProduksiFreshAuthController::class, 'showLogin'])->name('login');
+        Route::post('/login', [ProduksiFreshAuthController::class, 'login'])->name('login.attempt');
+    });
+
+    Route::middleware(['auth:tally', 'role:foreman,supervisor,tally_by_product', 'no-cache'])->group(function () {
+        Route::post('/logout', [ProduksiFreshAuthController::class, 'logout'])->name('logout');
+        Route::get('/workspace', [ProduksiFreshController::class, 'workspace'])->name('workspace');
+
+        Route::get('/purchase-orders', [ProduksiFreshController::class, 'listPurchaseOrders'])->name('purchase-orders');
+        Route::get('/products', [ProduksiFreshController::class, 'listProducts'])->name('products');
+        Route::post('/store', [ProduksiFreshController::class, 'store'])->name('store');
     });
 });
 

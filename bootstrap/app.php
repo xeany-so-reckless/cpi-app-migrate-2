@@ -10,6 +10,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use App\Http\Middleware\RedirectIfProduksiFreshAuthenticated;
+
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -23,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'guest.serahterima' => RedirectIfSerahTerimaAuthenticated::class,
             'guest.lbreport' => RedirectIfLbReportAuthenticated::class,
             'guest.it' => RedirectIfItAuthenticated::class,
+            'guest.produksifresh' => RedirectIfProduksiFreshAuthenticated::class, // BARU
             'no-cache' => PreventBackHistoryCache::class,
             'role' => EnsureUserHasRole::class,
         ]);
@@ -38,6 +41,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if ($request->is('report-lb*')) {
                 return route('lbreport.login');
+            }
+
+            if ($request->is('produksi-fresh*')) {
+                return route('produksifresh.login');
             }
 
             if ($request->is('it*')) {
