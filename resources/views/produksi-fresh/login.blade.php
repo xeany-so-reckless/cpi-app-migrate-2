@@ -55,6 +55,16 @@
       cursor: pointer; background-color: var(--primary); color: #fff; margin-top: 8px;
     }
     .btn:hover { background-color: var(--primary-hover); }
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .back-link:hover { color: var(--primary); }
     .error-box {
       background: #fef2f2; border-left: 4px solid var(--error); color: var(--error);
       padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 16px;
@@ -93,6 +103,7 @@
 
       <button class="btn" type="submit">MASUK</button>
     </form>
+    <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard Produksi</a>
   </div>
 </body>
 </html>
