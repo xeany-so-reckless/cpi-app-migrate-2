@@ -429,7 +429,10 @@
     const tglSearch = document.getElementById('search_tanggal');
     if (tglSearch) tglSearch.value = today;
 
-    if (document.getElementById('formSebelum')) initEnterKey(); loadDaftarPO();
+    if (document.getElementById('formSebelum')) {
+    initEnterKey(); 
+    loadDaftarPO();
+    }
     if (document.getElementById('hanging-mobile-rows')) { renderTableKosong(); initVerticalNavigation(); }
   });
 
@@ -797,11 +800,23 @@ function generateDropdownRit() {
     selisihEl.className = selisih === 0 ? "font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded" : (selisih < 0 ? "font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded" : "font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded");
   }
 
+function getJamSekarang() {
+  const now = new Date();
+  const jam = String(now.getHours()).padStart(2, '0');
+  const menit = String(now.getMinutes()).padStart(2, '0');
+  return `${jam}:${menit}`;
+}
+
+
   function simpanDraftLokal() {
-    const noRit = document.getElementById('input-no-rit').value.trim().toUpperCase();
-    const noPo = document.getElementById('input-no-po').value.trim().toUpperCase();
-    if (!noRit) return alert("Cari Nomor Ritase terlebih dahulu sebelum menyimpan draft!");
-    let draftData = { jamBongkar: document.getElementById('jam-bongkar').value, jamSelesai: document.getElementById('jam-selesai').value, grid: {} };
+  const noRit = document.getElementById('input-no-rit').value.trim().toUpperCase();
+  const noPo = document.getElementById('input-no-po').value.trim().toUpperCase();
+  if (!noRit) return alert("Cari Nomor Ritase terlebih dahulu sebelum menyimpan draft!");
+
+  const jamSelesaiEl = document.getElementById('jam-selesai');
+  if (!jamSelesaiEl.value) jamSelesaiEl.value = getJamSekarang();
+
+  let draftData = { jamBongkar: document.getElementById('jam-bongkar').value, jamSelesai: jamSelesaiEl.value, grid: {} };
     for (let i = 1; i <= 19; i++) {
       for (let col = 1; col <= 4; col++) {
         const input = document.getElementById(`a${col}_${i}`);
@@ -847,9 +862,17 @@ function generateDropdownRit() {
   }
 
   async function cariNoRit() {
-    const noRit = document.getElementById('input-no-rit').value.trim();
-    const noPo = document.getElementById('input-no-po').value.trim();
-    if (!noRit) return alert("Masukkan nomor Ritase!");
+  const inputRitEl = document.getElementById('input-no-rit');
+  let noRit = inputRitEl.value.trim();
+
+  // ubah angka jadi format RIT-xx khusus untuk pencarian di menu Hanging
+  if (/^\d+$/.test(noRit)) {
+    noRit = 'RIT-' + noRit.padStart(2, '0');
+    inputRitEl.value = noRit; // biar tampilan di kolom ikut berubah
+  }
+
+  const noPo = document.getElementById('input-no-po').value.trim();
+  if (!noRit) return alert("Masukkan nomor Ritase!");
 
     document.getElementById('btn-cari-rit').disabled = true;
     document.getElementById('icon-cari').className = "fas fa-spinner fa-spin";
@@ -905,11 +928,15 @@ function generateDropdownRit() {
   }
 
   async function eksekusiSimpanKeSpreadsheet() {
-    const farm = document.getElementById('info-farm').innerText;
-    const noRitInput = document.getElementById('input-no-rit').value.trim();
-    const jamBongkar = document.getElementById('jam-bongkar').value;
-    const jamSelesai = document.getElementById('jam-selesai').value;
-    const namaTally = document.getElementById('input-nama-tally').value;
+  const farm = document.getElementById('info-farm').innerText;
+  const noRitInput = document.getElementById('input-no-rit').value.trim();
+  const jamBongkar = document.getElementById('jam-bongkar').value;
+
+  const jamSelesaiEl = document.getElementById('jam-selesai');
+  if (!jamSelesaiEl.value) jamSelesaiEl.value = getJamSekarang();
+  const jamSelesai = jamSelesaiEl.value;
+
+  const namaTally = document.getElementById('input-nama-tally').value;
     const namaForeman = document.getElementById('input-nama-foreman').value.trim().toUpperCase();
     if (farm === "-" || !noRitInput) return alert("Cari Ritase valid dahulu sebelum menyimpan!");
     if (!jamBongkar || !jamSelesai) return alert("Silakan isi Jam Bongkar dan Jam Selesai terlebih dahulu!");
