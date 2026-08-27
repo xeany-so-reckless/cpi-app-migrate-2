@@ -117,6 +117,7 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
 // dikunci pakai ID+password role foreman (verify-signature).
 Route::prefix('uniformity')->name('uniformity.')->group(function () {
     Route::get('/', [UniformityController::class, 'index'])->name('index');
+    Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/export', [UniformityController::class, 'exportPage'])->name('export');
 
     Route::get('/data', [UniformityController::class, 'data'])->name('data');

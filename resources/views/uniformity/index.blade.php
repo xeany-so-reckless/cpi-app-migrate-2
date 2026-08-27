@@ -98,9 +98,18 @@
                 <input type="date" id="input-tanggal" onkeydown="pindahFormDenganEnter(event, 'input-noRit')" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
               </div>
               <div>
-                <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Nomor Rit</label>
-                <input type="text" id="input-noRit" onkeydown="pindahFormDenganEnter(event, 'input-asalKandang')" placeholder="Contoh: RIT-01" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
-              </div>
+  <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Nomor Rit</label>
+  <div class="flex gap-2">
+    <input type="text" id="input-noRit" placeholder="Contoh: RIT-01"
+      onkeydown="if(event.key==='Enter'){ event.preventDefault(); cariDataDTA(); }"
+      class="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+    <button type="button" onclick="cariDataDTA()" id="btn-cari-dta"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-lg text-xs font-bold whitespace-nowrap">
+      <i class="fa-solid fa-magnifying-glass"></i> Cari
+    </button>
+  </div>
+  <input type="hidden" id="input-noPo" value="">
+</div>
               <div>
                 <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Asal Kandang</label>
                 <input type="text" id="input-asalKandang" onkeydown="pindahFormDenganEnter(event, 'input-sizeMin')" placeholder="Nama Kandang / Farm" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">
@@ -304,6 +313,63 @@
           else { document.getElementById('btn-add-temporary').focus(); }
         }
       }
+
+      function pindahInputDenganEnter(event, currentIndex) {
+  if (event.key === 'Enter') {
+    event.preventDefault(); prosesOtomatisDesimal(event.target);
+    const nextInput = document.querySelector(`.sample-input[data-index="${currentIndex + 1}"]`);
+    if (nextInput) { nextInput.focus(); nextInput.select(); }
+    else { document.getElementById('btn-add-temporary').focus(); }
+  }
+}
+
+async function cariDataDTA() {
+  const noRitEl = document.getElementById('input-noRit');
+  let noRit = noRitEl.value.trim();
+  if (!noRit) return alert('Ketik Nomor Rit terlebih dahulu!');
+
+  // ubah angka jadi format RIT-xx (konsisten dengan menu Hanging di workspace LB)
+  if (/^\d+$/.test(noRit)) {
+    noRit = 'RIT-' + noRit.padStart(2, '0');
+    noRitEl.value = noRit;
+  }
+
+  const btn = document.getElementById('btn-cari-dta');
+  const btnTextAsli = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+  try {
+    const res = await apiFetch(`{{ route('uniformity.dta-by-rit') }}?no_rit=${encodeURIComponent(noRit)}`);
+
+    document.getElementById('input-tanggal').value = res.tanggal || '';
+    document.getElementById('input-noPo').value = res.no_po || '';
+    document.getElementById('input-asalKandang').value = res.farm || '';
+
+    if (res.size) {
+      const parts = res.size.split('-').map(s => s.trim());
+      document.getElementById('input-sizeMin').value = parts[0] ? parseFloat(parts[0]).toFixed(2) : '';
+      document.getElementById('input-sizeMax').value = parts[1] ? parseFloat(parts[1]).toFixed(2) : '';
+    }
+
+    document.getElementById('input-kgDta').value = res.kg_dta ? parseFloat(res.kg_dta).toFixed(1) : '';
+    document.getElementById('input-ekorDta').value = res.ekor_dta || '';
+
+    hitungAbw();
+    hitungKalkulasiUniformity();
+
+    const sampleFirst = document.querySelector('.sample-input[data-index="1"]');
+    if (sampleFirst) sampleFirst.focus();
+
+  } catch (err) {
+    alert('Gagal ambil data: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = btnTextAsli;
+  }
+}
+
+function hitungAbw() {}
 
       function hitungAbw() {
         const kg = parseFloat(document.getElementById('input-kgDta').value) || 0;

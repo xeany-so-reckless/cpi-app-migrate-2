@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
+use App\Models\LbPenerimaan;
 
 class UniformityController extends Controller
 {
@@ -39,6 +40,34 @@ class UniformityController extends Controller
 
         return response()->json($rits->map(fn (UniformityRit $r) => $this->formatRit($r)));
     }
+
+    public function dtaByRit(Request $request)
+{
+    $noRit = $request->query('no_rit');
+
+    if (!$noRit) {
+        return response()->json(['message' => 'Nomor Rit wajib diisi.'], 422);
+    }
+
+    $data = LbPenerimaan::where('no_rit', $noRit)
+        ->latest('tanggal')
+        ->first();
+
+    if (!$data) {
+        return response()->json([
+            'message' => "Data DTA untuk Rit '{$noRit}' tidak ditemukan."
+        ], 404);
+    }
+
+    return response()->json([
+        'tanggal'  => \Carbon\Carbon::parse($data->tanggal)->format('Y-m-d'),
+        'no_po'    => $data->no_po,
+        'farm'     => $data->farm,
+        'size'     => $data->size,
+        'kg_dta'   => $data->kg_dta,
+        'ekor_dta' => $data->ekor_dta,
+    ]);
+}
 
     /**
      * Menggantikan getRekapData(jenis) di code.gs.
