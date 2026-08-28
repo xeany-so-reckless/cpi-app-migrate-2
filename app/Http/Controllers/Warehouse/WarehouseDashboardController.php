@@ -39,7 +39,7 @@ class WarehouseDashboardController extends Controller
                 "url"  => "#",
             ],
             [
-                "name" => "B2B",
+                "name" => "Produk Fresh",
                 "icon" => "handshake",
                 "info" => "Transaksi barang fresh yang tidak masuk Cell gudang",
                 "url"  => "#",
