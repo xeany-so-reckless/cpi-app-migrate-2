@@ -59,7 +59,7 @@
             font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted);
             text-transform: uppercase; letter-spacing: 0.5px;
         }
-        table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         table.data-table tr:hover td { background: var(--primary-soft); }
     </style>
 </head>
