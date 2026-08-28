@@ -14,12 +14,6 @@ class DashboardController extends Controller
 
         $production_docs = [
             [
-                "name" => "Laporan Produksi Harian",
-                "icon" => "Add_To_Drive",
-                "info" => "Upload Laporan harian Hasil Produksi Bersih Griller & Bahan Baku ke database",
-                "url"  => "https://drive.google.com/drive/folders/1vSTNp6m7q3P13NRXWXVOvpjzNBsC2uF-",
-            ],
-            [
                 "name" => "Tally Pro 2026",
                 "icon" => "Docs",
                 "info" => "Sistem input data tally harian otomatis berbasis web dan Excel VBA",
@@ -42,12 +36,6 @@ class DashboardController extends Controller
                 "icon" => "File_Copy",
                 "info" => "Sistem web input Serah Terima Hasil Produksi dengan Tim Warehouse",
                 "url"  => route('serahterima.login'),
-            ],
-            [
-                "name" => "Laporan Hasil Produksi",
-                "icon" => "description",
-                "info" => "Data hasil Produksi harian, Monitoring yield dan Hasil Produksi",
-                "url"  => "https://10.60.22.9/index.php/s/bxSpXbMyCxCsQ0D",
             ],
             [
                 "name" => "Dashboard Produksi Bulanan",
