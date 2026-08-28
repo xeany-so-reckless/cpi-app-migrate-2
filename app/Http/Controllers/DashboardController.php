@@ -90,6 +90,13 @@ class DashboardController extends Controller
     "icon" => "restaurant",
     "info" => "Sistem pengelolaan dan produksi produk fresh",
     "url"  => route('produksifresh.login'),
+],
+
+            [
+    "name" => "Warehouse",
+    "icon" => "inventory_2",
+    "info" => "Sistem pengelolaan stok dan aktivitas keluar masuk barang",
+    "url"  => "http://10.60.22.31/warehouse",
 ]
 
         ];
