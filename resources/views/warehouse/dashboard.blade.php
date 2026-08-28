@@ -186,18 +186,6 @@
         }
         .card-icon .material-symbols-outlined { font-size: 24px; }
 
-        .area-code {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            padding: 3px 8px;
-            border-radius: 999px;
-            border: 1px solid var(--line);
-            color: var(--muted);
-        }
-        .area-code.is-active { color: var(--ice-text); border-color: #9fd8e6; background: var(--ice-soft); }
-
         .file-name {
             font-family: 'Barlow Condensed', sans-serif;
             font-weight: 700;
@@ -230,6 +218,27 @@
         }
         .file-card.is-active .file-link { color: var(--ice-text); }
         .file-card:not(.is-active) .file-link { color: var(--muted-dim); pointer-events: none; }
+
+        /* ---------- STATUS BADGE (pojok kanan atas, blink hijau/ice seperti Produksi) ---------- */
+        .status-badge {
+            position: absolute; top: 14px; right: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem; font-weight: bold; padding: 4px 8px; border-radius: 3px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        .status-badge.status-active {
+            background-color: rgba(8, 145, 178, 0.1);
+            color: var(--ice-text);
+            border: 1px solid var(--ice);
+            animation: blink-animation 1.5s steps(5, start) infinite;
+        }
+        .status-badge.status-soon {
+            background-color: #eee;
+            color: #9bacba;
+            border: 1px solid #ccc;
+        }
+        @keyframes blink-animation { to { visibility: hidden; } }
 
         footer {
             background: #0a1219;
@@ -279,27 +288,19 @@
     <div class="content-section">
         <div class="section-label">Menu Operasional</div>
         <div class="grid-container">
-            @php
-                $area_codes = [
-                    'Inbound' => 'INB',
-                    'Stock Warehouse' => 'STK',
-                    'Outbound' => 'OUT',
-                    'Inbound STRSTO' => 'STR',
-                    'B2B' => 'B2B',
-                    'Transfer Cell' => 'TRF',
-                ];
-            @endphp
             @foreach ($warehouse_menus as $menu)
                 @php
                     $is_active = ($menu['url'] !== '#');
-                    $kode = $area_codes[$menu['name']] ?? '---';
+                    $badge_class = $is_active ? 'status-active' : 'status-soon';
+                    $badge_label = $is_active ? '● Active' : 'Coming Soon';
                 @endphp
                 <div class="file-card {{ $is_active ? 'is-active' : '' }}">
+                    <span class="status-badge {{ $badge_class }}">{{ $badge_label }}</span>
+
                     <div class="card-top-row">
                         <div class="card-icon">
                             <span class="material-symbols-outlined">{{ $menu['icon'] }}</span>
                         </div>
-                        <span class="area-code {{ $is_active ? 'is-active' : '' }}">{{ $kode }}</span>
                     </div>
 
                     <div class="file-name">{{ $menu['name'] }}</div>
