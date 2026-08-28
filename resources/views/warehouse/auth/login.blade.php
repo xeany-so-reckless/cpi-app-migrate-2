@@ -219,7 +219,7 @@
 
         <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Kembali ke Warehouse Console</a>
 
-        <a href="{{ route('dashboard') }}" class="text-xs text-gray-400 hover:text-blue-600 transition">← Kembali ke Dashboard Utama</a>
+        <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard Utama</a>
     </div>
 
     <div class="visual-side">
