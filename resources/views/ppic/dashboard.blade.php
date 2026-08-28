@@ -113,17 +113,17 @@
         <h4>Rekap Produksi Fresh per PO</h4>
         <div class="table-wrap">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>No. PO</th>
-                        <th>Jenis PO</th>
-                        <th>Tanggal</th>
-                        <th class="num">Qty Main</th>
-                        <th class="num">Qty By-Product</th>
-                        <th class="num">Qty Total</th>
-                        <th class="num">Jumlah Entri</th>
-                    </tr>
-                </thead>
+            <thead>
+                <tr>
+                    <th>No. PO</th>
+                    <th>Jenis PO</th>
+                    <th>Tanggal</th>
+                    <th class="num">Qty Main</th>
+                    <th class="num">Qty By-Product</th>
+                    <th class="num">Qty Total</th>
+                    <th class="num">Jumlah Entri</th>
+                </tr>
+            </thead>
                 <tbody id="tblProduksiFreshBody">
                     <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
                 </tbody>
