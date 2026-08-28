@@ -36,11 +36,31 @@
         .stat-value { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.7rem; color: var(--text); }
         .stat-box.primary .stat-value { color: var(--primary); }
 
-        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; padding: 0 5% 60px; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; padding: 0 5% 26px; }
         .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
         .chart-card h4 { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
         .chart-body { height: 260px; position: relative; }
         .empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 0.85rem; }
+
+        .section-card {
+            background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+            padding: 18px; margin: 0 5% 60px;
+        }
+        .section-card h4 {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+        }
+        .table-wrap { overflow-x: auto; }
+        table.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        table.data-table th, table.data-table td {
+            padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap;
+        }
+        table.data-table th {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        table.data-table tr:hover td { background: var(--primary-soft); }
     </style>
 </head>
 <body>
@@ -89,6 +109,28 @@
         </div>
     </div>
 
+    <div class="section-card">
+        <h4>Rekap Produksi Fresh per PO</h4>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No. PO</th>
+                        <th>Jenis PO</th>
+                        <th>Tanggal</th>
+                        <th class="num">Qty Main</th>
+                        <th class="num">Qty By-Product</th>
+                        <th class="num">Qty Total</th>
+                        <th class="num">Jumlah Entri</th>
+                    </tr>
+                </thead>
+                <tbody id="tblProduksiFreshBody">
+                    <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <script>
         let charts = {};
         const filterBulan = document.getElementById('filterBulan');
@@ -100,6 +142,7 @@
                 const data = await res.json();
                 renderStats(data.summary, data.totalPo);
                 renderCharts(data.trend, data.poByJenis);
+                renderProduksiFresh(data.produksiFresh);
             } catch (err) {
                 console.error(err);
             }
@@ -174,6 +217,27 @@
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
                 });
             }
+        }
+
+        function renderProduksiFresh(rows) {
+            const tbody = document.getElementById('tblProduksiFreshBody');
+
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada input Produksi Fresh bulan ini.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td>${r.nomorPo}</td>
+                    <td>${r.jenisPo}</td>
+                    <td>${r.tanggalLabel}</td>
+                    <td class="num">${Number(r.qtyMain).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
+                    <td class="num">${Number(r.qtyByProduct).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
+                    <td class="num">${Number(r.qtyTotal).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
+                    <td class="num">${r.jumlahEntri}</td>
+                </tr>
+            `).join('');
         }
 
         filterBulan.addEventListener('change', loadDashboard);

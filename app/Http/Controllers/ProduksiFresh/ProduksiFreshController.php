@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProduksiFresh;
 use App\Models\PurchaseOrder;
+use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,13 +22,18 @@ class ProduksiFreshController extends Controller
     }
 
     /**
-     * Daftar semua PO dari PPIC untuk dropdown Nomor PO. TIDAK difilter
-     * TECO - PO yang sudah TECO tetap boleh dipilih di sini (keputusan
-     * bisnis: TECO cuma mempengaruhi LB Report, bukan modul ini).
+     * Daftar semua PO dari PPIC untuk dropdown Nomor PO.
+     *
+     * DIUBAH: PO yang sudah TECO (Technically Complete, ditandai PPIC)
+     * dikeluarkan dari daftar - sama seperti LbReportController, PO yang
+     * sudah ditutup PPIC tidak boleh lagi dipilih untuk input baru.
+     * Dashboard Produksi Bulanan SENGAJA TIDAK ikut difilter (keputusan
+     * bisnis: TECO cuma mempengaruhi LB Report & Produksi Fresh).
      */
     public function listPurchaseOrders(): JsonResponse
     {
-        $list = PurchaseOrder::orderByDesc('tanggal')
+        $list = PurchaseOrder::whereNull('teco_at')
+            ->orderByDesc('tanggal')
             ->get(['nomor_po', 'jenis_po', 'tanggal'])
             ->map(fn (PurchaseOrder $po) => [
                 'nomorPo' => $po->nomor_po,
@@ -116,6 +122,15 @@ class ProduksiFreshController extends Controller
 
             return $rows;
         });
+
+        $noPoList = collect($data['rows'])->pluck('no_po')->unique()->implode(', ');
+
+        ActivityLogger::log(
+            'produksi_fresh',
+            'create',
+            "{$user->employee_code} ({$user->name}) input ".count($inserted)." data produksi Fresh (tipe: {$tipe}, PO: {$noPoList})",
+            $user
+        );
 
         return response()->json([
             'success' => true,

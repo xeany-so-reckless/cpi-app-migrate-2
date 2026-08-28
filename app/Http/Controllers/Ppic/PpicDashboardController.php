@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Ppic;
 
 use App\Http\Controllers\Controller;
 use App\Models\PpicPlan;
+use App\Models\ProduksiFresh;
 use App\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,11 +51,50 @@ class PpicDashboardController extends Controller
         $poByJenis = $poBulanIni->groupBy('jenis_po')->map->count();
 
         return response()->json([
-            'bulan'     => $bulan,
-            'trend'     => $trend,
-            'summary'   => $summary,
-            'totalPo'   => $poBulanIni->count(),
-            'poByJenis' => $poByJenis,
+            'bulan'         => $bulan,
+            'trend'         => $trend,
+            'summary'       => $summary,
+            'totalPo'       => $poBulanIni->count(),
+            'poByJenis'     => $poByJenis,
+            'produksiFresh' => $this->produksiFreshRekap($poBulanIni),
         ]);
+    }
+
+    /**
+     * BARU - Rekap total Qty Produksi Fresh per PO, untuk PO-PO di bulan
+     * yang sedang difilter. Cuma PO yang SUDAH ADA input Fresh-nya yang
+     * ditampilkan (PO tanpa input Fresh sama sekali di-skip, supaya
+     * tabel tidak penuh baris kosong).
+     *
+     * Ini murni tampilan READ-ONLY - tidak ada data yang ditulis balik
+     * dari sini, PPIC cuma melihat rekap hasil input tim Produksi Fresh.
+     */
+    private function produksiFreshRekap($poBulanIni)
+    {
+        $nomorPoList = $poBulanIni->pluck('nomor_po');
+
+        $freshRows = ProduksiFresh::whereIn('no_po', $nomorPoList)
+            ->selectRaw('no_po, tipe_input, SUM(qty) as total_qty, COUNT(*) as jumlah_entri')
+            ->groupBy('no_po', 'tipe_input')
+            ->get()
+            ->groupBy('no_po');
+
+        return $poBulanIni->map(function (PurchaseOrder $po) use ($freshRows) {
+            $rows = $freshRows->get($po->nomor_po, collect());
+
+            $qtyMain = (float) ($rows->firstWhere('tipe_input', 'main')->total_qty ?? 0);
+            $qtyByProduct = (float) ($rows->firstWhere('tipe_input', 'byproduct')->total_qty ?? 0);
+            $jumlahEntri = (int) $rows->sum('jumlah_entri');
+
+            return [
+                'nomorPo'      => $po->nomor_po,
+                'jenisPo'      => $po->jenis_po,
+                'tanggalLabel' => $po->tanggal->format('d/m/Y'),
+                'qtyMain'      => $qtyMain,
+                'qtyByProduct' => $qtyByProduct,
+                'qtyTotal'     => $qtyMain + $qtyByProduct,
+                'jumlahEntri'  => $jumlahEntri,
+            ];
+        })->filter(fn ($row) => $row['jumlahEntri'] > 0)->values();
     }
 }
