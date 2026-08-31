@@ -15,7 +15,7 @@ class DashboardController extends Controller
         $production_docs = [
             [
                 "name" => "Laporan Produksi Harian",
-                "icon" => "Drive",
+                "icon" => "add_to_drive",
                 "info" => "Upload Laporan harian Hasil Produksi Bersih Griller & Bahan Baku ke database",
                 "url"  => "https://drive.google.com/drive/folders/1vSTNp6m7q3P13NRXWXVOvpjzNBsC2uF-",
             ],
