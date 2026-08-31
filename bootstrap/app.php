@@ -55,6 +55,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 return route('warehouse.stock.login');
             }
 
+            if ($request->is('warehouse/outbound*')) {
+    return route('warehouse.outbound.login');
+}
+
             return route('tally.login');
         });
     })

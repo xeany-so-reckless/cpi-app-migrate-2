@@ -23,6 +23,9 @@ use App\Http\Controllers\Ppic\PurchaseOrderController;
 use App\Http\Controllers\Ppic\PpicDashboardController;
 use App\Http\Controllers\ProduksiFresh\AuthController as ProduksiFreshAuthController;
 use App\Http\Controllers\ProduksiFresh\ProduksiFreshController;
+use App\Http\Controllers\Warehouse\Outbound\AuthController as WarehouseOutboundAuthController;
+use App\Http\Controllers\Warehouse\Outbound\OutboundController;
+
 
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -51,6 +54,20 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
 
     // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
     Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
+    });
+});
+
+Route::prefix('warehouse/outbound')->name('warehouse.outbound.')->group(function () {
+    Route::get('/login', [WarehouseOutboundAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [WarehouseOutboundAuthController::class, 'login'])->name('login.attempt');
+ 
+    Route::middleware(['auth:tally', 'role:checker', 'no-cache'])->group(function () {
+        Route::post('/logout', [WarehouseOutboundAuthController::class, 'logout'])->name('logout');
+ 
+        Route::get('/', [OutboundController::class, 'index'])->name('index');
+        Route::get('/cells', [OutboundController::class, 'listCellsWithStock'])->name('cells');
+        Route::get('/cells/{cell}', [OutboundController::class, 'getCellContents'])->name('cells.show');
+        Route::post('/', [OutboundController::class, 'store'])->name('store');
     });
 });
 

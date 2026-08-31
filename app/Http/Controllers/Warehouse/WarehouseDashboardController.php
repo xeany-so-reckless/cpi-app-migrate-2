@@ -27,11 +27,11 @@ class WarehouseDashboardController extends Controller
                 "url"  => route('warehouse.stock.index'),
             ],
             [
-                "name" => "Outbound",
-                "icon" => "outbox",
-                "info" => "Pencatatan barang keluar dari gudang",
-                "url"  => "#",
-            ],
+    "name" => "Outbound",
+    "icon" => "outbox",
+    "info" => "Pencatatan barang keluar dari gudang",
+    "url"  => route('warehouse.outbound.login'),
+],
             [
                 "name" => "Inbound STRSTO",
                 "icon" => "local_shipping",

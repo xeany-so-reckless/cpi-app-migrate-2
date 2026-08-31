@@ -140,4 +140,146 @@ class Cell extends Model
 
         return max(0, $this->kapasitas_max - $terpakaiUsed - $terpakaiPending - $adjustment);
     }
+
+    // =====================================================================
+    // BARU - Ditambahkan untuk fitur Outbound (Checker). Semua method di
+    // bawah ini READ-ONLY dan tidak mengubah/menggantikan method di atas.
+    // =====================================================================
+
+    /**
+     * Total bag yang FISIK ada di cell ini SEKARANG (stock riil).
+     *
+     * Beda dengan sisaKapasitas(): method itu menghitung SISA RUANG
+     * (kapasitas_max dikurangi terpakai), sedangkan ini menghitung STOCK
+     * yang ada, tanpa melibatkan kapasitas_max sama sekali. Reservasi
+     * PENDING sengaja TIDAK diikutkan karena itu baru "dijatah", belum
+     * tentu benar-benar sudah terisi produk.
+     *
+     * Setelah Outbound berjalan, baris adjustment sumber='outbound'
+     * (selisih negatif) otomatis mengurangi angka ini juga - karena
+     * totalAdjustment() menjumlahkan SEMUA sumber adjustment.
+     */
+    public function stockBag(): int
+    {
+        $terpakaiUsed = $this->reservations()
+            ->where('status', 'USED')
+            ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
+            ->sum('serah_terima_batches.jumlah_bag');
+
+        return max(0, $terpakaiUsed + $this->totalAdjustment());
+    }
+
+    /**
+     * Total kg yang FISIK ada di cell ini SEKARANG. Sebenarnya identik
+     * dengan terpakaiKg() yang sudah ada - dibuat alias di sini supaya
+     * penamaan simetris dengan stockBag() dan lebih jelas maksudnya
+     * dipakai di konteks Outbound.
+     */
+    public function stockKg(): float
+    {
+        return $this->terpakaiKg();
+    }
+
+    /**
+     * Total bag yang stock-nya TIDAK punya identitas batch asli - murni
+     * hasil penyesuaian manual upload Excel (sumber='upload_excel').
+     * SENGAJA tidak mengikutkan sumber 'outbound' supaya tidak dobel
+     * hitung dengan bag yang sudah pernah dikeluarkan.
+     *
+     * Kalau nilainya > 0, berarti ada stock "misterius" di cell ini yang
+     * tidak bisa ditelusuri ke bag/batch tertentu - ditampilkan sebagai
+     * 1 baris generik "Stock Adjustment" di daftar centang Outbound.
+     */
+    public function genericAdjustmentBag(): int
+    {
+        return max(0, (int) $this->adjustments()->where('sumber', 'upload_excel')->sum('selisih'));
+    }
+
+    public function genericAdjustmentKg(): float
+    {
+        return max(0, (float) $this->adjustments()->where('sumber', 'upload_excel')->sum('selisih_kg'));
+    }
+
+    /**
+     * Daftar bag yang MASIH ADA fisik di cell ini & BELUM PERNAH keluar
+     * lewat Outbound manapun. Dipakai untuk isi checklist saat Checker
+     * klik 1 Kode Cell di form Outbound.
+     *
+     * Setiap elemen array:
+     *  - 'type'          => 'batch' | 'generic'
+     *  - 'batch_id'       (null kalau generic)
+     *  - 'nomor_bag'      (null kalau generic)
+     *  - 'kode_produksi'  (null kalau generic)
+     *  - 'produk'         (nama produk, null kalau generic)
+     *  - 'kg'
+     *  - 'tanggal_produksi' (dipakai FE/BE untuk breakdown warna kuartal, null kalau generic)
+     *
+     * Baris 'generic' cuma MUNCUL 1 KALI mewakili SISA total
+     * genericAdjustmentBag()/genericAdjustmentKg() - karena stock jenis
+     * ini tidak punya identitas per-bag, jadi tidak bisa dipecah satu-satu.
+     */
+    public function availableBags(): array
+    {
+        $bags = [];
+
+        // Bag dari batch asli (identitas lengkap)
+        $reservations = $this->reservations()
+            ->where('status', 'USED')
+            ->with('batch.produk')
+            ->get();
+
+        // Bag yang sudah pernah keluar sebelumnya (dari cell manapun -
+        // tapi cukup dicek by batch_id+nomor_bag karena 1 bag cuma bisa
+        // ada di 1 cell dalam satu waktu).
+        $sudahKeluar = OutboundShipmentCellBag::whereNotNull('batch_id')
+            ->whereNotNull('nomor_bag')
+            ->get(['batch_id', 'nomor_bag'])
+            ->map(fn ($row) => $row->batch_id.'-'.$row->nomor_bag)
+            ->flip();
+
+        foreach ($reservations as $reservation) {
+            $batch = $reservation->batch;
+            if (! $batch) {
+                continue;
+            }
+
+            for ($i = 1; $i <= $batch->jumlah_bag; $i++) {
+                $statusBag = $batch->{"status_bag_{$i}"};
+                if ($statusBag === 'TOLAK (REJECT)') {
+                    continue; // bag reject tidak pernah masuk stock, skip
+                }
+
+                if (isset($sudahKeluar[$batch->id.'-'.$i])) {
+                    continue; // sudah pernah keluar via Outbound sebelumnya
+                }
+
+                $bags[] = [
+                    'type'             => 'batch',
+                    'batch_id'         => $batch->id,
+                    'nomor_bag'        => $i,
+                    'kode_produksi'    => $batch->kode_produksi,
+                    'produk'           => $batch->produk->name ?? null,
+                    'kg'               => (float) $batch->{"kg_bag_{$i}"},
+                    'tanggal_produksi' => optional($batch->tanggal_produksi)->format('Y-m-d'),
+                ];
+            }
+        }
+
+        // Baris generik untuk sisa stock tanpa identitas (upload Excel)
+        $genericBag = $this->genericAdjustmentBag();
+        if ($genericBag > 0) {
+            $bags[] = [
+                'type'             => 'generic',
+                'batch_id'         => null,
+                'nomor_bag'        => null,
+                'kode_produksi'    => null,
+                'produk'           => null,
+                'kg'               => $this->genericAdjustmentKg(),
+                'tanggal_produksi' => null,
+                'jumlah_bag'       => $genericBag, // baris ini mewakili banyak bag sekaligus
+            ];
+        }
+
+        return $bags;
+    }
 }
