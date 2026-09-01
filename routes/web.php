@@ -27,7 +27,6 @@ use App\Http\Controllers\Warehouse\Outbound\AuthController as WarehouseOutboundA
 use App\Http\Controllers\Warehouse\Outbound\OutboundController;
 
 
-
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 // ==================== DASHBOARD WAREHOUSE ====================
@@ -60,16 +59,26 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
 Route::prefix('warehouse/outbound')->name('warehouse.outbound.')->group(function () {
     Route::get('/login', [WarehouseOutboundAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [WarehouseOutboundAuthController::class, 'login'])->name('login.attempt');
- 
+
     Route::middleware(['auth:tally', 'role:checker', 'no-cache'])->group(function () {
         Route::post('/logout', [WarehouseOutboundAuthController::class, 'logout'])->name('logout');
- 
+
         Route::get('/', [OutboundController::class, 'index'])->name('index');
         Route::get('/cells', [OutboundController::class, 'listCellsWithStock'])->name('cells');
         Route::get('/cells/{cell}', [OutboundController::class, 'getCellContents'])->name('cells.show');
         Route::post('/', [OutboundController::class, 'store'])->name('store');
     });
+
+    // BARU - Riwayat Outbound. Role lebih luas - Admin/Supervisor Gudang
+    // perlu bisa ikut lihat tanpa perlu akun checker.
+    Route::middleware(['auth:tally', 'role:checker,admin_gudang,supervisor_gudang', 'no-cache'])->group(function () {
+        Route::get('/history', [OutboundController::class, 'history'])->name('history');
+        Route::get('/history/data', [OutboundController::class, 'historyData'])->name('history.data');
+        Route::get('/history/{shipment}', [OutboundController::class, 'historyDetail'])->name('history.detail');
+    });
 });
+
+
 
 // ==================== TALLY PRO ====================
 Route::prefix('tally-pro')->name('tally.')->group(function () {
@@ -134,7 +143,7 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
 // dikunci pakai ID+password role foreman (verify-signature).
 Route::prefix('uniformity')->name('uniformity.')->group(function () {
     Route::get('/', [UniformityController::class, 'index'])->name('index');
-    Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
+     Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/export', [UniformityController::class, 'exportPage'])->name('export');
 
     Route::get('/data', [UniformityController::class, 'data'])->name('data');

@@ -8,6 +8,8 @@ use App\Models\CellStockAdjustment;
 use App\Models\OutboundShipment;
 use App\Models\OutboundShipmentCell;
 use App\Models\OutboundShipmentCellBag;
+use App\Models\OutboundShipmentTir;
+use App\Models\User;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,95 @@ class OutboundController extends Controller
     public function index(): View
     {
         return view('warehouse.outbound.workspace');
+    }
+
+    /**
+     * BARU - Halaman Riwayat Outbound. Bisa diakses Checker maupun
+     * Admin/Supervisor Gudang (lihat middleware role di routes). Daftar
+     * checker dikirim ke view untuk isi dropdown filter.
+     */
+    public function history(): View
+    {
+        $checkers = User::whereHas('roles', fn ($q) => $q->where('name', 'checker'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('warehouse.outbound.history', compact('checkers'));
+    }
+
+    /**
+     * BARU - List ringkasan DO untuk tabel Riwayat, dengan filter
+     * opsional: tanggal, checker_user_id, dan pencarian No DO.
+     */
+    public function historyData(Request $request): JsonResponse
+    {
+        $query = OutboundShipment::with('checker')->withCount('cells');
+
+        if ($tanggal = $request->query('tanggal')) {
+            $query->whereDate('tanggal', $tanggal);
+        }
+
+        if ($checkerId = $request->query('checker_user_id')) {
+            $query->where('checker_user_id', $checkerId);
+        }
+
+        if ($search = $request->query('search')) {
+            $query->where('no_do', 'like', '%'.strtoupper(trim($search)).'%');
+        }
+
+        $shipments = $query->orderByDesc('tanggal')->orderByDesc('id')->get();
+
+        $result = $shipments->map(fn (OutboundShipment $s) => [
+            'id'            => $s->id,
+            'tanggal'       => $s->tanggal->format('Y-m-d'),
+            'noDo'          => $s->no_do,
+            'namaCustomer'  => $s->nama_customer,
+            'jamMuat'       => $s->jam_muat,
+            'noPol'         => $s->no_pol,
+            'namaDriver'    => $s->nama_driver,
+            'checkerNama'   => $s->checker->name ?? '-',
+            'jumlahCell'    => $s->cells_count,
+            'totalBag'      => $s->totalBag(),
+            'totalKg'       => round($s->totalKg(), 2),
+        ]);
+
+        return response()->json($result);
+    }
+
+    /**
+     * BARU - Detail 1 DO (dipanggil saat baris di-expand, dan juga jadi
+     * sumber data untuk generate PDF di sisi client). Isinya breakdown
+     * per Cell + bag yang keluar + daftar Tir.
+     */
+    public function historyDetail(OutboundShipment $shipment): JsonResponse
+    {
+        $shipment->load(['checker', 'cells.cell', 'cells.bags', 'tirs']);
+
+        return response()->json([
+            'id'           => $shipment->id,
+            'tanggal'      => $shipment->tanggal->format('Y-m-d'),
+            'noDo'         => $shipment->no_do,
+            'namaCustomer' => $shipment->nama_customer,
+            'jamMuat'      => $shipment->jam_muat,
+            'noPol'        => $shipment->no_pol,
+            'namaDriver'   => $shipment->nama_driver,
+            'checkerNama'  => $shipment->checker->name ?? '-',
+            'cells'        => $shipment->cells->map(fn (OutboundShipmentCell $sc) => [
+                'kodeCell' => $sc->cell->kode_cell ?? '-',
+                'totalBag' => $sc->total_bag,
+                'totalKg'  => (float) $sc->total_kg,
+                'bags'     => $sc->bags->map(fn (OutboundShipmentCellBag $bag) => [
+                    'nomorBag'     => $bag->nomor_bag,
+                    'kodeProduksi' => $bag->kode_produksi,
+                    'kg'           => (float) $bag->kg,
+                    'keterangan'   => $bag->keterangan,
+                ]),
+            ]),
+            'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [
+                'tirKe'     => $tir->tir_ke,
+                'jumlahBag' => $tir->jumlah_bag,
+            ]),
+        ]);
     }
 
     /**
@@ -75,7 +166,14 @@ class OutboundController extends Controller
      *       ]
      *     },
      *     ...
-     *   ]
+     *   ],
+     *   tirs: [12, 13, 15, ...]   // OPSIONAL - hanya diisi kalau truk besar
+     *                             // (misal tronton, maks 20 tir). Tiap
+     *                             // angka = jumlah bag untuk 1 tir. Urutan
+     *                             // array menentukan tir_ke/label "Tir 1",
+     *                             // "Tir 2", dst - BUKAN nomor segel manual.
+     *                             // Baris kosong tidak perlu dikirim sama
+     *                             // sekali dari frontend.
      * }
      *
      * PENTING: kg & kode_produksi TIDAK dipercaya dari input client -
@@ -97,6 +195,11 @@ class OutboundController extends Controller
             'cells.*.bags.*.type'        => ['required', 'in:batch,generic'],
             'cells.*.bags.*.batch_id'    => ['required_if:cells.*.bags.*.type,batch', 'nullable', 'integer'],
             'cells.*.bags.*.nomor_bag'   => ['required_if:cells.*.bags.*.type,batch', 'nullable', 'integer', 'between:1,10'],
+            // BARU - Tir, opsional sepenuhnya (khusus truk besar). Cuma
+            // jumlah_bag yang diisi user - tir_ke/label "Tir 1", "Tir 2"
+            // otomatis dari urutan array, bukan nomor segel manual.
+            'tirs'                       => ['nullable', 'array', 'max:20'],
+            'tirs.*'                     => ['integer', 'min:1'],
         ]);
 
         $shipment = DB::transaction(function () use ($data, $request) {
@@ -113,6 +216,17 @@ class OutboundController extends Controller
 
             foreach ($data['cells'] as $cellInput) {
                 $this->processCellOutbound($shipment, $cellInput);
+            }
+
+            // BARU - simpan Tir kalau ada. tir_ke mengikuti urutan array
+            // (1-based) = label "Tir 1", "Tir 2", dst - tidak wajib ada
+            // isinya sama sekali.
+            foreach (($data['tirs'] ?? []) as $index => $jumlahBag) {
+                OutboundShipmentTir::create([
+                    'outbound_shipment_id' => $shipment->id,
+                    'tir_ke'               => $index + 1,
+                    'jumlah_bag'           => $jumlahBag,
+                ]);
             }
 
             return $shipment;

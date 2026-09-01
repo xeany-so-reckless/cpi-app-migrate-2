@@ -146,8 +146,9 @@
         <span>OUTBOUND</span>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">
-        <span class="mono" style="font-size:0.78rem; color: var(--muted);">{{ $currentUser->name }}</span>
-        <form id="logoutForm" method="POST" action="{{ route('warehouse.outbound.logout') }}">
+    <a href="{{ route('warehouse.outbound.history') }}" style="color: var(--muted); text-decoration:none; font-size:0.82rem; font-weight:600;">Riwayat</a>
+    <span class="mono" style="font-size:0.78rem; color: var(--muted);">{{ $currentUser->name }}</span>
+    <form id="logoutForm" method="POST" action="{{ route('warehouse.outbound.logout') }}">
             @csrf
             <button type="button" class="btn btn-danger-outline" onclick="confirmLogout()">Keluar</button>
         </form>
@@ -212,6 +213,27 @@
         </div>
     </div>
 
+    {{-- ==================== DATA TIR (OPSIONAL - KHUSUS TRUK BESAR) ==================== --}}
+    <div class="card">
+        <div class="card-title"><span class="material-symbols-outlined">local_shipping</span> Data Tir (Opsional)</div>
+        <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+            Isi kalau truk besar (misal tronton) - kosongkan kalau customer pakai mobil kecil.
+        </p>
+
+        <div class="bag-list" id="tirListContainer">
+            <div class="bag-empty">Belum ada Tir ditambahkan.</div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+            <button class="btn btn-outline" id="btnAddTir" onclick="addTirRow()">
+                <span class="material-symbols-outlined" style="font-size:16px;">add</span> Tambah Tir
+            </button>
+            <div class="mono" style="font-size:0.85rem; color:var(--muted);">
+                Total Bag (Tir): <b id="tirTotalBag" style="color:var(--text);">0</b>
+            </div>
+        </div>
+    </div>
+
     {{-- ==================== DAFTAR CELL DALAM DO INI ==================== --}}
     <div class="card">
         <div class="card-title"><span class="material-symbols-outlined">checklist</span> Cell dalam DO Ini</div>
@@ -248,6 +270,7 @@
 
     // State DO yang sedang dibangun di sisi client
     let doCells = []; // [{ cellId, kodeCell, bags: [...], totalBag, totalKg }]
+    let tirRows = []; // [{ jumlahBag: number|null }] - urutan array = label Tir 1, Tir 2, dst
     let currentCell = null; // cell yang sedang dibuka detailnya
     let currentBags = []; // hasil availableBags() untuk currentCell
     let cellOptionsCache = [];
@@ -447,6 +470,74 @@
         document.getElementById('grandTotalKg').innerText = grandKg.toLocaleString('id-ID', {maximumFractionDigits:1});
     }
 
+    // ==================== DATA TIR (OPSIONAL) ====================
+    const MAX_TIR = 20;
+
+    function addTirRow() {
+        if (tirRows.length >= MAX_TIR) {
+            Swal.fire({ title: 'Maksimal 20 Tir', icon: 'warning' });
+            return;
+        }
+        tirRows.push({ jumlahBag: null });
+        renderTirList();
+        // fokus otomatis ke input yang baru muncul
+        const inputs = document.querySelectorAll('.tir-jumlah-input');
+        if (inputs.length > 0) inputs[inputs.length - 1].focus();
+    }
+
+    function removeTirRow(index) {
+        tirRows.splice(index, 1);
+        renderTirList();
+    }
+
+    function updateTirJumlah(index, value) {
+        tirRows[index].jumlahBag = value === '' ? null : parseInt(value, 10);
+        updateTirTotal();
+    }
+
+    function renderTirList() {
+        const container = document.getElementById('tirListContainer');
+        const btnAdd = document.getElementById('btnAddTir');
+        btnAdd.disabled = tirRows.length >= MAX_TIR;
+
+        if (tirRows.length === 0) {
+            container.innerHTML = `<div class="bag-empty">Belum ada Tir ditambahkan.</div>`;
+            updateTirTotal();
+            return;
+        }
+
+        container.innerHTML = tirRows.map((row, idx) => `
+            <div class="bag-item">
+                <span class="bag-chip">Tir ${idx + 1}</span>
+                <input type="number" min="1" class="form-control tir-jumlah-input"
+                    style="max-width:140px; height:38px;"
+                    placeholder="Jumlah Bag"
+                    value="${row.jumlahBag ?? ''}"
+                    oninput="updateTirJumlah(${idx}, this.value)">
+                <button class="btn btn-danger-outline" style="margin-left:auto; padding:6px 10px;" onclick="removeTirRow(${idx})">
+                    <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
+                </button>
+            </div>
+        `).join('');
+
+        updateTirTotal();
+    }
+
+    function updateTirTotal() {
+        const total = tirRows.reduce((sum, r) => sum + (Number(r.jumlahBag) || 0), 0);
+        document.getElementById('tirTotalBag').innerText = total.toLocaleString('id-ID');
+    }
+
+    // Hanya baris yang benar-benar terisi angka valid yang dikirim ke
+    // server - baris kosong dilewati begitu saja (tidak mengganggu
+    // penomoran Tir 1, Tir 2, dst yang terkirim, karena backend
+    // menomori ulang berdasarkan urutan array yang dikirim).
+    function collectTirPayload() {
+        return tirRows
+            .filter(r => Number.isInteger(r.jumlahBag) && r.jumlahBag > 0)
+            .map(r => r.jumlahBag);
+    }
+
     // ==================== SAVE ====================
     async function submitOutbound() {
         const payload = {
@@ -457,6 +548,7 @@
             no_pol: document.getElementById('f_no_pol').value.trim(),
             nama_driver: document.getElementById('f_nama_driver').value.trim(),
             cells: doCells.map(c => ({ cell_id: c.cellId, bags: c.bags })),
+            tirs: collectTirPayload(),
         };
 
         if (!payload.tanggal || !payload.no_do || !payload.nama_customer || !payload.jam_muat || !payload.no_pol || !payload.nama_driver) {
@@ -494,10 +586,12 @@
         document.getElementById('f_no_pol').value = '';
         document.getElementById('f_nama_driver').value = '';
         doCells = [];
+        tirRows = [];
         currentCell = null;
         currentBags = [];
         document.getElementById('cellDetailPanel').style.display = 'none';
         renderDoCellTable();
+        renderTirList();
         loadCellOptions();
     }
 
@@ -505,6 +599,7 @@
         document.getElementById('f_tanggal').value = new Date().toISOString().split('T')[0];
         loadCellOptions();
         renderDoCellTable();
+        renderTirList();
     });
 </script>
 </body>
