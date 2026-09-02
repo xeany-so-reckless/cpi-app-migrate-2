@@ -163,7 +163,7 @@
           <input type="number" name="ekor_netto" id="ekor_netto" class="w-full border border-gray-200 bg-gray-100 rounded-xl p-3 text-gray-500 cursor-not-allowed" readonly required>
         </div>
 
-        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">No SPPA</label><input type="text" name="no_sppa" class="w-full border rounded-xl p-3 uppercase focus:ring-2 focus:ring-emerald-200 outline-none" required></div>
+        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">No SPPA (Opsional)</label><input type="text" name="no_sppa" class="w-full border rounded-xl p-3 uppercase focus:ring-2 focus:ring-emerald-200 outline-none"></div>
 
         <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Kg Netto (Timbang)</label><input type="number" step="0.1" name="kg_netto" id="kg_netto" class="w-full border rounded-xl p-3 focus:ring-2 focus:ring-emerald-200 outline-none" oninput="hitungUndersizeKg()" required></div>
         <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Kg Basah</label><input type="number" step="0.1" name="kg_basah" id="kg_basah" class="w-full border rounded-xl p-3 focus:ring-2 focus:ring-emerald-200 outline-none" required></div>

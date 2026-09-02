@@ -390,7 +390,7 @@ class LbReportController extends Controller
             'ekor_undersize'  => ['required', 'integer', 'min:0'],
             'kg_rphu'         => ['required', 'numeric', 'min:0'],
             'kg_basah'        => ['required', 'numeric', 'min:0'],
-            'no_sppa'         => ['required', 'string'],
+            'no_sppa'         => ['nullable', 'string'],
             'keterangan'      => ['nullable', 'string'],
         ]);
 
@@ -421,7 +421,7 @@ class LbReportController extends Controller
             'berat_reject'   => $data['kg_undersize'] + ($data['ayam_mati'] * ($data['ekor_netto'] > 0 ? $data['kg_netto'] / $data['ekor_netto'] : 0)),
             'kg_rphu'        => $data['kg_rphu'],
             'kg_basah'       => $data['kg_basah'],
-            'no_sppa'        => strtoupper(trim($data['no_sppa'])),
+            'no_sppa'        => isset($data['no_sppa']) && $data['no_sppa'] !== '' ? strtoupper(trim($data['no_sppa'])) : null,
             'keterangan'     => $data['keterangan'] ?? null,
         ]);
 
