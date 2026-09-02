@@ -553,14 +553,17 @@ function generateDropdownRit() {
   {{-- ============ SECTION: SETELAH BONGKAR ============ --}}
   @if ($canSetelah)
   function hitungUndersizeKg() {
-    let kgNetto = parseFloat(document.getElementById('kg_netto').value) || 0;
-    let ekorNetto = parseFloat(document.getElementById('ekor_netto').value) || 0;
-    let ekorUndersize = parseFloat(document.getElementById('ekor_undersize').value) || 0;
-    if (ekorNetto > 0 && kgNetto > 0 && ekorUndersize > 0) {
-      let abw = kgNetto / ekorNetto;
-      document.getElementById('kg_undersize').value = (ekorUndersize * abw).toFixed(2);
-    } else { document.getElementById('kg_undersize').value = ""; }
+  let kgNetto = parseFloat(document.getElementById('kg_netto').value) || 0;
+  let ekorNetto = parseFloat(document.getElementById('ekor_netto').value) || 0;
+  let ekorUndersize = parseFloat(document.getElementById('ekor_undersize').value) || 0;
+
+  if (ekorNetto > 0 && kgNetto > 0) {
+    let abw = kgNetto / ekorNetto;
+    document.getElementById('kg_undersize').value = (ekorUndersize * abw).toFixed(2);
+  } else {
+    document.getElementById('kg_undersize').value = "0.00";
   }
+}
 
   async function cariDaftarPO() {
     let po = document.getElementById('search_po_setelah').value.trim();
