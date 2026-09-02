@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use App\Models\LbPenerimaan;
+use App\Models\PurchaseOrder;
 
 class UniformityController extends Controller
 {
@@ -41,33 +42,61 @@ class UniformityController extends Controller
         return response()->json($rits->map(fn (UniformityRit $r) => $this->formatRit($r)));
     }
 
-    public function dtaByRit(Request $request)
-{
-    $noRit = $request->query('no_rit');
+    /**
+     * Daftar No PO untuk dropdown pertama di form input Uniformity.
+     * Sumbernya sama dengan dropdown "Nomor PO" di form Sebelum Bongkar
+     * (LB Report): dari PurchaseOrder milik PPIC - BUKAN dari
+     * LbPenerimaan, karena LbPenerimaan cuma berisi PO yang sudah ada
+     * rit/bongkarnya. PO yang sudah TECO disembunyikan, konsisten
+     * dengan perilaku dropdown LB Report.
+     */
+    public function poList(): JsonResponse
+    {
+        $data = PurchaseOrder::whereNull('teco_at')
+            ->orderByDesc('tanggal')
+            ->pluck('nomor_po');
 
-    if (!$noRit) {
-        return response()->json(['message' => 'Nomor Rit wajib diisi.'], 422);
+        return response()->json($data);
     }
 
-    $data = LbPenerimaan::where('no_rit', $noRit)
-        ->latest('tanggal')
-        ->first();
+    /**
+     * Menggantikan lookup DTA di code.gs.
+     * Sekarang wajib menyertakan no_po (dipilih via dropdown di form)
+     * supaya pencarian No Rit lebih presisi kalau ada No Rit yang
+     * kebetulan sama di PO yang berbeda.
+     */
+    public function dtaByRit(Request $request): JsonResponse
+    {
+        $noPo  = $request->query('no_po');
+        $noRit = $request->query('no_rit');
 
-    if (!$data) {
+        if (!$noPo) {
+            return response()->json(['message' => 'No PO wajib dipilih terlebih dahulu.'], 422);
+        }
+        if (!$noRit) {
+            return response()->json(['message' => 'Nomor Rit wajib diisi.'], 422);
+        }
+
+        $data = LbPenerimaan::where('no_po', $noPo)
+            ->where('no_rit', $noRit)
+            ->latest('tanggal')
+            ->first();
+
+        if (!$data) {
+            return response()->json([
+                'message' => "Rit '{$noRit}' tidak ditemukan pada PO '{$noPo}'."
+            ], 404);
+        }
+
         return response()->json([
-            'message' => "Data DTA untuk Rit '{$noRit}' tidak ditemukan."
-        ], 404);
+            'tanggal'  => \Carbon\Carbon::parse($data->tanggal)->format('Y-m-d'),
+            'no_po'    => $data->no_po,
+            'farm'     => $data->farm,
+            'size'     => $data->size,
+            'kg_dta'   => $data->kg_dta,
+            'ekor_dta' => $data->ekor_dta,
+        ]);
     }
-
-    return response()->json([
-        'tanggal'  => \Carbon\Carbon::parse($data->tanggal)->format('Y-m-d'),
-        'no_po'    => $data->no_po,
-        'farm'     => $data->farm,
-        'size'     => $data->size,
-        'kg_dta'   => $data->kg_dta,
-        'ekor_dta' => $data->ekor_dta,
-    ]);
-}
 
     /**
      * Menggantikan getRekapData(jenis) di code.gs.

@@ -143,12 +143,11 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
 // dikunci pakai ID+password role foreman (verify-signature).
 Route::prefix('uniformity')->name('uniformity.')->group(function () {
     Route::get('/', [UniformityController::class, 'index'])->name('index');
-     Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/export', [UniformityController::class, 'exportPage'])->name('export');
-
     Route::get('/data', [UniformityController::class, 'data'])->name('data');
+    Route::get('/po-list', [UniformityController::class, 'poList'])->name('po-list'); // ← tambahan
+    Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/rekap', [UniformityController::class, 'rekap'])->name('rekap');
-
     Route::post('/verify-pin', [UniformityController::class, 'verifyPin'])->name('verify-pin');
     Route::post('/rits', [UniformityController::class, 'store'])->name('rits.store');
     Route::post('/verify-signature', [UniformityController::class, 'verifySignature'])->name('verify-signature');
