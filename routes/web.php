@@ -114,6 +114,9 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
 
         Route::get('/', [SerahTerimaController::class, 'index'])->name('index');
         Route::get('/data', [SerahTerimaController::class, 'data'])->name('data');
+        // --- BARU: Dashboard Rekap (semua role di grup ini boleh akses) ---
+Route::get('/dashboard', [SerahTerimaController::class, 'dashboard'])->name('dashboard');
+Route::get('/dashboard-data', [SerahTerimaController::class, 'dashboardData'])->name('dashboard-data');
 
         // --- BARU: Reservasi Cell oleh TWH (sebelum TPR input batch) ---
         Route::get('/cells', [SerahTerimaController::class, 'listCells'])->name('cells.index');
@@ -145,14 +148,14 @@ Route::prefix('uniformity')->name('uniformity.')->group(function () {
     Route::get('/', [UniformityController::class, 'index'])->name('index');
     Route::get('/export', [UniformityController::class, 'exportPage'])->name('export');
     Route::get('/data', [UniformityController::class, 'data'])->name('data');
-    Route::get('/po-list', [UniformityController::class, 'poList'])->name('po-list'); // ← tambahan
+    Route::get('/po-list', [UniformityController::class, 'poList'])->name('po-list');
     Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/rekap', [UniformityController::class, 'rekap'])->name('rekap');
+    Route::get('/export-excel', [UniformityController::class, 'exportExcel'])->name('export-excel'); // ← TAMBAHAN
     Route::post('/verify-pin', [UniformityController::class, 'verifyPin'])->name('verify-pin');
     Route::post('/rits', [UniformityController::class, 'store'])->name('rits.store');
     Route::post('/verify-signature', [UniformityController::class, 'verifySignature'])->name('verify-signature');
 });
-
 // ==================== REPORT HARIAN BAHAN BAKU LIVE BIRDS ====================
 Route::prefix('report-lb')->name('lbreport.')->group(function () {
 

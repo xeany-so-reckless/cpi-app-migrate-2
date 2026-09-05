@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use App\Models\LbPenerimaan;
 use App\Models\PurchaseOrder;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UniformityController extends Controller
 {
@@ -119,6 +120,74 @@ class UniformityController extends Controller
             'sizeMasuk' => round((float) $row->size_masuk, 1),
             'oversize'  => round((float) $row->oversize, 1),
         ]));
+    }
+
+    /**
+     * BARU: Export raw data Uniformity ke CSV (dibuka normal di Excel).
+     * Tidak pakai package tambahan - cukup fputcsv() + streamDownload()
+     * bawaan Laravel supaya nggak perlu file Export class terpisah.
+     *
+     * Filter (opsional, query string):
+     * - tanggal=YYYY-MM-DD  -> export data pada tanggal itu saja
+     * - bulan=YYYY-MM       -> export data sepanjang bulan itu (ikut
+     *                          filter "Periode Bulan" yang ada di dashboard)
+     * - tanpa filter        -> export semua data yang ada
+     *
+     * Kalau dua-duanya dikirim, "tanggal" yang menang (lebih spesifik).
+     */
+    public function exportExcel(Request $request): StreamedResponse
+    {
+        $tanggal = $request->query('tanggal');
+        $bulan   = $request->query('bulan');
+
+        $query = UniformityRit::orderBy('tanggal')->orderBy('no_rit');
+
+        $namaFile = 'uniformity-raw.csv';
+
+        if ($tanggal) {
+            $query->whereDate('tanggal', $tanggal);
+            $namaFile = "uniformity-raw-{$tanggal}.csv";
+        } elseif ($bulan) {
+            $query->whereYear('tanggal', substr($bulan, 0, 4))
+                  ->whereMonth('tanggal', substr($bulan, 5, 2));
+            $namaFile = "uniformity-raw-{$bulan}.csv";
+        }
+
+        $rits = $query->get();
+
+        return response()->streamDownload(function () use ($rits) {
+            $out = fopen('php://output', 'w');
+
+            // BOM supaya Excel baca UTF-8 dengan benar (karakter kandang dll).
+            fwrite($out, "\xEF\xBB\xBF");
+
+            fputcsv($out, [
+                'Tanggal', 'No Rit', 'Asal Kandang', 'Size Min', 'Size Max',
+                'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Jumlah Sample',
+                'Undersize (%)', 'Size Masuk (%)', 'Oversize (%)',
+            ]);
+
+            foreach ($rits as $r) {
+                fputcsv($out, [
+                    $r->tanggal->format('Y-m-d'),
+                    $r->no_rit,
+                    $r->asal_kandang,
+                    $r->size_min,
+                    $r->size_max,
+                    $r->kg_dta,
+                    $r->ekor_dta,
+                    $r->rerata_abw,
+                    $r->jumlah_sample,
+                    $r->undersize_percent,
+                    $r->size_masuk_percent,
+                    $r->oversize_percent,
+                ]);
+            }
+
+            fclose($out);
+        }, $namaFile, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 
     /**

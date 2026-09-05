@@ -55,6 +55,15 @@
               <label class="text-xs font-bold text-gray-500 uppercase">Periode Bulan:</label>
               <input type="month" id="filter-bulan" onchange="loadDashboard()" class="border border-gray-300 rounded-lg p-2 text-sm focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50">
             </div>
+             <!-- TAMBAHAN BARU -->
+  <div class="flex items-center space-x-2">
+    <label class="text-xs font-bold text-gray-500 uppercase">Tanggal Spesifik:</label>
+    <input type="date" id="filter-tanggal-export" class="border border-gray-300 rounded-lg p-2 text-sm bg-gray-50">
+  </div>
+  <button onclick="exportExcelRaw()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">
+    <i class="fa-solid fa-file-excel"></i> Export Excel (Raw)
+  </button>
+  <!-- END TAMBAHAN -->
             <button onclick="loadDashboard()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">Refresh Data</button>
           </div>
         </div>
@@ -649,6 +658,20 @@
         if (isNaN(num)) return '0.0%';
         return num.toFixed(1) + '%';
       }
+
+      function exportExcelRaw() {
+  const tanggal = document.getElementById('filter-tanggal-export').value;
+  const bulan = document.getElementById('filter-bulan').value;
+
+  let params = new URLSearchParams();
+  if (tanggal) {
+    params.set('tanggal', tanggal);
+  } else if (bulan) {
+    params.set('bulan', bulan);
+  }
+
+  window.location.href = '{{ route('uniformity.export-excel') }}?' + params.toString();
+}
 
       async function loadDashboard() {
         const container = document.getElementById('dashboard-boxes-container');
