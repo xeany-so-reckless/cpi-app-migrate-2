@@ -165,7 +165,7 @@ class UniformityController extends Controller
                 'Tanggal', 'No Rit', 'Asal Kandang', 'Size Min', 'Size Max',
                 'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Jumlah Sample',
                 'Undersize (%)', 'Size Masuk (%)', 'Oversize (%)',
-            ]);
+            ], ';');
 
             foreach ($rits as $r) {
                 fputcsv($out, [
@@ -181,7 +181,7 @@ class UniformityController extends Controller
                     $r->undersize_percent,
                     $r->size_masuk_percent,
                     $r->oversize_percent,
-                ]);
+                ], ';');
             }
 
             fclose($out);
