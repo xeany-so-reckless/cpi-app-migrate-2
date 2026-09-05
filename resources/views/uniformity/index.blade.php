@@ -57,7 +57,7 @@
             </div>
              <!-- TAMBAHAN BARU -->
   <div class="flex items-center space-x-2">
-    <label class="text-xs font-bold text-gray-500 uppercase">Tanggal Spesifik:</label>
+    <label class="text-xs font-bold text-gray-500 uppercase">Pilih Tanggal Spesifik untuk Export Excel :</label>
     <input type="date" id="filter-tanggal-export" class="border border-gray-300 rounded-lg p-2 text-sm bg-gray-50">
   </div>
   <button onclick="exportExcelRaw()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">
