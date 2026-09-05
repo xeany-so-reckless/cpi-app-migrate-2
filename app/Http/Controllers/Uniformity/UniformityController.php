@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use App\Models\LbPenerimaan;
 use App\Models\PurchaseOrder;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class UniformityController extends Controller
@@ -123,9 +125,9 @@ class UniformityController extends Controller
     }
 
     /**
-     * BARU: Export raw data Uniformity ke CSV (dibuka normal di Excel).
-     * Tidak pakai package tambahan - cukup fputcsv() + streamDownload()
-     * bawaan Laravel supaya nggak perlu file Export class terpisah.
+     * BARU: Export raw data Uniformity ke file Excel (.xlsx) asli
+     * menggunakan PhpSpreadsheet - bukan CSV yang di-rename, jadi
+     * langsung terbuka tanpa warning dan sudah rapi per kolom.
      *
      * Filter (opsional, query string):
      * - tanggal=YYYY-MM-DD  -> export data pada tanggal itu saja
@@ -142,51 +144,60 @@ class UniformityController extends Controller
 
         $query = UniformityRit::orderBy('tanggal')->orderBy('no_rit');
 
-        $namaFile = 'uniformity-raw.csv';
+        $namaFile = 'uniformity-raw.xlsx';
 
         if ($tanggal) {
             $query->whereDate('tanggal', $tanggal);
-            $namaFile = "uniformity-raw-{$tanggal}.csv";
+            $namaFile = "uniformity-raw-{$tanggal}.xlsx";
         } elseif ($bulan) {
             $query->whereYear('tanggal', substr($bulan, 0, 4))
                   ->whereMonth('tanggal', substr($bulan, 5, 2));
-            $namaFile = "uniformity-raw-{$bulan}.csv";
+            $namaFile = "uniformity-raw-{$bulan}.xlsx";
         }
 
         $rits = $query->get();
 
-        return response()->streamDownload(function () use ($rits) {
-            $out = fopen('php://output', 'w');
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Uniformity Raw');
 
-            // BOM supaya Excel baca UTF-8 dengan benar (karakter kandang dll).
-            fwrite($out, "\xEF\xBB\xBF");
+        $headers = [
+            'Tanggal', 'No Rit', 'Asal Kandang', 'Size Min', 'Size Max',
+            'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Jumlah Sample',
+            'Undersize (%)', 'Size Masuk (%)', 'Oversize (%)',
+        ];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
 
-            fputcsv($out, [
-                'Tanggal', 'No Rit', 'Asal Kandang', 'Size Min', 'Size Max',
-                'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Jumlah Sample',
-                'Undersize (%)', 'Size Masuk (%)', 'Oversize (%)',
-            ], ';');
+        $baris = 2;
+        foreach ($rits as $r) {
+            $sheet->fromArray([
+                $r->tanggal->format('Y-m-d'),
+                $r->no_rit,
+                $r->asal_kandang,
+                (float) $r->size_min,
+                (float) $r->size_max,
+                (float) $r->kg_dta,
+                (int) $r->ekor_dta,
+                (float) $r->rerata_abw,
+                (int) $r->jumlah_sample,
+                (float) $r->undersize_percent,
+                (float) $r->size_masuk_percent,
+                (float) $r->oversize_percent,
+            ], null, "A{$baris}");
+            $baris++;
+        }
 
-            foreach ($rits as $r) {
-                fputcsv($out, [
-                    $r->tanggal->format('Y-m-d'),
-                    $r->no_rit,
-                    $r->asal_kandang,
-                    $r->size_min,
-                    $r->size_max,
-                    $r->kg_dta,
-                    $r->ekor_dta,
-                    $r->rerata_abw,
-                    $r->jumlah_sample,
-                    $r->undersize_percent,
-                    $r->size_masuk_percent,
-                    $r->oversize_percent,
-                ], ';');
-            }
+        foreach (range('A', 'L') as $kolom) {
+            $sheet->getColumnDimension($kolom)->setAutoSize(true);
+        }
 
-            fclose($out);
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
         }, $namaFile, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 
