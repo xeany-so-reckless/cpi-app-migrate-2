@@ -114,9 +114,6 @@ Route::prefix('serah-terima')->name('serahterima.')->group(function () {
 
         Route::get('/', [SerahTerimaController::class, 'index'])->name('index');
         Route::get('/data', [SerahTerimaController::class, 'data'])->name('data');
-        // --- BARU: Dashboard Rekap (semua role di grup ini boleh akses) ---
-Route::get('/dashboard', [SerahTerimaController::class, 'dashboard'])->name('dashboard');
-Route::get('/dashboard-data', [SerahTerimaController::class, 'dashboardData'])->name('dashboard-data');
 
         // --- BARU: Reservasi Cell oleh TWH (sebelum TPR input batch) ---
         Route::get('/cells', [SerahTerimaController::class, 'listCells'])->name('cells.index');
@@ -137,6 +134,15 @@ Route::get('/dashboard-data', [SerahTerimaController::class, 'dashboardData'])->
         Route::post('/batches/{batch}/approve-spv', [SerahTerimaController::class, 'approveSpv'])->name('batches.approve-spv');
 
         Route::delete('/batches/{batch}', [SerahTerimaController::class, 'destroy'])->name('batches.destroy');
+    });
+
+    // --- BARU: Dashboard Rekap - KHUSUS Supervisor (SPV Produksi) &
+    // Supervisor Gudang (SPVG). Dipisah dari grup role di atas supaya
+    // role lain (tally_produksi, tally_gudang, admin_gudang) tidak bisa
+    // akses walau tahu/ketik URL-nya langsung.
+    Route::middleware(['auth:tally', 'role:supervisor,supervisor_gudang', 'no-cache'])->group(function () {
+        Route::get('/dashboard', [SerahTerimaController::class, 'dashboard'])->name('dashboard');
+        Route::get('/dashboard-data', [SerahTerimaController::class, 'dashboardData'])->name('dashboard-data');
     });
 });
 
