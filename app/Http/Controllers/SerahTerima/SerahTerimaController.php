@@ -55,6 +55,100 @@ class SerahTerimaController extends Controller
     }
 
     /**
+     * BARU - Menampilkan halaman Dashboard Rekap.
+     * Halaman ini murni shell HTML, semua data diambil lewat fetch()
+     * ke endpoint dashboardData() di bawah (konsisten dengan pola
+     * halaman index yang sudah ada: render dulu, data nyusul via JS).
+     * Bisa diakses semua role (tidak ada authorizeRole di sini).
+     */
+    public function dashboard(): View
+    {
+        return view('serah-terima.dashboard');
+    }
+
+    /**
+     * BARU - Endpoint API agregasi untuk Dashboard Rekap.
+     * Menerima parameter query: dari=YYYY-MM-DD & sampai=YYYY-MM-DD
+     * Default: 7 hari terakhir kalau parameter tidak dikirim.
+     *
+     * Return 4 blok data:
+     * - summary   : total bag, total kg, total batch untuk rentang terpilih
+     * - trend     : total bag & kg per tanggal (buat chart trend harian)
+     * - per_produk: breakdown per produk, diurutkan dari yang paling banyak
+     * - per_cell  : breakdown per cell, diurutkan dari yang paling banyak
+     */
+    public function dashboardData(Request $request): JsonResponse
+    {
+        $dari = $request->query('dari') ?: now()->subDays(6)->format('Y-m-d');
+        $sampai = $request->query('sampai') ?: now()->format('Y-m-d');
+
+        // Ekspresi SQL untuk menjumlahkan kg_bag_1 s.d kg_bag_10 jadi total kg
+        // per baris, dilakukan di level SQL (bukan tarik semua row lalu
+        // diolah di PHP) supaya tetap ringan meskipun data sudah banyak.
+        $kgSumExpr = collect(range(1, 10))
+            ->map(fn ($i) => "COALESCE(kg_bag_{$i}, 0)")
+            ->implode(' + ');
+
+        $baseQuery = DB::table('serah_terima_batches')
+    ->whereBetween('tanggal_produksi', [$dari, $sampai]);
+
+        // 1. Ringkasan total untuk rentang terpilih
+        $summaryRow = (clone $baseQuery)
+            ->selectRaw("SUM(jumlah_bag) as total_bag, SUM({$kgSumExpr}) as total_kg, COUNT(*) as total_batch")
+            ->first();
+
+        // 2. Trend per tanggal (buat grafik)
+        $trend = (clone $baseQuery)
+            ->selectRaw("tanggal_produksi, SUM(jumlah_bag) as total_bag, SUM({$kgSumExpr}) as total_kg")
+            ->groupBy('tanggal_produksi')
+            ->orderBy('tanggal_produksi')
+            ->get();
+
+        // 3. Breakdown per produk
+        $perProduk = (clone $baseQuery)
+            ->join('products', 'products.id', '=', 'serah_terima_batches.produk_id')
+            ->selectRaw("products.code as kode_produk, products.name as nama_produk, SUM(serah_terima_batches.jumlah_bag) as total_bag, SUM({$kgSumExpr}) as total_kg")
+            ->groupBy('products.id', 'products.code', 'products.name')
+            ->orderByDesc('total_bag')
+            ->get();
+
+        // 4. Breakdown per cell
+        $perCell = (clone $baseQuery)
+            ->whereNotNull('kode_cell')
+            ->selectRaw("kode_cell, SUM(jumlah_bag) as total_bag, SUM({$kgSumExpr}) as total_kg, COUNT(*) as total_batch")
+            ->groupBy('kode_cell')
+            ->orderByDesc('total_bag')
+            ->get();
+
+        return response()->json([
+            'summary' => [
+                'dari'        => $dari,
+                'sampai'      => $sampai,
+                'total_bag'   => (int) ($summaryRow->total_bag ?? 0),
+                'total_kg'    => round((float) ($summaryRow->total_kg ?? 0), 1),
+                'total_batch' => (int) ($summaryRow->total_batch ?? 0),
+            ],
+            'trend' => $trend->map(fn ($t) => [
+                'tanggal'   => $t->tanggal_produksi,
+                'total_bag' => (int) $t->total_bag,
+                'total_kg'  => round((float) $t->total_kg, 1),
+            ]),
+            'per_produk' => $perProduk->map(fn ($p) => [
+                'kode_produk' => $p->kode_produk,
+                'nama_produk' => $p->nama_produk,
+                'total_bag'   => (int) $p->total_bag,
+                'total_kg'    => round((float) $p->total_kg, 1),
+            ]),
+            'per_cell' => $perCell->map(fn ($c) => [
+                'kode_cell'   => $c->kode_cell,
+                'total_bag'   => (int) $c->total_bag,
+                'total_kg'    => round((float) $c->total_kg, 1),
+                'total_batch' => (int) $c->total_batch,
+            ]),
+        ]);
+    }
+
+    /**
      * BARU - Daftar Cell aktif beserta sisa kapasitas live saat ini.
      * Dipakai untuk dropdown TWH saat mau membuat reservasi baru, supaya
      * bisa lihat dulu Cell mana yang masih ada sisa sebelum pilih.

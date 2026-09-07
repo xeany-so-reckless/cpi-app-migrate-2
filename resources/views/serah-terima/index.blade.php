@@ -80,6 +80,20 @@
             font-size: 13px;
             transition: .2s;
         }
+
+        .btn-ghost-nav {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.25);
+    color: #f1f5f9;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 13px;
+    transition: .2s;
+    text-decoration: none;
+    display: inline-block;
+}
+.btn-ghost-nav:hover { background: rgba(255,255,255,.1); color: #fff; }
         .btn-ghost-logout:hover { background: var(--red); border-color: var(--red); color: #fff; }
 
         /* ---------- CARDS & BUTTONS ---------- */
@@ -266,7 +280,12 @@
             {{ $currentUser->hasAnyRole(['tally_gudang', 'admin_gudang', 'supervisor_gudang']) ? 'Inbound Warehouse' : 'Serah Terima Hasil Produksi' }}
             <small>CPI Jombang Plant &middot; Traceability System</small>
         </span>
-        <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2">
+            @if ($currentUser->hasAnyRole(['supervisor', 'supervisor_gudang']))
+            <a href="{{ route('serahterima.dashboard') }}" class="btn-ghost-nav me-1">
+                <i class="fa-solid fa-chart-column me-1"></i> Dashboard Rekap
+            </a>
+            @endif
             <span class="role-pill">{{ $currentUser->name }} &middot; {{ $roleLabel }}</span>
             <form id="logoutForm" method="POST" action="{{ route('serahterima.logout') }}" class="d-inline">
                 @csrf
