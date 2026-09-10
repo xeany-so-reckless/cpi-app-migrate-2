@@ -137,7 +137,7 @@ class UniformityController extends Controller
      *
      * Kalau dua-duanya dikirim, "tanggal" yang menang (lebih spesifik).
      */
-    public function exportExcel(Request $request): StreamedResponse
+        public function exportExcel(Request $request): StreamedResponse
     {
         $tanggal = $request->query('tanggal');
         $bulan   = $request->query('bulan');
@@ -162,33 +162,50 @@ class UniformityController extends Controller
         $sheet->setTitle('Uniformity Raw');
 
         $headers = [
-            'Tanggal', 'No Rit', 'Asal Kandang', 'Size Min', 'Size Max',
-            'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Jumlah Sample',
+            'Tanggal', 'No Rit', 'Asal Kandang', 'Ekspedisi', 'Size Min', 'Size Max',
+            'Kg DTA', 'Ekor DTA', 'Rerata ABW', 'Rata-rata RPA', 'Jumlah Sample',
             'Undersize (%)', 'Size Masuk (%)', 'Oversize (%)',
         ];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:N1')->getFont()->setBold(true);
 
         $baris = 2;
         foreach ($rits as $r) {
+            // Ambil data dari Sebelum/Setelah Bongkar (tabel lb_penerimaan)
+            // untuk kolom Ekspedisi & Rata-rata RPA. Dicocokkan lewat
+            // tanggal + no_rit, sama seperti join di LbReportController.
+            $penerimaan = LbPenerimaan::where('tanggal', $r->tanggal->format('Y-m-d'))
+                ->where('no_rit', $r->no_rit)
+                ->first();
+
+            $ekspedisi = $penerimaan->ekspedisi ?? '-';
+
+            $rataRataRpa = ($penerimaan && $penerimaan->ekor_netto > 0)
+                ? round($penerimaan->kg_netto / $penerimaan->ekor_netto, 3)
+                : 0;
+
             $sheet->fromArray([
                 $r->tanggal->format('Y-m-d'),
                 $r->no_rit,
                 $r->asal_kandang,
+                $ekspedisi,
                 (float) $r->size_min,
                 (float) $r->size_max,
                 (float) $r->kg_dta,
                 (int) $r->ekor_dta,
                 (float) $r->rerata_abw,
+                $rataRataRpa,
                 (int) $r->jumlah_sample,
-                (float) $r->undersize_percent,
-                (float) $r->size_masuk_percent,
-                (float) $r->oversize_percent,
+                (float) $r->undersize_percent / 100,
+                (float) $r->size_masuk_percent / 100,
+                (float) $r->oversize_percent / 100,
             ], null, "A{$baris}");
             $baris++;
         }
 
-        foreach (range('A', 'L') as $kolom) {
+        
+
+        foreach (range('A', 'N') as $kolom) {
             $sheet->getColumnDimension($kolom)->setAutoSize(true);
         }
 
