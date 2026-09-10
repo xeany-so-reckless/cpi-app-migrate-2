@@ -63,6 +63,9 @@
   <button onclick="exportExcelRaw()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">
     <i class="fa-solid fa-file-excel"></i> Export Excel (Raw)
   </button>
+  <button onclick="exportExcelSamples()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">
+  <i class="fa-solid fa-vial"></i> Export Excel (Samples)
+</button>
   <!-- END TAMBAHAN -->
             <button onclick="loadDashboard()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition">Refresh Data</button>
           </div>
@@ -671,6 +674,20 @@
   }
 
   window.location.href = '{{ route('uniformity.export-excel') }}?' + params.toString();
+}
+
+function exportExcelSamples() {
+  const tanggal = document.getElementById('filter-tanggal-export').value;
+  const bulan = document.getElementById('filter-bulan').value;
+
+  let params = new URLSearchParams();
+  if (tanggal) {
+    params.set('tanggal', tanggal);
+  } else if (bulan) {
+    params.set('bulan', bulan);
+  }
+
+  window.location.href = '{{ route('uniformity.export-samples-excel') }}?' + params.toString();
 }
 
       async function loadDashboard() {

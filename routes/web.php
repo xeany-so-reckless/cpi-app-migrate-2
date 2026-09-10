@@ -158,6 +158,7 @@ Route::prefix('uniformity')->name('uniformity.')->group(function () {
     Route::get('/dta-by-rit', [UniformityController::class, 'dtaByRit'])->name('dta-by-rit');
     Route::get('/rekap', [UniformityController::class, 'rekap'])->name('rekap');
     Route::get('/export-excel', [UniformityController::class, 'exportExcel'])->name('export-excel'); // ← TAMBAHAN
+    Route::get('/export-samples-excel', [UniformityController::class, 'exportSamplesExcel'])->name('export-samples-excel');
     Route::post('/verify-pin', [UniformityController::class, 'verifyPin'])->name('verify-pin');
     Route::post('/rits', [UniformityController::class, 'store'])->name('rits.store');
     Route::post('/verify-signature', [UniformityController::class, 'verifySignature'])->name('verify-signature');

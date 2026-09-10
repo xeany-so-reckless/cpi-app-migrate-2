@@ -201,6 +201,79 @@ class UniformityController extends Controller
         ]);
     }
 
+        public function exportSamplesExcel(Request $request): StreamedResponse
+    {
+        $tanggal = $request->query('tanggal');
+        $bulan   = $request->query('bulan');
+
+        $query = UniformityRit::with(['samples' => function ($q) {
+            $q->orderBy('sample_index');
+        }])->orderBy('tanggal')->orderBy('no_rit');
+
+        $namaFile = 'uniformity-samples.xlsx';
+
+        if ($tanggal) {
+            $query->whereDate('tanggal', $tanggal);
+            $namaFile = "uniformity-samples-{$tanggal}.xlsx";
+        } elseif ($bulan) {
+            $query->whereYear('tanggal', substr($bulan, 0, 4))
+                  ->whereMonth('tanggal', substr($bulan, 5, 2));
+            $namaFile = "uniformity-samples-{$bulan}.xlsx";
+        }
+
+        $rits = $query->get();
+
+        // Cari jumlah sample terbanyak di antara semua rit yang di-export,
+        // supaya jumlah kolom "Sample ke-N" pas - tidak kurang, tidak lebih.
+        $maxSample = $rits->max(fn (UniformityRit $r) => $r->samples->count()) ?? 0;
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Uniformity Samples');
+
+        // Header: 3 kolom identitas rit + kolom "Sample 1" s.d. "Sample {maxSample}"
+        $headers = ['Tanggal', 'No Rit', 'Asal Kandang'];
+        for ($i = 1; $i <= $maxSample; $i++) {
+            $headers[] = "Sample {$i}";
+        }
+        $sheet->fromArray($headers, null, 'A1');
+        $lastColumn = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle("A1:{$lastColumn}1")->getFont()->setBold(true);
+
+        $baris = 2;
+        foreach ($rits as $r) {
+            $beratPerSample = $r->samples->pluck('berat')->map(fn ($b) => (float) $b)->values()->all();
+
+            $row = [
+                $r->tanggal->format('Y-m-d'),
+                $r->no_rit,
+                $r->asal_kandang,
+            ];
+
+            // Isi kolom sample sesuai data rit ini; sisanya (kalau rit ini
+            // sample-nya lebih sedikit dari maxSample) dikosongkan.
+            for ($i = 0; $i < $maxSample; $i++) {
+                $row[] = $beratPerSample[$i] ?? null;
+            }
+
+            $sheet->fromArray($row, null, "A{$baris}");
+            $baris++;
+        }
+
+        foreach (range(1, count($headers)) as $colIndex) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
+            $sheet->getColumnDimension($colLetter)->setAutoSize(true);
+        }
+
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $namaFile, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     /**
      * Menggantikan pengecekan PIN_OTORISASI di JS lama.
      * Sekarang divalidasi server-side, PIN tidak lagi kelihatan di kode
