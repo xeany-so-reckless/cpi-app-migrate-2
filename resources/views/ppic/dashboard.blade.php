@@ -169,6 +169,7 @@
                 <thead>
                     <tr>
                         <th>No. PO</th>
+                        <th>Jenis PO</th>
                         <th>Kode Batch</th>
                         <th>Tanggal</th>
                         <th>Kode Produk</th>
@@ -178,7 +179,7 @@
                     </tr>
                 </thead>
                 <tbody id="tblSerahTerimaBody">
-                    <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+                    <tr><td colspan="8" class="empty-state">Memuat data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -300,7 +301,7 @@
             const dari = document.getElementById('stDari').value;
             const sampai = document.getElementById('stSampai').value;
             const tbody = document.getElementById('tblSerahTerimaBody');
-            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Memuat data...</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Memuat data...</td></tr>`;
             document.getElementById('stSummaryTotal').innerHTML = '';
 
             try {
@@ -310,7 +311,7 @@
                 renderSerahTerima(data.per_batch);
                 renderSerahTerimaSummary(data.summary);
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
             }
         }
 
@@ -318,13 +319,14 @@
             const tbody = document.getElementById('tblSerahTerimaBody');
 
             if (!rows || rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada data Serah Terima pada rentang tanggal ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Belum ada data Serah Terima pada rentang tanggal ini.</td></tr>`;
                 return;
             }
 
             tbody.innerHTML = rows.map(r => `
                 <tr>
                     <td class="mono-cell">${r.no_po}</td>
+                    <td class="mono-cell">${r.jenis_po}</td>
                     <td class="mono-cell">${r.kode_batch}</td>
                     <td>${r.tanggal_produksi}</td>
                     <td>${r.kode_produk}</td>

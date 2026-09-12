@@ -157,6 +157,7 @@ class PpicDashboardController extends Controller
 
             return [
                 'no_po'            => $noPo ?? '-',
+                'jenis_po'         => $jenisPo ?? '-',
                 'kode_batch'       => $r->kode_batch,
                 'tanggal_produksi' => $r->tanggal_produksi,
                 'kode_produk'      => $r->kode_produk,
