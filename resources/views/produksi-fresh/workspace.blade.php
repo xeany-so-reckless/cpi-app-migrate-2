@@ -34,14 +34,17 @@
 
     .header {
       background: linear-gradient(135deg, var(--primary), #a60013); color: white; padding: 15px 20px;
-      display: flex; justify-content: space-between; align-items: center;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
     }
     .header h2 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+    .header-actions { display: flex; gap: 6px; }
     .btn-logout-header {
       background: rgba(255,255,255,0.2); color: white; border: none; padding: 8px 12px; border-radius: 6px;
       cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600;
+      white-space: nowrap;
     }
     .btn-logout-header:hover { background: rgba(255,255,255,0.3); }
+    .btn-logout-header.active { background: rgba(255,255,255,0.4); }
 
     .content { padding: 25px 20px; }
     @media (min-width: 768px) { .content { padding: 30px 35px; } }
@@ -76,6 +79,7 @@
     .btn-outline { background: #fff; color: var(--text-main); border: 1px solid var(--border); }
     .btn-outline:hover { background: #f8f8f8; }
     .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .error-text { color: var(--error); font-size: 13px; font-weight: 500; margin-top: 6px; text-align: center; }
 
@@ -111,6 +115,11 @@
 
     .hidden { display: none !important; }
 
+    .history-pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; }
+    .history-pagination span { font-size: 13px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+    .history-pagination .btn { width: auto; padding: 10px 16px; font-size: 13px; }
+    .empty-row td { text-align: center; color: var(--text-muted); padding: 20px 8px; }
+
     @media print {
       body { background: #fff; padding: 0; }
       .no-print { display: none !important; }
@@ -127,15 +136,24 @@
   <div class="container">
     <div class="header no-print">
       <h2>INPUT DATA FRESH</h2>
-      <form id="logoutForm" method="POST" action="{{ route('produksifresh.logout') }}">
-        @csrf
-        <button type="button" class="btn-logout-header" onclick="confirmLogout()">
-          <span class="material-icons-round" style="font-size:16px;">logout</span> Logout
+      <div class="header-actions">
+        <button type="button" class="btn-logout-header active" onclick="toggleView('input')" id="btnViewInput">
+          <span class="material-icons-round" style="font-size:16px;">edit_note</span> Input
         </button>
-      </form>
+        <button type="button" class="btn-logout-header" onclick="toggleView('history')" id="btnViewHistory">
+          <span class="material-icons-round" style="font-size:16px;">history</span> Riwayat
+        </button>
+        <form id="logoutForm" method="POST" action="{{ route('produksifresh.logout') }}">
+          @csrf
+          <button type="button" class="btn-logout-header" onclick="confirmLogout()">
+            <span class="material-icons-round" style="font-size:16px;">logout</span>
+          </button>
+        </form>
+      </div>
     </div>
 
-    <div class="content">
+    <!-- ==================== PANEL INPUT ==================== -->
+    <div class="content" id="inputPanel">
       <div class="user-info no-print">
         <span class="material-icons-round" style="color: var(--primary); font-size: 32px;">account_circle</span>
         <div class="user-info-text">
@@ -225,6 +243,51 @@
         </button>
       </div>
     </div>
+
+    <!-- ==================== PANEL RIWAYAT ==================== -->
+    <div class="content hidden" id="historyPanel">
+      <div class="form-row form-row-2 no-print" style="margin-bottom:15px;">
+        <div class="form-group">
+          <label>Cari No PO</label>
+          <div class="input-with-icon">
+            <span class="material-icons-round">search</span>
+            <input type="text" id="filterNoPo" placeholder="Ketik lalu Enter">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tanggal</label>
+          <div class="input-with-icon">
+            <span class="material-icons-round">event</span>
+            <input type="date" id="filterTanggal">
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="historyTable">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>No PO</th>
+              <th>Kode</th>
+              <th>Nama Produk</th>
+              <th>Kode Produksi</th>
+              <th>Qty</th>
+              <th>Input Oleh</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr class="empty-row"><td colspan="7">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="history-pagination no-print">
+        <button class="btn btn-outline" onclick="changeHistoryPage(-1)" id="btnHistoryPrev">‹ Sebelumnya</button>
+        <span id="historyPageInfo">-</span>
+        <button class="btn btn-outline" onclick="changeHistoryPage(1)" id="btnHistoryNext">Berikutnya ›</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -232,6 +295,9 @@
     let productCache = [];
     let draftData = [];
     let editIndex = -1;
+    let historyCurrentPage = 1;
+    let historyLastPage = 1;
+    let historyLoaded = false;
 
     async function apiFetch(url, options = {}) {
       const response = await fetch(url, {
@@ -263,6 +329,21 @@
       loadProducts();
       document.getElementById('poNumber').focus();
     });
+
+    // ==================== TAB SWITCH (Input / Riwayat) ====================
+    function toggleView(target) {
+      const isHistory = target === 'history';
+
+      document.getElementById('inputPanel').classList.toggle('hidden', isHistory);
+      document.getElementById('historyPanel').classList.toggle('hidden', !isHistory);
+
+      document.getElementById('btnViewInput').classList.toggle('active', !isHistory);
+      document.getElementById('btnViewHistory').classList.toggle('active', isHistory);
+
+      if (isHistory && !historyLoaded) {
+        loadHistory(1);
+      }
+    }
 
     async function loadPurchaseOrders() {
       const select = document.getElementById('poNumber');
@@ -447,6 +528,9 @@
         renderDraft();
         clearForm();
         document.getElementById('prodCode').focus();
+
+        // Data baru masuk sistem - paksa reload riwayat kalau nanti dibuka lagi
+        historyLoaded = false;
       } catch (err) {
         showToast('Gagal: ' + err.message, true);
       } finally {
@@ -486,6 +570,64 @@
       const tanggal = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(wb, `draft-produksi-fresh-${tanggal}.xlsx`);
     }
+
+    // ==================== RIWAYAT (DATA YANG SUDAH TERSIMPAN) ====================
+    async function loadHistory(page = 1) {
+      const tbody = document.getElementById('historyBody');
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Memuat data...</td></tr>`;
+
+      const params = new URLSearchParams({ page });
+      const noPo = document.getElementById('filterNoPo').value.trim();
+      const tanggal = document.getElementById('filterTanggal').value;
+      if (noPo) params.set('no_po', noPo);
+      if (tanggal) { params.set('tanggal_dari', tanggal); params.set('tanggal_sampai', tanggal); }
+
+      try {
+        const res = await apiFetch('{{ route('produksifresh.history') }}?' + params.toString());
+        renderHistory(res.data);
+        historyCurrentPage = res.meta.current_page;
+        historyLastPage = res.meta.last_page;
+        document.getElementById('historyPageInfo').innerText = `Hal ${historyCurrentPage}/${historyLastPage} • ${res.meta.total} data`;
+        document.getElementById('btnHistoryPrev').disabled = historyCurrentPage <= 1;
+        document.getElementById('btnHistoryNext').disabled = historyCurrentPage >= historyLastPage;
+        historyLoaded = true;
+      } catch (err) {
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Gagal memuat riwayat.</td></tr>`;
+        showToast('Gagal memuat riwayat: ' + err.message, true);
+      }
+    }
+
+    function renderHistory(rows) {
+      const tbody = document.getElementById('historyBody');
+
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="7">Belum ada data tersimpan.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.tanggal}</td>
+          <td>${r.noPo}</td>
+          <td>${r.kodeProduk}</td>
+          <td>${r.namaProduk}</td>
+          <td>${r.kodeProduksi}</td>
+          <td><strong>${r.qty.toFixed(1)}</strong></td>
+          <td>${r.inputOleh}</td>
+        </tr>
+      `).join('');
+    }
+
+    function changeHistoryPage(delta) {
+      const target = historyCurrentPage + delta;
+      if (target < 1 || target > historyLastPage) return;
+      loadHistory(target);
+    }
+
+    document.getElementById('filterNoPo').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); loadHistory(1); }
+    });
+    document.getElementById('filterTanggal').addEventListener('change', () => loadHistory(1));
   </script>
 </body>
 </html>

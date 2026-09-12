@@ -197,6 +197,7 @@ Route::prefix('report-lb')->name('lbreport.')->group(function () {
 });
 
 // ==================== PRODUKSI FRESH ====================
+// ==================== PRODUKSI FRESH ====================
 Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
 
     Route::middleware('guest.produksifresh')->group(function () {
@@ -211,6 +212,9 @@ Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
         Route::get('/purchase-orders', [ProduksiFreshController::class, 'listPurchaseOrders'])->name('purchase-orders');
         Route::get('/products', [ProduksiFreshController::class, 'listProducts'])->name('products');
         Route::post('/store', [ProduksiFreshController::class, 'store'])->name('store');
+
+        // BARU - Riwayat data yang sudah tersimpan
+        Route::get('/riwayat-data', [ProduksiFreshController::class, 'history'])->name('history');
     });
 });
 

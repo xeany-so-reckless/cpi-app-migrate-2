@@ -137,4 +137,55 @@ class ProduksiFreshController extends Controller
             'message' => count($inserted).' data berhasil disimpan ke sistem.',
         ]);
     }
+
+    /**
+     * BARU - Riwayat data yang sudah tersimpan, difilter sesuai
+     * tipe_input dari session (pola sama seperti listProducts()) -
+     * user tidak bisa melihat data tipe lain lewat manipulasi query
+     * string. Mendukung filter opsional no_po & rentang tanggal, plus
+     * pagination.
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $tipe = $request->session()->get('produksi_fresh_tipe');
+        if (! $tipe) {
+            abort(403, 'Sesi tidak valid, silakan login ulang.');
+        }
+
+        $query = ProduksiFresh::with(['product:id,code,name', 'user:id,name,employee_code'])
+            ->where('tipe_input', $tipe);
+
+        if ($request->filled('no_po')) {
+            $query->where('no_po', 'like', '%'.strtoupper($request->string('no_po')).'%');
+        }
+
+        if ($request->filled('tanggal_dari')) {
+            $query->whereDate('created_at', '>=', $request->date('tanggal_dari'));
+        }
+
+        if ($request->filled('tanggal_sampai')) {
+            $query->whereDate('created_at', '<=', $request->date('tanggal_sampai'));
+        }
+
+        $perPage = min((int) $request->get('per_page', 20), 100);
+        $paginated = $query->orderByDesc('created_at')->paginate($perPage);
+
+        return response()->json([
+            'data' => collect($paginated->items())->map(fn (ProduksiFresh $p) => [
+                'id'           => $p->id,
+                'noPo'         => $p->no_po,
+                'kodeProduk'   => $p->product->code ?? '-',
+                'namaProduk'   => $p->product->name ?? '-',
+                'kodeProduksi' => $p->kode_produksi,
+                'qty'          => (float) $p->qty,
+                'inputOleh'    => $p->user->name ?? '-',
+                'tanggal'      => $p->created_at->format('d/m/Y H:i'),
+            ]),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'last_page'    => $paginated->lastPage(),
+                'total'        => $paginated->total(),
+            ],
+        ]);
+    }
 }
