@@ -50,6 +50,22 @@
             font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted);
             text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
         }
+        .section-head {
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+            margin-bottom: 12px;
+        }
+        .section-head h4 { margin-bottom: 0; }
+        .date-range-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .date-range-filter input[type="date"] {
+            height: 36px; border-radius: 8px; border: 1px solid var(--line); padding: 0 10px; font-size: 0.82rem;
+        }
+        .date-range-filter span { color: var(--muted); font-size: 0.8rem; }
+        .btn-terapkan {
+            height: 36px; border: none; border-radius: 8px; padding: 0 14px; font-size: 0.8rem; font-weight: 700;
+            background: var(--primary); color: #fff; cursor: pointer; transition: .15s;
+        }
+        .btn-terapkan:hover { background: #4338ca; }
+
         .table-wrap { overflow-x: auto; }
         table.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         table.data-table th, table.data-table td {
@@ -61,6 +77,11 @@
         }
         table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         table.data-table tr:hover td { background: var(--primary-soft); }
+        table.data-table td.mono-cell { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+        .summary-total {
+            display: flex; gap: 24px; padding: 14px 4px 4px; font-size: 0.85rem; color: var(--muted);
+        }
+        .summary-total b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
     </style>
 </head>
 <body>
@@ -129,6 +150,39 @@
                 </tbody>
             </table>
         </div>
+    </div>
+
+    {{-- ==================== BARU: REKAP SERAH TERIMA PER PRODUK ==================== --}}
+    <div class="section-card">
+        <div class="section-head">
+            <h4>Rekap Serah Terima per Produk</h4>
+            <div class="date-range-filter">
+                <span class="material-symbols-outlined" style="font-size:16px; color: var(--muted);">calendar_month</span>
+                <input type="date" id="stDari">
+                <span>s/d</span>
+                <input type="date" id="stSampai">
+                <button class="btn-terapkan" onclick="loadSerahTerima()">Terapkan</button>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No. PO</th>
+                        <th>Kode Batch</th>
+                        <th>Tanggal</th>
+                        <th>Kode Produk</th>
+                        <th>Nama Produk</th>
+                        <th class="num">Jumlah Bag</th>
+                        <th class="num">Total Kg</th>
+                    </tr>
+                </thead>
+                <tbody id="tblSerahTerimaBody">
+                    <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="summary-total" id="stSummaryTotal"></div>
     </div>
 
     <script>
@@ -240,8 +294,69 @@
             `).join('');
         }
 
+        // ==================== BARU: REKAP SERAH TERIMA (FILTER RENTANG TANGGAL) ====================
+
+        async function loadSerahTerima() {
+            const dari = document.getElementById('stDari').value;
+            const sampai = document.getElementById('stSampai').value;
+            const tbody = document.getElementById('tblSerahTerimaBody');
+            tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Memuat data...</td></tr>`;
+            document.getElementById('stSummaryTotal').innerHTML = '';
+
+            try {
+                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-data') }}?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}`);
+                if (!res.ok) throw new Error('Gagal memuat data.');
+                const data = await res.json();
+                renderSerahTerima(data.per_batch);
+                renderSerahTerimaSummary(data.summary);
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
+            }
+        }
+
+        function renderSerahTerima(rows) {
+            const tbody = document.getElementById('tblSerahTerimaBody');
+
+            if (!rows || rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada data Serah Terima pada rentang tanggal ini.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = rows.map(r => `
+                <tr>
+                    <td class="mono-cell">${r.no_po}</td>
+                    <td class="mono-cell">${r.kode_batch}</td>
+                    <td>${r.tanggal_produksi}</td>
+                    <td>${r.kode_produk}</td>
+                    <td>${r.nama_produk}</td>
+                    <td class="num">${Number(r.jumlah_bag).toLocaleString('id-ID')}</td>
+                    <td class="num">${Number(r.total_kg).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderSerahTerimaSummary(summary) {
+            if (!summary) return;
+            document.getElementById('stSummaryTotal').innerHTML = `
+                <div>Jumlah Batch: <b>${Number(summary.total_batch).toLocaleString('id-ID')}</b></div>
+                <div>Total Bag: <b>${Number(summary.total_bag).toLocaleString('id-ID')}</b></div>
+                <div>Total Kg: <b>${Number(summary.total_kg).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</b></div>
+            `;
+        }
+
+        function initSerahTerimaDefaultRange() {
+            const sampai = new Date();
+            const dari = new Date();
+            dari.setDate(dari.getDate() - 6);
+            document.getElementById('stDari').value = dari.toISOString().split('T')[0];
+            document.getElementById('stSampai').value = sampai.toISOString().split('T')[0];
+        }
+
         filterBulan.addEventListener('change', loadDashboard);
         loadDashboard();
+
+        initSerahTerimaDefaultRange();
+        loadSerahTerima();
     </script>
 </body>
 </html>
