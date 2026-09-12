@@ -281,10 +281,12 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
     Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
 });
 
+        
         // --- Dashboard ---
-        Route::prefix('dashboard')->name('dashboard.')->group(function () {
-            Route::get('/', [PpicDashboardController::class, 'index'])->name('index');
-            Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
-        });
+Route::prefix('dashboard')->name('dashboard.')->group(function () {
+    Route::get('/', [PpicDashboardController::class, 'index'])->name('index');
+    Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
+    Route::get('/serah-terima-data', [PpicDashboardController::class, 'serahTerimaData'])->name('serah-terima-data');
+});
     });
 });
