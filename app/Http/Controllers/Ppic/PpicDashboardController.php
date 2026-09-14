@@ -99,9 +99,11 @@ class PpicDashboardController extends Controller
      * (dari - sampai), terpisah dari filter bulan di atas supaya tidak
      * mengganggu chart Plan/Aktual/PO yang sudah berjalan.
      *
-     * Endpoint: GET /ppic/dashboard/serah-terima-data?dari=YYYY-MM-DD&sampai=YYYY-MM-DD
+     * Endpoint: GET /ppic/dashboard/serah-terima-data?dari=YYYY-MM-DD&sampai=YYYY-MM-DD&jenis_po=FEH0
      * Default rentang: 7 hari terakhir kalau parameter tidak dikirim
      * (konsisten dengan default Dashboard Rekap Serah Terima).
+     * Parameter jenis_po OPSIONAL - kalau tidak dikirim/kosong, semua
+     * jenis PO ditampilkan.
      *
      * Setiap baris = 1 BATCH (1 kode_produksi), diurutkan tanggal
      * terbaru dulu. Tidak ada grouping per produk - kalau 1 kode produk
@@ -113,6 +115,12 @@ class PpicDashboardController extends Controller
     {
         $dari = $request->query('dari') ?: now()->subDays(6)->format('Y-m-d');
         $sampai = $request->query('sampai') ?: now()->format('Y-m-d');
+
+        // BARU - Filter opsional Jenis PO (FEH0/FEH1/FEH2/FEHM). Karena
+        // jenis_po BUKAN kolom asli di tabel serah_terima_batches (hasil
+        // mapping kode produk, dihitung setelah data ditarik), filter ini
+        // diterapkan di collection PHP - BUKAN di query SQL.
+        $jenisPoFilter = $request->query('jenis_po');
 
         // Ekspresi SQL sama seperti di Dashboard Rekap Serah Terima -
         // jumlahkan kg_bag_1 s.d kg_bag_10 jadi total kg per baris.
@@ -165,11 +173,20 @@ class PpicDashboardController extends Controller
                 'jumlah_bag'       => (int) $r->jumlah_bag,
                 'total_kg'         => round((float) $r->total_kg, 1),
             ];
-        })->values();
+        });
+
+        // Filter Jenis PO diterapkan DI SINI (setelah mapping), cuma
+        // kalau parameter dikirim & bukan "semua"/kosong.
+        if ($jenisPoFilter) {
+            $perBatch = $perBatch->where('jenis_po', $jenisPoFilter);
+        }
+
+        $perBatch = $perBatch->values();
 
         return response()->json([
             'dari'      => $dari,
             'sampai'    => $sampai,
+            'jenis_po'  => $jenisPoFilter,
             'per_batch' => $perBatch,
             'summary'   => [
                 'total_batch' => $perBatch->count(),

@@ -59,6 +59,10 @@
         .date-range-filter input[type="date"] {
             height: 36px; border-radius: 8px; border: 1px solid var(--line); padding: 0 10px; font-size: 0.82rem;
         }
+        .date-range-filter select {
+            height: 36px; border-radius: 8px; border: 1px solid var(--line); padding: 0 10px; font-size: 0.82rem;
+            background: #fff; color: var(--text);
+        }
         .date-range-filter span { color: var(--muted); font-size: 0.8rem; }
         .btn-terapkan {
             height: 36px; border: none; border-radius: 8px; padding: 0 14px; font-size: 0.8rem; font-weight: 700;
@@ -161,6 +165,13 @@
                 <input type="date" id="stDari">
                 <span>s/d</span>
                 <input type="date" id="stSampai">
+                <select id="stJenisPo">
+                    <option value="">Semua Jenis PO</option>
+                    <option value="FEH0">FEH0</option>
+                    <option value="FEH1">FEH1</option>
+                    <option value="FEH2">FEH2</option>
+                    <option value="FEHM">FEHM</option>
+                </select>
                 <button class="btn-terapkan" onclick="loadSerahTerima()">Terapkan</button>
             </div>
         </div>
@@ -300,12 +311,13 @@
         async function loadSerahTerima() {
             const dari = document.getElementById('stDari').value;
             const sampai = document.getElementById('stSampai').value;
+            const jenisPo = document.getElementById('stJenisPo').value;
             const tbody = document.getElementById('tblSerahTerimaBody');
             tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Memuat data...</td></tr>`;
             document.getElementById('stSummaryTotal').innerHTML = '';
 
             try {
-                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-data') }}?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}`);
+                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-data') }}?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}&jenis_po=${encodeURIComponent(jenisPo)}`);
                 if (!res.ok) throw new Error('Gagal memuat data.');
                 const data = await res.json();
                 renderSerahTerima(data.per_batch);
