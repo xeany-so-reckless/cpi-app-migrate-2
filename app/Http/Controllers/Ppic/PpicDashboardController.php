@@ -99,11 +99,11 @@ class PpicDashboardController extends Controller
      * (dari - sampai), terpisah dari filter bulan di atas supaya tidak
      * mengganggu chart Plan/Aktual/PO yang sudah berjalan.
      *
-     * Endpoint: GET /ppic/dashboard/serah-terima-data?dari=YYYY-MM-DD&sampai=YYYY-MM-DD&jenis_po=FEH0
+     * Endpoint: GET /ppic/dashboard/serah-terima-data?dari=YYYY-MM-DD&sampai=YYYY-MM-DD&jenis_po=FEH0&kode_produk=67
      * Default rentang: 7 hari terakhir kalau parameter tidak dikirim
      * (konsisten dengan default Dashboard Rekap Serah Terima).
-     * Parameter jenis_po OPSIONAL - kalau tidak dikirim/kosong, semua
-     * jenis PO ditampilkan.
+     * Parameter jenis_po & kode_produk OPSIONAL - kalau tidak dikirim/
+     * kosong, semua jenis PO / produk ditampilkan.
      *
      * Setiap baris = 1 BATCH (1 kode_produksi), diurutkan tanggal
      * terbaru dulu. Tidak ada grouping per produk - kalau 1 kode produk
@@ -122,6 +122,11 @@ class PpicDashboardController extends Controller
         // diterapkan di collection PHP - BUKAN di query SQL.
         $jenisPoFilter = $request->query('jenis_po');
 
+        // BARU - Filter opsional Kode Produk. Berbeda dengan jenis_po,
+        // kode_produk itu kolom ASLI (products.code) - jadi filter ini
+        // diterapkan langsung di query SQL, lebih efisien.
+        $kodeProdukFilter = $request->query('kode_produk');
+
         // Ekspresi SQL sama seperti di Dashboard Rekap Serah Terima -
         // jumlahkan kg_bag_1 s.d kg_bag_10 jadi total kg per baris.
         $kgSumExpr = collect(range(1, 10))
@@ -134,6 +139,7 @@ class PpicDashboardController extends Controller
         $rows = DB::table('serah_terima_batches')
             ->join('products', 'products.id', '=', 'serah_terima_batches.produk_id')
             ->whereBetween('tanggal_produksi', [$dari, $sampai])
+            ->when($kodeProdukFilter, fn ($q) => $q->where('products.code', $kodeProdukFilter))
             ->selectRaw("
                 serah_terima_batches.kode_produksi as kode_batch,
                 serah_terima_batches.tanggal_produksi as tanggal_produksi,
@@ -184,16 +190,57 @@ class PpicDashboardController extends Controller
         $perBatch = $perBatch->values();
 
         return response()->json([
-            'dari'      => $dari,
-            'sampai'    => $sampai,
-            'jenis_po'  => $jenisPoFilter,
-            'per_batch' => $perBatch,
-            'summary'   => [
+            'dari'         => $dari,
+            'sampai'       => $sampai,
+            'jenis_po'     => $jenisPoFilter,
+            'kode_produk'  => $kodeProdukFilter,
+            'per_batch'    => $perBatch,
+            'summary'      => [
                 'total_batch' => $perBatch->count(),
                 'total_bag'   => $perBatch->sum('jumlah_bag'),
                 'total_kg'    => round($perBatch->sum('total_kg'), 1),
             ],
         ]);
+    }
+
+    /**
+     * BARU - Daftar Produk untuk mengisi dropdown filter "Nama Produk"
+     * di Rekap Serah Terima, DIPERSEMPIT sesuai Jenis PO yang dipilih
+     * (Opsi B) - supaya user tidak bisa pilih kombinasi yang mustahil
+     * (mis. pilih produk kode 5 padahal sedang filter FEH0).
+     *
+     * Endpoint: GET /ppic/dashboard/serah-terima-produk-list?jenis_po=FEH0
+     * Kalau jenis_po tidak dikirim/kosong -> return SEMUA produk yang
+     * termasuk salah satu dari 4 jenis PO (kode 1-36, 47-68), diurutkan
+     * per kode. Produk di luar range mapping (37-46, 69+) tidak pernah
+     * disertakan di sini karena memang tidak relevan untuk Serah Terima.
+     *
+     * Mapping kode->jenis_po dihitung di PHP (bukan query DB) karena
+     * murni aturan statis - lalu dipakai untuk memfilter produk yang
+     * sudah ditarik dari tabel products.
+     */
+    public function serahTerimaProdukList(Request $request): JsonResponse
+    {
+        $jenisPoFilter = $request->query('jenis_po');
+
+        $produk = DB::table('products')
+            ->select('code', 'name')
+            ->orderBy('code')
+            ->get()
+            ->map(fn ($p) => [
+                'code'     => $p->code,
+                'name'     => $p->name,
+                'jenis_po' => $this->mapKodeProdukKeJenisPo($p->code),
+            ])
+            ->filter(fn ($p) => $p['jenis_po'] !== null)
+            ->when($jenisPoFilter, fn ($c) => $c->where('jenis_po', $jenisPoFilter))
+            ->map(fn ($p) => [
+                'code' => $p['code'],
+                'name' => $p['name'],
+            ])
+            ->values();
+
+        return response()->json($produk);
     }
 
     /**

@@ -165,12 +165,15 @@
                 <input type="date" id="stDari">
                 <span>s/d</span>
                 <input type="date" id="stSampai">
-                <select id="stJenisPo">
+                <select id="stJenisPo" onchange="onJenisPoChange()">
                     <option value="">Semua Jenis PO</option>
                     <option value="FEH0">FEH0</option>
                     <option value="FEH1">FEH1</option>
                     <option value="FEH2">FEH2</option>
                     <option value="FEHM">FEHM</option>
+                </select>
+                <select id="stKodeProduk">
+                    <option value="">Semua Produk</option>
                 </select>
                 <button class="btn-terapkan" onclick="loadSerahTerima()">Terapkan</button>
             </div>
@@ -312,12 +315,13 @@
             const dari = document.getElementById('stDari').value;
             const sampai = document.getElementById('stSampai').value;
             const jenisPo = document.getElementById('stJenisPo').value;
+            const kodeProduk = document.getElementById('stKodeProduk').value;
             const tbody = document.getElementById('tblSerahTerimaBody');
             tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Memuat data...</td></tr>`;
             document.getElementById('stSummaryTotal').innerHTML = '';
 
             try {
-                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-data') }}?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}&jenis_po=${encodeURIComponent(jenisPo)}`);
+                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-data') }}?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}&jenis_po=${encodeURIComponent(jenisPo)}&kode_produk=${encodeURIComponent(kodeProduk)}`);
                 if (!res.ok) throw new Error('Gagal memuat data.');
                 const data = await res.json();
                 renderSerahTerima(data.per_batch);
@@ -325,6 +329,34 @@
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
             }
+        }
+
+        // BARU - Isi dropdown "Nama Produk", DIPERSEMPIT sesuai Jenis PO
+        // yang sedang dipilih (dropdown kosong = Semua Jenis PO -> semua
+        // produk yang relevan ke Serah Terima ditampilkan).
+        async function loadProdukOptions() {
+            const jenisPo = document.getElementById('stJenisPo').value;
+            const select = document.getElementById('stKodeProduk');
+            select.innerHTML = `<option value="">Memuat...</option>`;
+
+            try {
+                const res = await fetch(`{{ route('ppic.dashboard.serah-terima-produk-list') }}?jenis_po=${encodeURIComponent(jenisPo)}`);
+                if (!res.ok) throw new Error('Gagal memuat daftar produk.');
+                const produk = await res.json();
+
+                select.innerHTML = `<option value="">Semua Produk</option>` + produk.map(p =>
+                    `<option value="${p.code}">${p.code} - ${p.name}</option>`
+                ).join('');
+            } catch (err) {
+                select.innerHTML = `<option value="">Gagal memuat produk</option>`;
+                console.error(err);
+            }
+        }
+
+        // Setiap kali Jenis PO diganti, dropdown produk di-refresh ulang
+        // (pilihan lama otomatis reset ke "Semua Produk").
+        function onJenisPoChange() {
+            loadProdukOptions();
         }
 
         function renderSerahTerima(rows) {
@@ -370,6 +402,7 @@
         loadDashboard();
 
         initSerahTerimaDefaultRange();
+        loadProdukOptions();
         loadSerahTerima();
     </script>
 </body>
