@@ -222,6 +222,10 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        @media print {
+    .no-print { display: none !important; }
+}
+
         .page-block {
             page-break-after: always;
             break-after: page;
@@ -1083,9 +1087,9 @@
                 tableContent += `<tr style="background-color: var(--accent-soft);"><td class="text-start fw-bold" style="color: var(--accent-dark);">Kode Cell</td>`;
                 targetData.forEach(d => {
                     let info = d.kodeCell ? `<span class="cell-chip">${d.kodeCell}</span>` : '-';
-                    if (d.maxBagAllowed) {
-                        info += `<br><span style="font-size:5.2pt; color:var(--muted);">(reservasi maks ${d.maxBagAllowed} bag)</span>`;
-                    }
+if (d.maxBagAllowed) {
+    info += `<br><span class="no-print" style="font-size:5.2pt; color:var(--muted);">(reservasi maks ${d.maxBagAllowed} bag)</span>`;
+}
                     tableContent += `<td>${info}</td>`;
                 });
                 tableContent += `</tr>`;
