@@ -289,9 +289,7 @@
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
                         <td>
                             <div class="action-cell">
-                                <button class="btn-icon btn-icon-edit" onclick="editPo(${d.id}, ${d.jumlahRit ?? 0}, '${d.tanggal}', '${d.jenisPo}', '${d.nomorPo}')" title="Koreksi Rit / Tanggal">
-                                    <span class="material-symbols-outlined" style="font-size:18px;">edit</span>
-                                </button>
+                                ${d.isTeco ? '' : `<button class="btn-icon btn-icon-edit" onclick="editPo(${d.id}, ${d.jumlahRit ?? 0}, '${d.tanggal}', '${d.jenisPo}', '${d.nomorPo}')" title="Koreksi Rit / Tanggal"><span class="material-symbols-outlined" style="font-size:18px;">edit</span></button>`}
                                 ${d.isTeco ? '' : `<button class="btn-icon" onclick="hapusPo(${d.id})" title="Hapus"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>`}
                             </div>
                         </td>
