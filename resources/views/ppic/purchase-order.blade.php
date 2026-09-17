@@ -82,6 +82,8 @@
         .btn-icon { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; }
         .btn-icon:hover { color: var(--danger); background: #fef2f2; }
         .btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-icon.btn-icon-edit:hover { color: var(--primary); background: var(--primary-soft); }
+        .action-cell { display: flex; align-items: center; gap: 2px; }
     </style>
 </head>
 <body>
@@ -285,7 +287,14 @@
                             <button class="btn-teco" onclick="toggleTeco(${d.id})">${d.isTeco ? 'Buka Lagi' : 'Tandai TECO'}</button>
                         </td>
                         <td style="font-size:0.78rem; color:var(--muted);">${d.namaUser}</td>
-                                                <td>${d.isTeco ? '' : `<button class="btn-icon" onclick="hapusPo(${d.id})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>`}</td>
+                        <td>
+                            <div class="action-cell">
+                                <button class="btn-icon btn-icon-edit" onclick="editPo(${d.id}, ${d.jumlahRit ?? 0}, '${d.tanggal}', '${d.jenisPo}', '${d.nomorPo}')" title="Koreksi Rit / Tanggal">
+                                    <span class="material-symbols-outlined" style="font-size:18px;">edit</span>
+                                </button>
+                                ${d.isTeco ? '' : `<button class="btn-icon" onclick="hapusPo(${d.id})" title="Hapus"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>`}
+                            </div>
+                        </td>
                     </tr>
                 `).join('');
             } catch (err) {
@@ -313,6 +322,60 @@
             try {
                 const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}/toggle-teco`, { method: 'POST' });
                 Swal.fire({ title: 'Berhasil!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
+                loadData();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            }
+        }
+
+        // BARU - Koreksi jumlah_rit & tanggal PO. Field jumlah rit cuma
+        // ditampilkan kalau jenisPo = FEH0 (lihat komentar di
+        // PurchaseOrderController::updateRit()). Tidak dibatasi status
+        // TECO - koreksi rit sering baru ketahuan setelah truk selesai
+        // jalan, dan PO bisa saja sudah TECO duluan.
+        async function editPo(id, jumlahRit, tanggal, jenisPo, nomorPo) {
+            const isFeh0 = jenisPo === 'FEH0';
+
+            const { value: formValues } = await Swal.fire({
+                title: `Koreksi PO ${nomorPo}`,
+                html: `
+                    ${isFeh0 ? `
+                        <label style="display:block; text-align:left; font-size:0.72rem; font-weight:700; color:#6b7280; margin-bottom:4px;">JUMLAH RIT</label>
+                        <input type="number" id="swal_jumlah_rit" class="swal2-input" style="margin:0 0 12px;" value="${jumlahRit}" min="1">
+                    ` : ''}
+                    <label style="display:block; text-align:left; font-size:0.72rem; font-weight:700; color:#6b7280; margin-bottom:4px;">TANGGAL</label>
+                    <input type="date" id="swal_tanggal" class="swal2-input" style="margin:0;" value="${tanggal}">
+                `,
+                confirmButtonText: 'Simpan Perubahan',
+                confirmButtonColor: '#4f46e5',
+                showCancelButton: true,
+                cancelButtonText: 'Batal',
+                cancelButtonColor: '#6b7280',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const tanggalVal = document.getElementById('swal_tanggal').value;
+                    const ritVal = isFeh0 ? document.getElementById('swal_jumlah_rit').value : null;
+
+                    if (!tanggalVal) {
+                        Swal.showValidationMessage('Tanggal wajib diisi');
+                        return false;
+                    }
+                    if (isFeh0 && (!ritVal || parseInt(ritVal, 10) < 1)) {
+                        Swal.showValidationMessage('Jumlah Rit wajib diisi, minimal 1');
+                        return false;
+                    }
+                    return { jumlah_rit: ritVal ? parseInt(ritVal, 10) : null, tanggal: tanggalVal };
+                },
+            });
+
+            if (!formValues) return;
+
+            try {
+                const res = await apiFetch(`{{ url('ppic/purchase-order') }}/${id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(formValues),
+                });
+                Swal.fire({ title: 'Tersimpan!', text: res.message, icon: 'success', confirmButtonColor: '#4f46e5' });
                 loadData();
             } catch (err) {
                 Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });

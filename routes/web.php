@@ -275,9 +275,10 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
     Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
     Route::get('/trashed', [PurchaseOrderController::class, 'trashed'])->name('trashed');
     Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
+    Route::patch('/{purchaseOrder}', [PurchaseOrderController::class, 'updateRit'])->name('update-rit'); // <- INI
     Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco');
     Route::post('/{id}/restore', [PurchaseOrderController::class, 'restore'])->name('restore');
-    Route::delete('/{id}/force', [PurchaseOrderController::class, 'forceDeletePermanent'])->name('force-delete'); // BARU
+    Route::delete('/{id}/force', [PurchaseOrderController::class, 'forceDeletePermanent'])->name('force-delete');
     Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
 });
 

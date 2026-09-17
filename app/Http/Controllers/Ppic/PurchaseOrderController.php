@@ -94,6 +94,77 @@ class PurchaseOrderController extends Controller
     }
 
     /**
+     * BARU - Koreksi jumlah_rit dan/atau tanggal PO. Dipakai saat aktual
+     * di lapangan beda dari input awal PPIC (misal input 14 rit, ternyata
+     * ada kendala jadi cuma 13 rit di lapangan).
+     *
+     * Sengaja TIDAK block PO yang sudah TECO - beda dengan destroy().
+     * Koreksi rit sering baru ketahuan setelah truk selesai jalan, dan PO
+     * bisa saja sudah keburu ditandai TECO duluan. Kalau di-block di sini,
+     * fitur ini justru tidak kepakai pas paling dibutuhkan.
+     *
+     * jumlah_rit hanya boleh dikoreksi untuk jenis_po = FEH0. Untuk jenis
+     * lain, jumlah rit ditentukan mandiri oleh tim LB Report saat truk
+     * datang (lihat komentar di store()) - PPIC tidak berwenang mengubahnya
+     * dari sini, jadi field ini di-ignore diam-diam kalau bukan FEH0
+     * (bukan error, karena frontend memang menyembunyikan field ini untuk
+     * jenis PO selain FEH0).
+     *
+     * Hanya nomor_po, jenis_po, dan produk_id yang TIDAK bisa diubah lewat
+     * endpoint ini - kalau itu yang salah input, harus dihapus lalu input
+     * ulang lewat store().
+     */
+    public function updateRit(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
+    {
+        $data = $request->validate([
+            'jumlah_rit' => ['nullable', 'integer', 'min:1'],
+            'tanggal'    => ['required', 'date'],
+        ]);
+
+        $isFeh0 = $purchaseOrder->jenis_po === 'FEH0';
+
+        if ($isFeh0 && (! isset($data['jumlah_rit']) || $data['jumlah_rit'] < 1)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Jumlah Rit wajib diisi, minimal 1, untuk jenis PO FEH0.',
+            ], 422);
+        }
+
+        $user = $request->user('tally');
+        $ritLama = $purchaseOrder->jumlah_rit;
+        $tanggalLama = $purchaseOrder->tanggal->format('d/m/Y');
+
+        $purchaseOrder->tanggal = $data['tanggal'];
+        if ($isFeh0) {
+            $purchaseOrder->jumlah_rit = $data['jumlah_rit'];
+        }
+        $purchaseOrder->save();
+
+        $tanggalBaru = $purchaseOrder->tanggal->format('d/m/Y');
+
+        $perubahan = [];
+        if ($isFeh0 && $ritLama !== $purchaseOrder->jumlah_rit) {
+            $perubahan[] = "jumlah rit dari {$ritLama} menjadi {$purchaseOrder->jumlah_rit}";
+        }
+        if ($tanggalLama !== $tanggalBaru) {
+            $perubahan[] = "tanggal dari {$tanggalLama} menjadi {$tanggalBaru}";
+        }
+        $infoPerubahan = $perubahan ? ' ('.implode(', ', $perubahan).')' : ' (tidak ada perubahan nilai)';
+
+        ActivityLogger::log(
+            'ppic',
+            'update',
+            "{$user->employee_code} ({$user->name}) mengoreksi PO {$purchaseOrder->nomor_po}{$infoPerubahan}",
+            $user
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "PO {$purchaseOrder->nomor_po} berhasil diperbarui.",
+        ]);
+    }
+
+    /**
      * DIUBAH: PO yang sudah TECO tidak boleh dihapus - harus dibuka
      * (unTECO) dulu lewat toggleTeco() kalau memang perlu dihapus.
      * Proteksi ini di server, bukan cuma sembunyikan tombol di frontend.
@@ -243,12 +314,3 @@ class PurchaseOrderController extends Controller
         ]);
     }
 }
-
-
-
-
-
-
-
-
-
