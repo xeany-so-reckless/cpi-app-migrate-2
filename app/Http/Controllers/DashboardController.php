@@ -91,7 +91,13 @@ class DashboardController extends Controller
     "icon" => "inventory_2",
     "info" => "Sistem pengelolaan stok dan aktivitas keluar masuk barang",
     "url"  => "http://10.60.22.31/warehouse",
-]
+],
+            [
+    "name" => "WEB BACKUP",
+    "icon" => "history",
+    "info" => "Akses ke sistem web versi sebelumnya untuk kebutuhan backup dan referensi",
+    "url"  => "10.60.22.31/web/",
+],
 
         ];
 
