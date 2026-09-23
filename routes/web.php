@@ -213,6 +213,8 @@ Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
         Route::get('/products', [ProduksiFreshController::class, 'listProducts'])->name('products');
         Route::post('/store', [ProduksiFreshController::class, 'store'])->name('store');
 
+        Route::post('/export-xlsx', [ProduksiFreshController::class, 'exportXlsx'])->name('export-xlsx');
+
         // BARU - Riwayat data yang sudah tersimpan
         Route::get('/riwayat-data', [ProduksiFreshController::class, 'history'])->name('history');
     });

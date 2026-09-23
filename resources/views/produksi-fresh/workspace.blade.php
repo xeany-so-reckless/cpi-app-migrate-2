@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bwip-js/dist/bwip-js-min.js"></script>
   <style>
     :root {
       --primary: #da0019;
@@ -119,6 +120,20 @@
     .history-pagination span { font-size: 13px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
     .history-pagination .btn { width: auto; padding: 10px 16px; font-size: 13px; }
     .empty-row td { text-align: center; color: var(--text-muted); padding: 20px 8px; }
+
+    /* ==================== MODAL EXPORT FORM RESMI ==================== */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 2000;
+      display: flex; align-items: center; justify-content: center; padding: 15px;
+    }
+    .modal-box {
+      background: #fff; border-radius: 12px; padding: 25px 20px; width: 100%; max-width: 400px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25); max-height: 90vh; overflow-y: auto;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: var(--text-main); }
+    .modal-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; font-weight: 500; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 5px; }
+    .modal-actions .btn { margin-top: 0; }
 
     @media print {
       body { background: #fff; padding: 0; }
@@ -263,6 +278,11 @@
         </div>
       </div>
 
+      <!-- BARU: Cetak Form Resmi (Excel) - butuh No PO terisi di filter di atas -->
+      <button class="btn btn-primary no-print" onclick="openExportModal()" id="btnOpenExportModal" style="margin-bottom:15px;">
+        <span class="material-icons-round">fact_check</span> Cetak Form Resmi
+      </button>
+
       <div class="table-wrapper">
         <table id="historyTable">
           <thead>
@@ -286,6 +306,50 @@
         <button class="btn btn-outline" onclick="changeHistoryPage(-1)" id="btnHistoryPrev">‹ Sebelumnya</button>
         <span id="historyPageInfo">-</span>
         <button class="btn btn-outline" onclick="changeHistoryPage(1)" id="btnHistoryNext">Berikutnya ›</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: CETAK FORM RESMI (EXCEL) ==================== -->
+  <div id="exportModalOverlay" class="modal-overlay hidden no-print">
+    <div class="modal-box">
+      <div class="modal-title">Cetak Form Resmi (Excel)</div>
+      <div class="modal-subtitle">Tanda tangani dengan ID &amp; password untuk membuat form FM-PROD-018.</div>
+
+      <div class="form-group">
+        <label>No PO</label>
+        <input type="text" id="exportNoPo" readonly>
+      </div>
+
+      <div class="form-group">
+        <label>Shift</label>
+        <select id="exportShift">
+          <option value="1">Shift 1</option>
+          <option value="2">Shift 2</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>ID Pegawai</label>
+        <input type="text" id="exportEmployeeCode" placeholder="Contoh: APP01" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="exportPassword" placeholder="Password akun" autocomplete="off">
+      </div>
+
+      <div id="exportError" class="error-text"></div>
+      <canvas id="exportQrCanvas" class="hidden"></canvas>
+
+            <div class="modal-actions" style="flex-wrap: wrap;">
+        <button class="btn btn-outline" onclick="closeExportModal()" id="btnExportCancel" style="flex:1 1 100%;">Batal</button>
+        <button class="btn btn-primary" onclick="submitExportModal('xlsx')" id="btnExportSubmitXlsx" style="flex:1;">
+          <span class="material-icons-round">qr_code_2</span> Unduh Excel
+        </button>
+        <button class="btn btn-primary" onclick="submitExportModal('pdf')" id="btnExportSubmitPdf" style="flex:1;">
+          <span class="material-icons-round">picture_as_pdf</span> Unduh PDF
+        </button>
       </div>
     </div>
   </div>
@@ -628,6 +692,138 @@
       if (e.key === 'Enter') { e.preventDefault(); loadHistory(1); }
     });
     document.getElementById('filterTanggal').addEventListener('change', () => loadHistory(1));
+
+    // ==================== EXPORT FORM RESMI (EXCEL + QR TANDA TANGAN) ====================
+    // Pola tanda tangan mengikuti halaman Rekap (tally-pro): verifikasi
+    // ID + password ke endpoint stateless 'tally.rekap.verify-signature'
+    // (tidak membuat sesi baru, tidak menyimpan histori approval),
+    // lalu QR (bwip-js) dibuat di canvas dan dikirim sebagai base64 PNG
+    // ke backend untuk ditempel sebagai gambar di file .xlsx
+    // (PhpSpreadsheet), bersama logo perusahaan yang sudah statis di server.
+
+    function openExportModal() {
+      const noPo = document.getElementById('filterNoPo').value.trim();
+      if (!noPo) {
+        showToast('Isi/cari No PO dulu di kolom filter sebelum cetak form resmi!', true);
+        return;
+      }
+
+      document.getElementById('exportNoPo').value = noPo;
+      document.getElementById('exportShift').value = '1';
+      document.getElementById('exportEmployeeCode').value = '';
+      document.getElementById('exportPassword').value = '';
+      document.getElementById('exportError').innerText = '';
+      document.getElementById('exportModalOverlay').classList.remove('hidden');
+      document.getElementById('exportEmployeeCode').focus();
+    }
+
+    function closeExportModal() {
+      document.getElementById('exportModalOverlay').classList.add('hidden');
+    }
+
+        document.getElementById('exportPassword').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); submitExportModal('xlsx'); }
+    });
+
+        async function submitExportModal(format) {
+      const noPo = document.getElementById('exportNoPo').value;
+      const shift = document.getElementById('exportShift').value;
+      const employeeCode = document.getElementById('exportEmployeeCode').value.trim();
+      const password = document.getElementById('exportPassword').value;
+      const errDiv = document.getElementById('exportError');
+      const btn = format === 'pdf'
+        ? document.getElementById('btnExportSubmitPdf')
+        : document.getElementById('btnExportSubmitXlsx');
+      const otherBtn = format === 'pdf'
+        ? document.getElementById('btnExportSubmitXlsx')
+        : document.getElementById('btnExportSubmitPdf');
+
+      errDiv.innerText = '';
+
+      if (!employeeCode || !password) {
+        errDiv.innerText = 'ID Pegawai dan Password wajib diisi!';
+        return;
+      }
+
+            btn.disabled = true;
+      otherBtn.disabled = true;
+      document.getElementById('btnExportCancel').disabled = true;
+      btn.innerHTML = `<span class="material-icons-round">sync</span> Memverifikasi...`;
+
+      try {
+        // 1. Verifikasi ID + Password (reuse endpoint Rekap Tally Pro - stateless)
+        const verifyRes = await apiFetch('{{ route('tally.rekap.verify-signature') }}', {
+          method: 'POST',
+          body: JSON.stringify({ employee_code: employeeCode, password: password }),
+        }).catch(err => ({ valid: false, message: err.message }));
+
+        if (!verifyRes.valid) {
+          errDiv.innerText = verifyRes.message || 'ID Pengguna atau Password salah!';
+          return;
+        }
+
+        // 2. Generate QR code (bwip-js) di canvas tersembunyi
+        btn.innerHTML = `<span class="material-icons-round">sync</span> Membuat QR...`;
+        const canvas = document.getElementById('exportQrCanvas');
+        bwipjs.toCanvas(canvas, {
+          bcid: 'qrcode',
+          text: `PRODUKSI FRESH\nNO PO: ${noPo}\nSHIFT: ${shift}\nNAMA: ${verifyRes.name}\nID: ${employeeCode}\nDATE: ${new Date().toLocaleString('id-ID')}`,
+          scale: 2,
+        });
+        const qrDataUrl = canvas.toDataURL('image/png');
+
+        // 3. Kirim ke backend untuk digenerate jadi file .xlsx (PhpSpreadsheet)
+        btn.innerHTML = `<span class="material-icons-round">sync</span> Menyiapkan File...`;
+        const response = await fetch('{{ route('produksifresh.export-xlsx') }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+          },
+                    body: JSON.stringify({
+            no_po: noPo,
+            shift: shift,
+            signer_name: verifyRes.name,
+            qr_base64: qrDataUrl,
+            format: format,
+          }),
+        });
+
+        const contentType = response.headers.get('Content-Type') || '';
+
+        if (!response.ok || contentType.includes('application/json')) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || 'Gagal membuat file Excel.');
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : `Form_Fresh_${noPo}.${format}`;
+
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(downloadUrl);
+
+        showToast('Form resmi berhasil diunduh!');
+        closeExportModal();
+      } catch (err) {
+        errDiv.innerText = err.message || 'Terjadi kesalahan, coba lagi.';
+            } finally {
+        btn.disabled = false;
+        otherBtn.disabled = false;
+        document.getElementById('btnExportCancel').disabled = false;
+        btn.innerHTML = format === 'pdf'
+          ? `<span class="material-icons-round">picture_as_pdf</span> Unduh PDF`
+          : `<span class="material-icons-round">qr_code_2</span> Unduh Excel`;
+      }
+    }
   </script>
 </body>
 </html>
