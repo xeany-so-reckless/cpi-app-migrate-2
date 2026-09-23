@@ -38,7 +38,7 @@
         .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.05rem; color: var(--text); }
         .logo img { height: 38px; border-radius: 6px; padding: 3px 6px; }
 
-        .page-header { padding: 30px 5% 18px; }
+        .page-header { padding: 30px 5% 18px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px; }
         .page-eyebrow {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.7rem;
@@ -55,6 +55,20 @@
             letter-spacing: -0.3px;
             color: var(--text);
         }
+
+        /* BARU - Toggle Tab Frozen / Fresh */
+        .tab-toggle {
+            display: inline-flex; background: var(--surface); border: 1px solid var(--line);
+            border-radius: 11px; padding: 4px; gap: 4px;
+        }
+        .tab-toggle button {
+            border: none; background: transparent; cursor: pointer;
+            padding: 9px 20px; border-radius: 8px; font-weight: 700; font-size: 0.85rem;
+            color: var(--muted); transition: all .15s ease;
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-toggle button.active { background: var(--amber); color: #fff; }
+        .tab-toggle button:not(.active):hover { background: var(--surface-hover); color: var(--amber-dim); }
 
         .btn {
             border: none; border-radius: 9px; padding: 10px 18px;
@@ -156,104 +170,171 @@
 </nav>
 
 <div class="page-header">
-    <div class="page-eyebrow">Checker &middot; Barang Keluar</div>
-    <div class="page-title">Input Outbound</div>
+    <div>
+        <div class="page-eyebrow">Checker &middot; Barang Keluar</div>
+        <div class="page-title">Input Outbound</div>
+    </div>
+
+    {{-- BARU - Toggle Tab Frozen / Fresh --}}
+    <div class="tab-toggle" id="tabToggle">
+        <button type="button" class="active" data-tab="frozen" onclick="setActiveTab('frozen')">Frozen</button>
+        <button type="button" data-tab="fresh" onclick="setActiveTab('fresh')">Fresh</button>
+    </div>
 </div>
 
 <div class="container">
 
-    {{-- ==================== FORM HEADER DO ==================== --}}
-    <div class="card">
-        <div class="card-title"><span class="material-symbols-outlined">assignment</span> Data Pengiriman (DO)</div>
-        <div class="form-grid">
-            <div><label>Tanggal</label><input type="date" id="f_tanggal" class="form-control"></div>
-            <div><label>No DO</label><input type="text" id="f_no_do" class="form-control" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
-            <div><label>Nama Customer</label><input type="text" id="f_nama_customer" class="form-control"></div>
-            <div><label>Jam Muat</label><input type="time" id="f_jam_muat" class="form-control"></div>
-            <div><label>No Polisi</label><input type="text" id="f_no_pol" class="form-control" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
-            <div><label>Nama Driver</label><input type="text" id="f_nama_driver" class="form-control"></div>
-        </div>
-    </div>
+    {{-- ============================================================ --}}
+    {{-- ====================  PANEL FROZEN  ========================= --}}
+    {{-- ============================================================ --}}
+    <div id="panelFrozen">
 
-    {{-- ==================== PILIH CELL + CHECKLIST BAG ==================== --}}
-    <div class="card">
-        <div class="card-title"><span class="material-symbols-outlined">grid_view</span> Tambah Cell yang Dimuat</div>
-
-        <div class="cell-picker-row">
-            <div>
-                <label>Kode Cell</label>
-                <select id="cellPicker" class="form-control" onchange="onCellPicked(this.value)">
-                    <option value="">-- Pilih Kode Cell --</option>
-                </select>
+        {{-- ==================== FORM HEADER DO ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">assignment</span> Data Pengiriman (DO)</div>
+            <div class="form-grid">
+                <div><label>Tanggal</label><input type="date" id="f_tanggal" class="form-control"></div>
+                <div><label>No DO</label><input type="text" id="f_no_do" class="form-control" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
+                <div><label>Nama Customer</label><input type="text" id="f_nama_customer" class="form-control"></div>
+                <div><label>Jam Muat</label><input type="time" id="f_jam_muat" class="form-control"></div>
+                <div><label>No Polisi</label><input type="text" id="f_no_pol" class="form-control" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
+                <div><label>Nama Driver</label><input type="text" id="f_nama_driver" class="form-control"></div>
             </div>
-            <button class="btn btn-outline" onclick="loadCellOptions()">
-                <span class="material-symbols-outlined" style="font-size:16px;">refresh</span> Muat Ulang
-            </button>
         </div>
 
-        <div id="cellDetailPanel" style="display:none;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div class="mono" style="font-size:0.85rem;">
-                    Isi Cell <span id="detailKodeCell" class="bag-chip"></span>
+        {{-- ==================== PILIH CELL + CHECKLIST BAG ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">grid_view</span> Tambah Cell yang Dimuat</div>
+
+            <div class="cell-picker-row">
+                <div>
+                    <label>Kode Cell</label>
+                    <select id="cellPicker" class="form-control" onchange="onCellPicked(this.value)">
+                        <option value="">-- Pilih Kode Cell --</option>
+                    </select>
                 </div>
-                <button class="btn btn-outline" onclick="okAllBags()">
-                    <span class="material-symbols-outlined" style="font-size:16px;">done_all</span> OK ALL
+                <button class="btn btn-outline" onclick="loadCellOptions()">
+                    <span class="material-symbols-outlined" style="font-size:16px;">refresh</span> Muat Ulang
                 </button>
             </div>
 
-            <div class="bag-list" id="bagListContainer">
-                <div class="bag-empty">Memuat isi cell...</div>
+            <div id="cellDetailPanel" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div class="mono" style="font-size:0.85rem;">
+                        Isi Cell <span id="detailKodeCell" class="bag-chip"></span>
+                    </div>
+                    <button class="btn btn-outline" onclick="okAllBags()">
+                        <span class="material-symbols-outlined" style="font-size:16px;">done_all</span> OK ALL
+                    </button>
+                </div>
+
+                <div class="bag-list" id="bagListContainer">
+                    <div class="bag-empty">Memuat isi cell...</div>
+                </div>
+
+                <div style="text-align:right;">
+                    <button class="btn btn-amber" id="btnAddCellToDo" onclick="addCellToDo()">
+                        <span class="material-symbols-outlined" style="font-size:16px;">add</span> Tambahkan Cell Ini ke DO
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {{-- ==================== DATA TIR (OPSIONAL - KHUSUS TRUK BESAR) ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">local_shipping</span> Data Tir (Opsional)</div>
+            <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+                Isi kalau truk besar (misal tronton) - kosongkan kalau customer pakai mobil kecil.
+            </p>
+
+            <div class="bag-list" id="tirListContainer">
+                <div class="bag-empty">Belum ada Tir ditambahkan.</div>
             </div>
 
-            <div style="text-align:right;">
-                <button class="btn btn-amber" id="btnAddCellToDo" onclick="addCellToDo()">
-                    <span class="material-symbols-outlined" style="font-size:16px;">add</span> Tambahkan Cell Ini ke DO
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                <button class="btn btn-outline" id="btnAddTir" onclick="addTirRow()">
+                    <span class="material-symbols-outlined" style="font-size:16px;">add</span> Tambah Tir
                 </button>
+                <div class="mono" style="font-size:0.85rem; color:var(--muted);">
+                    Total Bag (Tir): <b id="tirTotalBag" style="color:var(--text);">0</b>
+                </div>
             </div>
         </div>
-    </div>
 
-    {{-- ==================== DATA TIR (OPSIONAL - KHUSUS TRUK BESAR) ==================== --}}
-    <div class="card">
-        <div class="card-title"><span class="material-symbols-outlined">local_shipping</span> Data Tir (Opsional)</div>
-        <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
-            Isi kalau truk besar (misal tronton) - kosongkan kalau customer pakai mobil kecil.
-        </p>
-
-        <div class="bag-list" id="tirListContainer">
-            <div class="bag-empty">Belum ada Tir ditambahkan.</div>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <button class="btn btn-outline" id="btnAddTir" onclick="addTirRow()">
-                <span class="material-symbols-outlined" style="font-size:16px;">add</span> Tambah Tir
-            </button>
-            <div class="mono" style="font-size:0.85rem; color:var(--muted);">
-                Total Bag (Tir): <b id="tirTotalBag" style="color:var(--text);">0</b>
+        {{-- ==================== DAFTAR CELL DALAM DO INI ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">checklist</span> Cell dalam DO Ini</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Kode Cell</th>
+                        <th class="num">Jumlah Bag</th>
+                        <th class="num">Total Kg</th>
+                        <th style="width:60px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="doCellTableBody">
+                    <tr><td colspan="4" class="empty-state">Belum ada Cell yang ditambahkan.</td></tr>
+                </tbody>
+            </table>
+            <div class="summary-total">
+                <div>Total Bag: <b id="grandTotalBag">0</b></div>
+                <div>Total Kg: <b id="grandTotalKg">0</b></div>
             </div>
         </div>
+
     </div>
 
-    {{-- ==================== DAFTAR CELL DALAM DO INI ==================== --}}
-    <div class="card">
-        <div class="card-title"><span class="material-symbols-outlined">checklist</span> Cell dalam DO Ini</div>
-        <table>
-            <thead>
-                <tr>
-                    <th>Kode Cell</th>
-                    <th class="num">Jumlah Bag</th>
-                    <th class="num">Total Kg</th>
-                    <th style="width:60px;"></th>
-                </tr>
-            </thead>
-            <tbody id="doCellTableBody">
-                <tr><td colspan="4" class="empty-state">Belum ada Cell yang ditambahkan.</td></tr>
-            </tbody>
-        </table>
-        <div class="summary-total">
-            <div>Total Bag: <b id="grandTotalBag">0</b></div>
-            <div>Total Kg: <b id="grandTotalKg">0</b></div>
+    {{-- ============================================================ --}}
+    {{-- ====================   PANEL FRESH   ========================= --}}
+    {{-- ============================================================ --}}
+    <div id="panelFresh" style="display:none;">
+
+        {{-- ==================== FORM HEADER PO ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">assignment</span> Data Pengiriman (PO)</div>
+            <div class="form-grid">
+                <div><label>Tanggal</label><input type="date" id="fr_tanggal" class="form-control"></div>
+                <div>
+                    <label>No PO</label>
+                    <select id="fr_no_po" class="form-control" onchange="onFreshPoPicked(this.value)">
+                        <option value="">-- Pilih No PO --</option>
+                    </select>
+                </div>
+                <div><label>Nama Customer</label><input type="text" id="fr_nama_customer" class="form-control"></div>
+                <div><label>Jam Muat</label><input type="time" id="fr_jam_muat" class="form-control"></div>
+                <div><label>No Polisi</label><input type="text" id="fr_no_pol" class="form-control" style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()"></div>
+                <div><label>Nama Driver</label><input type="text" id="fr_nama_driver" class="form-control"></div>
+            </div>
         </div>
+
+        {{-- ==================== CHECKLIST ITEM PRODUKSI FRESH UNTUK PO INI ==================== --}}
+        <div class="card">
+            <div class="card-title"><span class="material-symbols-outlined">checklist</span> Item Produksi Fresh untuk PO Ini</div>
+            <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+                Pilih No PO dulu di atas - daftar item hasil Produksi Fresh (yang belum pernah di-outbound) akan muncul di sini. Centang item yang benar-benar dimuat.
+            </p>
+
+            <div id="freshItemPanel" style="display:none;">
+                <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+                    <button class="btn btn-outline" onclick="okAllFreshItems()">
+                        <span class="material-symbols-outlined" style="font-size:16px;">done_all</span> OK ALL
+                    </button>
+                </div>
+
+                <div class="bag-list" id="freshItemListContainer">
+                    <div class="bag-empty">Memuat item...</div>
+                </div>
+
+                <div class="summary-total">
+                    <div>Jumlah Item Dicentang: <b id="freshTotalItem">0</b></div>
+                    <div>Total Qty: <b id="freshTotalQty">0</b></div>
+                </div>
+            </div>
+
+            <div id="freshItemEmptyState" class="empty-state">Belum ada No PO dipilih.</div>
+        </div>
+
     </div>
 
 </div>
@@ -268,12 +349,32 @@
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-    // State DO yang sedang dibangun di sisi client
+    // BARU - Tab aktif saat ini: 'frozen' atau 'fresh'. Menentukan panel
+    // mana yang ditampilkan dan fungsi submit/reset mana yang dipanggil
+    // dari 1 save-bar yang dipakai bersama.
+    let activeTab = 'frozen';
+
+    function setActiveTab(tab) {
+        activeTab = tab;
+
+        document.getElementById('panelFrozen').style.display = tab === 'frozen' ? 'block' : 'none';
+        document.getElementById('panelFresh').style.display = tab === 'fresh' ? 'block' : 'none';
+
+        document.querySelectorAll('#tabToggle button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+    }
+
+    // State DO (Frozen) yang sedang dibangun di sisi client
     let doCells = []; // [{ cellId, kodeCell, bags: [...], totalBag, totalKg }]
     let tirRows = []; // [{ jumlahBag: number|null }] - urutan array = label Tir 1, Tir 2, dst
     let currentCell = null; // cell yang sedang dibuka detailnya
     let currentBags = []; // hasil availableBags() untuk currentCell
     let cellOptionsCache = [];
+
+    // BARU - State PO (Fresh) yang sedang dibangun di sisi client
+    let freshItems = []; // hasil getPoItems() untuk No PO yang sedang dipilih
+    let freshPoOptionsCache = [];
 
     async function apiFetch(url, options = {}) {
         const response = await fetch(url, {
@@ -308,7 +409,7 @@
         });
     }
 
-    // ==================== LOAD DROPDOWN CELL ====================
+    // ==================== LOAD DROPDOWN CELL (FROZEN) ====================
     async function loadCellOptions() {
         const select = document.getElementById('cellPicker');
         select.innerHTML = `<option value="">-- Memuat daftar cell... --</option>`;
@@ -332,7 +433,7 @@
         }
     }
 
-    // ==================== KLIK / PILIH 1 CELL -> TAMPILKAN ISI ====================
+    // ==================== KLIK / PILIH 1 CELL -> TAMPILKAN ISI (FROZEN) ====================
     async function onCellPicked(cellId) {
         const panel = document.getElementById('cellDetailPanel');
         const container = document.getElementById('bagListContainer');
@@ -404,7 +505,7 @@
         renderBagList();
     }
 
-    // ==================== TAMBAH CELL (YANG SUDAH DICENTANG) KE DO ====================
+    // ==================== TAMBAH CELL (YANG SUDAH DICENTANG) KE DO (FROZEN) ====================
     function addCellToDo() {
         if (!currentCell) return;
 
@@ -470,7 +571,7 @@
         document.getElementById('grandTotalKg').innerText = grandKg.toLocaleString('id-ID', {maximumFractionDigits:1});
     }
 
-    // ==================== DATA TIR (OPSIONAL) ====================
+    // ==================== DATA TIR (OPSIONAL, FROZEN) ====================
     const MAX_TIR = 20;
 
     function addTirRow() {
@@ -538,8 +639,8 @@
             .map(r => r.jumlahBag);
     }
 
-    // ==================== SAVE ====================
-    async function submitOutbound() {
+    // ==================== SAVE (FROZEN) ====================
+    async function submitOutboundFrozen() {
         const payload = {
             tanggal: document.getElementById('f_tanggal').value,
             no_do: document.getElementById('f_no_do').value.trim(),
@@ -570,7 +671,7 @@
             });
 
             await Swal.fire({ title: 'Berhasil!', text: res.message, icon: 'success' });
-            resetForm();
+            resetFrozenForm();
         } catch (err) {
             Swal.fire({ title: 'Gagal Menyimpan', text: err.message, icon: 'error' });
         } finally {
@@ -578,7 +679,7 @@
         }
     }
 
-    function resetForm() {
+    function resetFrozenForm() {
         document.getElementById('f_tanggal').value = new Date().toISOString().split('T')[0];
         document.getElementById('f_no_do').value = '';
         document.getElementById('f_nama_customer').value = '';
@@ -595,11 +696,181 @@
         loadCellOptions();
     }
 
+    // ==================== LOAD DROPDOWN NO PO (FRESH) ====================
+    // BARU - Analog loadCellOptions(), tapi sumbernya baris produksi_fresh
+    // (tipe main) yang belum ter-outbound, bukan Cell.
+    async function loadFreshPoOptions() {
+        const select = document.getElementById('fr_no_po');
+        select.innerHTML = `<option value="">-- Memuat daftar No PO... --</option>`;
+        try {
+            const list = await apiFetch('{{ route("warehouse.outbound.fresh.purchase-orders") }}');
+            freshPoOptionsCache = list;
+
+            if (list.length === 0) {
+                select.innerHTML = `<option value="">-- Tidak ada No PO tersedia --</option>`;
+                return;
+            }
+
+            select.innerHTML = `<option value="">-- Pilih No PO --</option>` + list.map(p =>
+                `<option value="${p.noPo}">${p.noPo} (${p.jumlahItem} item / ${p.totalQty} Qty)</option>`
+            ).join('');
+        } catch (err) {
+            select.innerHTML = `<option value="">Gagal memuat: ${err.message}</option>`;
+        }
+    }
+
+    // ==================== PILIH 1 NO PO -> TAMPILKAN CHECKLIST ITEM (FRESH) ====================
+    async function onFreshPoPicked(noPo) {
+        const itemPanel = document.getElementById('freshItemPanel');
+        const emptyState = document.getElementById('freshItemEmptyState');
+        const container = document.getElementById('freshItemListContainer');
+
+        if (!noPo) {
+            itemPanel.style.display = 'none';
+            emptyState.style.display = 'block';
+            freshItems = [];
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        itemPanel.style.display = 'block';
+        container.innerHTML = `<div class="bag-empty">Memuat item...</div>`;
+
+        try {
+            const res = await apiFetch(`{{ url('warehouse/outbound/fresh/purchase-orders') }}/${encodeURIComponent(noPo)}/items`);
+            freshItems = res.items.map(i => ({ ...i, _checked: false, _keterangan: '' }));
+            renderFreshItemList();
+        } catch (err) {
+            container.innerHTML = `<div class="bag-empty">Gagal memuat item: ${err.message}</div>`;
+        }
+    }
+
+    function renderFreshItemList() {
+        const container = document.getElementById('freshItemListContainer');
+
+        if (freshItems.length === 0) {
+            container.innerHTML = `<div class="bag-empty">Tidak ada item tersedia untuk No PO ini.</div>`;
+            updateFreshItemTotal();
+            return;
+        }
+
+        container.innerHTML = freshItems.map(item => `
+    <div class="bag-item">
+        <input type="checkbox" ${item._checked ? 'checked' : ''} onchange="toggleFreshItem(${item.id}, this.checked)" style="cursor:pointer;">
+        <span class="bag-chip">${item.kodeProduksi}</span>
+        <span class="bag-meta">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
+        <span class="bag-kg">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
+        <input type="text" class="form-control" style="max-width:200px; height:36px; margin-left:8px;"
+            placeholder="Keterangan (opsional)"
+            value="${item._keterangan}"
+            onclick="event.stopPropagation()"
+            oninput="updateFreshItemKeterangan(${item.id}, this.value)">
+    </div>
+`).join('');
+
+        updateFreshItemTotal();
+    }
+
+    function toggleFreshItem(id, checked) {
+        const item = freshItems.find(i => i.id === id);
+        if (item) item._checked = checked;
+        updateFreshItemTotal();
+    }
+
+    function updateFreshItemKeterangan(id, value) {
+    const item = freshItems.find(i => i.id === id);
+    if (item) item._keterangan = value;
+}
+
+    function okAllFreshItems() {
+        freshItems.forEach(i => i._checked = true);
+        renderFreshItemList();
+    }
+
+    function updateFreshItemTotal() {
+        const checked = freshItems.filter(i => i._checked);
+        const totalQty = checked.reduce((sum, i) => sum + Number(i.qty), 0);
+        document.getElementById('freshTotalItem').innerText = checked.length.toLocaleString('id-ID');
+        document.getElementById('freshTotalQty').innerText = totalQty.toLocaleString('id-ID', {maximumFractionDigits:2});
+    }
+
+    // ==================== SAVE (FRESH) ====================
+    async function submitOutboundFresh() {
+        const noPo = document.getElementById('fr_no_po').value;
+        const checkedItems = freshItems.filter(i => i._checked);
+
+        const payload = {
+            tanggal: document.getElementById('fr_tanggal').value,
+            no_po: noPo,
+            nama_customer: document.getElementById('fr_nama_customer').value.trim(),
+            jam_muat: document.getElementById('fr_jam_muat').value,
+            no_pol: document.getElementById('fr_no_pol').value.trim(),
+            nama_driver: document.getElementById('fr_nama_driver').value.trim(),
+            items: checkedItems.map(i => ({
+    produksi_fresh_id: i.id,
+    keterangan: i._keterangan.trim() || null,
+})),
+        };
+
+        if (!payload.tanggal || !payload.no_po || !payload.nama_customer || !payload.jam_muat || !payload.no_pol || !payload.nama_driver) {
+            Swal.fire({ title: 'Data belum lengkap', text: 'Mohon lengkapi seluruh data pengiriman (PO).', icon: 'warning' });
+            return;
+        }
+        if (payload.items.length === 0) {
+            Swal.fire({ title: 'Belum ada Item Dicentang', text: 'Centang minimal 1 item atau klik OK ALL.', icon: 'warning' });
+            return;
+        }
+
+        const btn = document.getElementById('btnSave');
+        btn.disabled = true;
+
+        try {
+            const res = await apiFetch('{{ route("warehouse.outbound.fresh.store") }}', {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            });
+
+            await Swal.fire({ title: 'Berhasil!', text: res.message, icon: 'success' });
+            resetFreshForm();
+        } catch (err) {
+            Swal.fire({ title: 'Gagal Menyimpan', text: err.message, icon: 'error' });
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function resetFreshForm() {
+        document.getElementById('fr_tanggal').value = new Date().toISOString().split('T')[0];
+        document.getElementById('fr_no_po').value = '';
+        document.getElementById('fr_nama_customer').value = '';
+        document.getElementById('fr_jam_muat').value = '';
+        document.getElementById('fr_no_pol').value = '';
+        document.getElementById('fr_nama_driver').value = '';
+        freshItems = [];
+        document.getElementById('freshItemPanel').style.display = 'none';
+        document.getElementById('freshItemEmptyState').style.display = 'block';
+        loadFreshPoOptions();
+    }
+
+    // ==================== SAVE-BAR BERSAMA (DISPATCH SESUAI TAB AKTIF) ====================
+    function submitOutbound() {
+        return activeTab === 'fresh' ? submitOutboundFresh() : submitOutboundFrozen();
+    }
+
+    function resetForm() {
+        return activeTab === 'fresh' ? resetFreshForm() : resetFrozenForm();
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('f_tanggal').value = new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('f_tanggal').value = today;
+        document.getElementById('fr_tanggal').value = today;
+
         loadCellOptions();
         renderDoCellTable();
         renderTirList();
+
+        loadFreshPoOptions();
     });
 </script>
 </body>

@@ -27,9 +27,23 @@
         .nav-link { color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 600; }
         .nav-link:hover { color: var(--amber-dim); }
 
-        .page-header { padding: 30px 5% 18px; }
+        .page-header { padding: 30px 5% 18px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px; }
         .page-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--amber-dim); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 8px; }
         .page-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 2.4rem; text-transform: uppercase; color: var(--text); }
+
+        /* BARU - Toggle Tab Frozen / Fresh */
+        .tab-toggle {
+            display: inline-flex; background: var(--surface); border: 1px solid var(--line);
+            border-radius: 11px; padding: 4px; gap: 4px;
+        }
+        .tab-toggle button {
+            border: none; background: transparent; cursor: pointer;
+            padding: 9px 20px; border-radius: 8px; font-weight: 700; font-size: 0.85rem;
+            color: var(--muted); transition: all .15s ease;
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-toggle button.active { background: var(--amber); color: #fff; }
+        .tab-toggle button:not(.active):hover { background: var(--surface-hover); color: var(--amber-dim); }
 
         .btn { border: none; border-radius: 9px; padding: 9px 16px; font-size: 0.82rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all .15s ease; }
         .btn-amber { background: var(--amber); color: #fff; }
@@ -75,20 +89,20 @@
         .detail-actions { text-align: right; margin-top: 12px; }
 
         /* ==================== AREA CETAK PDF (tersembunyi) ==================== */
-        #pdfPrintArea {
+        #pdfPrintArea, #pdfPrintAreaFresh {
             position: fixed; top: -99999px; left: -99999px;
             width: 210mm; padding: 12mm; background: #fff; font-family: Arial, sans-serif; color: #000;
         }
-        #pdfPrintArea .pdf-header { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 14px; }
-        #pdfPrintArea .pdf-header img { height: 50px; }
-        #pdfPrintArea .pdf-title { font-size: 16pt; font-weight: bold; }
-        #pdfPrintArea .pdf-subtitle { font-size: 9pt; color: #444; }
-        #pdfPrintArea .pdf-info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 20px; font-size: 9pt; margin-bottom: 14px; }
-        #pdfPrintArea .pdf-info-grid b { display: inline-block; width: 90px; }
-        #pdfPrintArea table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 12px; }
-        #pdfPrintArea th, #pdfPrintArea td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
-        #pdfPrintArea th { background: #eee; font-weight: bold; }
-        #pdfPrintArea .pdf-section-title { font-size: 10pt; font-weight: bold; margin: 10px 0 6px; }
+        #pdfPrintArea .pdf-header, #pdfPrintAreaFresh .pdf-header { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 14px; }
+        #pdfPrintArea .pdf-header img, #pdfPrintAreaFresh .pdf-header img { height: 50px; }
+        #pdfPrintArea .pdf-title, #pdfPrintAreaFresh .pdf-title { font-size: 16pt; font-weight: bold; }
+        #pdfPrintArea .pdf-subtitle, #pdfPrintAreaFresh .pdf-subtitle { font-size: 9pt; color: #444; }
+        #pdfPrintArea .pdf-info-grid, #pdfPrintAreaFresh .pdf-info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 20px; font-size: 9pt; margin-bottom: 14px; }
+        #pdfPrintArea .pdf-info-grid b, #pdfPrintAreaFresh .pdf-info-grid b { display: inline-block; width: 90px; }
+        #pdfPrintArea table, #pdfPrintAreaFresh table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 12px; }
+        #pdfPrintArea th, #pdfPrintArea td, #pdfPrintAreaFresh th, #pdfPrintAreaFresh td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
+        #pdfPrintArea th, #pdfPrintAreaFresh th { background: #eee; font-weight: bold; }
+        #pdfPrintArea .pdf-section-title, #pdfPrintAreaFresh .pdf-section-title { font-size: 10pt; font-weight: bold; margin: 10px 0 6px; }
     </style>
 </head>
 <body>
@@ -109,47 +123,100 @@
 </nav>
 
 <div class="page-header">
-    <div class="page-eyebrow">Histori &middot; Barang Keluar</div>
-    <div class="page-title">Riwayat Outbound</div>
+    <div>
+        <div class="page-eyebrow">Histori &middot; Barang Keluar</div>
+        <div class="page-title">Riwayat Outbound</div>
+    </div>
+
+    {{-- BARU - Toggle Tab Frozen / Fresh --}}
+    <div class="tab-toggle" id="tabToggle">
+        <button type="button" class="active" data-tab="frozen" onclick="setActiveTab('frozen')">Frozen</button>
+        <button type="button" data-tab="fresh" onclick="setActiveTab('fresh')">Fresh</button>
+    </div>
 </div>
 
 <div class="container">
 
-    <div class="filter-bar">
-        <input type="date" id="filterTanggal">
-        <select id="filterChecker">
-            <option value="">Semua Checker</option>
-            @foreach ($checkers as $c)
-                <option value="{{ $c->id }}">{{ $c->name }}</option>
-            @endforeach
-        </select>
-        <input type="text" id="filterSearch" placeholder="Cari No DO...">
-        <button class="btn btn-outline" onclick="resetFilters()">Reset Filter</button>
+    {{-- ============================================================ --}}
+    {{-- ================  TAB FROZEN (SUDAH ADA)  =================== --}}
+    {{-- ============================================================ --}}
+    <div id="panelHistoryFrozen">
+
+        <div class="filter-bar">
+            <input type="date" id="filterTanggal">
+            <select id="filterChecker">
+                <option value="">Semua Checker</option>
+                @foreach ($checkers as $c)
+                    <option value="{{ $c->id }}">{{ $c->name }}</option>
+                @endforeach
+            </select>
+            <input type="text" id="filterSearch" placeholder="Cari No DO...">
+            <button class="btn btn-outline" onclick="resetFilters()">Reset Filter</button>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Tanggal</th>
+                        <th>No DO</th>
+                        <th>Customer</th>
+                        <th>Checker</th>
+                        <th class="num">Jml Cell</th>
+                        <th class="num">Total Bag</th>
+                        <th class="num">Total Kg</th>
+                        <th style="width:120px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr><td colspan="9" class="loading-state">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="table-wrapper">
-        <table>
-            <thead>
-                <tr>
-                    <th></th>
-                    <th>Tanggal</th>
-                    <th>No DO</th>
-                    <th>Customer</th>
-                    <th>Checker</th>
-                    <th class="num">Jml Cell</th>
-                    <th class="num">Total Bag</th>
-                    <th class="num">Total Kg</th>
-                    <th style="width:120px;"></th>
-                </tr>
-            </thead>
-            <tbody id="historyTableBody">
-                <tr><td colspan="9" class="loading-state">Memuat data...</td></tr>
-            </tbody>
-        </table>
+    {{-- ============================================================ --}}
+    {{-- ==================  TAB FRESH (BARU)  ======================= --}}
+    {{-- ============================================================ --}}
+    <div id="panelHistoryFresh" style="display:none;">
+
+        <div class="filter-bar">
+            <input type="date" id="filterTanggalFresh">
+            <select id="filterCheckerFresh">
+                <option value="">Semua Checker</option>
+                @foreach ($checkers as $c)
+                    <option value="{{ $c->id }}">{{ $c->name }}</option>
+                @endforeach
+            </select>
+            <input type="text" id="filterSearchFresh" placeholder="Cari No PO...">
+            <button class="btn btn-outline" onclick="resetFreshFilters()">Reset Filter</button>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Tanggal</th>
+                        <th>No PO</th>
+                        <th>Customer</th>
+                        <th>Checker</th>
+                        <th class="num">Jml Item</th>
+                        <th class="num">Total Qty</th>
+                        <th style="width:120px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="historyFreshTableBody">
+                    <tr><td colspan="8" class="loading-state">Memuat data...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
+
 </div>
 
-{{-- ==================== AREA CETAK PDF (diisi dinamis via JS, tidak terlihat di layar) ==================== --}}
+{{-- ==================== AREA CETAK PDF - FROZEN (diisi dinamis via JS) ==================== --}}
 <div id="pdfPrintArea">
     <div class="pdf-header">
         <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
@@ -164,8 +231,48 @@
     <div id="pdfTirSection"></div>
 </div>
 
+{{-- BARU - AREA CETAK PDF - FRESH (diisi dinamis via JS) - lebih sederhana,
+     cuma 1 tabel item (tidak ada Cell/Bag/Tir sama sekali) --}}
+<div id="pdfPrintAreaFresh">
+    <div class="pdf-header">
+        <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+        <div>
+            <div class="pdf-title">BUKTI PENGELUARAN BARANG FRESH (OUTBOUND)</div>
+            <div class="pdf-subtitle">CPI Jombang Plant - Warehouse Department</div>
+        </div>
+    </div>
+    <div class="pdf-info-grid" id="pdfInfoGridFresh"></div>
+    <div class="pdf-section-title">Rincian Item</div>
+    <div id="pdfFreshItemTable"></div>
+</div>
+
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+    // BARU - Tab aktif saat ini: 'frozen' atau 'fresh'.
+    let activeTab = 'frozen';
+
+    function setActiveTab(tab) {
+        activeTab = tab;
+
+        document.getElementById('panelHistoryFrozen').style.display = tab === 'frozen' ? 'block' : 'none';
+        document.getElementById('panelHistoryFresh').style.display = tab === 'fresh' ? 'block' : 'none';
+
+        document.querySelectorAll('#tabToggle button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+
+        // Muat data begitu tab dibuka pertama kali (lazy-load Fresh
+        // supaya tidak fetch 2 endpoint sekaligus saat halaman dibuka).
+        if (tab === 'fresh' && !freshLoadedOnce) {
+            freshLoadedOnce = true;
+            loadFreshHistoryData();
+        }
+    }
+
+    // ============================================================
+    // ==================  TAB FROZEN (SUDAH ADA)  =================
+    // ============================================================
     let allHistoryData = [];
     let expandedRows = new Set();
     let detailCache = {};
@@ -304,7 +411,7 @@
         `;
     }
 
-    // ==================== DOWNLOAD PDF (client-side, html2pdf.js) ====================
+    // ==================== DOWNLOAD PDF - FROZEN (client-side, html2pdf.js) ====================
     async function downloadPdf(id) {
         try {
             const detail = await getDetail(id);
@@ -384,6 +491,191 @@
         return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
     }
 
+    // ============================================================
+    // ==================  TAB FRESH (BARU)  =======================
+    // ============================================================
+    let allFreshHistoryData = [];
+    let expandedFreshRows = new Set();
+    let freshDetailCache = {};
+    let freshLoadedOnce = false; // lazy-load, lihat setActiveTab()
+
+    function buildFreshQuery() {
+        const params = new URLSearchParams();
+        const tanggal = document.getElementById('filterTanggalFresh').value;
+        const checker = document.getElementById('filterCheckerFresh').value;
+        const search = document.getElementById('filterSearchFresh').value.trim();
+        if (tanggal) params.set('tanggal', tanggal);
+        if (checker) params.set('checker_user_id', checker);
+        if (search) params.set('search', search);
+        return params.toString();
+    }
+
+    async function loadFreshHistoryData() {
+        const tbody = document.getElementById('historyFreshTableBody');
+        tbody.innerHTML = `<tr><td colspan="8" class="loading-state">Memuat data...</td></tr>`;
+        try {
+            const qs = buildFreshQuery();
+            allFreshHistoryData = await apiFetch(`{{ route('warehouse.outbound.fresh.history.data') }}?${qs}`);
+            renderFreshTable();
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderFreshTable() {
+        const tbody = document.getElementById('historyFreshTableBody');
+
+        if (allFreshHistoryData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Tidak ada data Outbound Fresh yang cocok dengan filter ini.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = allFreshHistoryData.map(d => {
+            const isOpen = expandedFreshRows.has(d.id);
+            const mainRow = `
+                <tr class="data-row" onclick="toggleFreshExpand(${d.id})">
+                    <td><span class="material-symbols-outlined expand-icon ${isOpen ? 'open' : ''}">expand_more</span></td>
+                    <td>${d.tanggal}</td>
+                    <td><span class="do-chip">${d.noPo}</span></td>
+                    <td>${d.namaCustomer}</td>
+                    <td>${d.checkerNama}</td>
+                    <td class="num">${d.jumlahItem}</td>
+                    <td class="num">${Number(d.totalQty).toLocaleString('id-ID', {maximumFractionDigits:2})}</td>
+                    <td onclick="event.stopPropagation()">
+                        <button class="btn btn-outline" style="padding:6px 10px;" onclick="downloadFreshPdf(${d.id})">
+                            <span class="material-symbols-outlined" style="font-size:15px;">picture_as_pdf</span> PDF
+                        </button>
+                    </td>
+                </tr>
+            `;
+
+            const detailRow = isOpen ? `
+                <tr class="detail-row">
+                    <td colspan="8">
+                        <div class="detail-inner" id="detailFreshInner-${d.id}">
+                            <div class="loading-state">Memuat detail...</div>
+                        </div>
+                    </td>
+                </tr>
+            ` : '';
+
+            return mainRow + detailRow;
+        }).join('');
+    }
+
+    async function toggleFreshExpand(id) {
+        if (expandedFreshRows.has(id)) {
+            expandedFreshRows.delete(id);
+            renderFreshTable();
+            return;
+        }
+        expandedFreshRows.add(id);
+        renderFreshTable();
+
+        try {
+            const detail = await getFreshDetail(id);
+            renderFreshDetailInto(id, detail);
+        } catch (err) {
+            const container = document.getElementById(`detailFreshInner-${id}`);
+            if (container) container.innerHTML = `<div class="empty-state">Gagal memuat detail: ${err.message}</div>`;
+        }
+    }
+
+    async function getFreshDetail(id) {
+        if (freshDetailCache[id]) return freshDetailCache[id];
+        const detail = await apiFetch(`{{ url('warehouse/outbound/fresh/history') }}/${id}`);
+        freshDetailCache[id] = detail;
+        return detail;
+    }
+
+    function renderFreshDetailInto(id, detail) {
+        const container = document.getElementById(`detailFreshInner-${id}`);
+        if (!container) return;
+
+        const itemsHtml = detail.items.map(item => `
+    <div class="bag-row">
+        <span style="width:110px;">${item.kodeProduksi}</span>
+        <span style="flex:1;">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
+        <span class="mono">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
+        ${item.keterangan ? `<span style="color:var(--danger); font-style:italic;">${item.keterangan}</span>` : ''}
+    </div>
+`).join('');
+
+        container.innerHTML = `
+            <div class="detail-cell-block">
+                ${itemsHtml || '<div class="empty-state">Tidak ada data item.</div>'}
+            </div>
+            <div class="detail-actions">
+                <button class="btn btn-amber" onclick="downloadFreshPdf(${id})">
+                    <span class="material-symbols-outlined" style="font-size:16px;">picture_as_pdf</span> Download PDF
+                </button>
+            </div>
+        `;
+    }
+
+    // ==================== DOWNLOAD PDF - FRESH (client-side, html2pdf.js) ====================
+    async function downloadFreshPdf(id) {
+        try {
+            const detail = await getFreshDetail(id);
+            populateFreshPrintArea(detail);
+
+            const opt = {
+                margin: 0,
+                filename: `Outbound_Fresh_${detail.noPo}_${detail.tanggal}.pdf`,
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            };
+
+            await html2pdf().set(opt).from(document.getElementById('pdfPrintAreaFresh')).save();
+        } catch (err) {
+            Swal.fire({ title: 'Gagal Membuat PDF', text: err.message, icon: 'error' });
+        }
+    }
+
+    function populateFreshPrintArea(detail) {
+        document.getElementById('pdfInfoGridFresh').innerHTML = `
+            <div><b>No PO</b>: ${detail.noPo}</div>
+            <div><b>Tanggal</b>: ${detail.tanggal}</div>
+            <div><b>Jam Muat</b>: ${detail.jamMuat}</div>
+            <div><b>Customer</b>: ${detail.namaCustomer}</div>
+            <div><b>No Polisi</b>: ${detail.noPol}</div>
+            <div><b>Driver</b>: ${detail.namaDriver}</div>
+            <div><b>Checker</b>: ${detail.checkerNama}</div>
+        `;
+
+        document.getElementById('pdfFreshItemTable').innerHTML = `
+    <table>
+        <thead>
+            <tr><th>Kode Produksi</th><th>Kode Produk</th><th>Nama Produk</th><th>Qty</th><th>Keterangan</th></tr>
+        </thead>
+        <tbody>
+            ${detail.items.map(item => `
+                <tr>
+                    <td>${item.kodeProduksi}</td>
+                    <td>${item.kodeProduk ?? '-'}</td>
+                    <td>${item.namaProduk ?? '-'}</td>
+                    <td>${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})}</td>
+                    <td>${item.keterangan ?? '-'}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    </table>
+`;
+    }
+
+    function resetFreshFilters() {
+        document.getElementById('filterTanggalFresh').value = '';
+        document.getElementById('filterCheckerFresh').value = '';
+        document.getElementById('filterSearchFresh').value = '';
+        loadFreshHistoryData();
+    }
+
+    document.getElementById('filterTanggalFresh').addEventListener('change', loadFreshHistoryData);
+    document.getElementById('filterCheckerFresh').addEventListener('change', loadFreshHistoryData);
+    document.getElementById('filterSearchFresh').addEventListener('input', debounce(loadFreshHistoryData, 400));
+
+    // Tab Frozen dimuat langsung saat halaman terbuka (default tab).
+    // Tab Fresh baru dimuat sekali saat pertama kali di-klik (lihat setActiveTab()).
     loadHistoryData();
 </script>
 </body>

@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ProduksiFresh extends Model
 {
@@ -44,6 +46,32 @@ class ProduksiFresh extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class, 'no_po', 'nomor_po');
+    }
+
+    /**
+     * BARU - Relasi ke item Outbound Fresh, KALAU baris produksi_fresh
+     * ini sudah pernah dikeluarkan lewat dokumen Outbound Fresh. hasOne
+     * karena produksi_fresh_id di outbound_fresh_shipment_items dibuat
+     * UNIQUE - 1 baris produksi_fresh maksimal punya 1 outbound item.
+     */
+    public function outboundItem(): HasOne
+    {
+        return $this->hasOne(OutboundFreshShipmentItem::class);
+    }
+
+    /**
+     * BARU - Scope baris produksi_fresh yang MASIH BISA dipilih untuk
+     * Outbound Fresh: tipe_input harus 'main' (sesuai revisi manager -
+     * by product tidak ikut Outbound Fresh) DAN belum pernah dipakai di
+     * outbound manapun (belum punya outboundItem).
+     *
+     * Dipakai di OutboundFreshController: listPurchaseOrdersWithFreshStock(),
+     * getPoItems(), dan store() (re-validasi server-side anti race-condition).
+     */
+    public function scopeAvailableForOutbound(Builder $query): Builder
+    {
+        return $query->where('tipe_input', 'main')
+            ->whereDoesntHave('outboundItem');
     }
 
     /**
@@ -91,4 +119,4 @@ class ProduksiFresh extends Model
 
         return $prefix.$yearCode.$monthCode.$dateCode.$middleCode.$categoryCode.$dayCode.$suffix;
     }
-}
+} //

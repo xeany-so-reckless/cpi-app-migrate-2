@@ -25,6 +25,7 @@ use App\Http\Controllers\ProduksiFresh\AuthController as ProduksiFreshAuthContro
 use App\Http\Controllers\ProduksiFresh\ProduksiFreshController;
 use App\Http\Controllers\Warehouse\Outbound\AuthController as WarehouseOutboundAuthController;
 use App\Http\Controllers\Warehouse\Outbound\OutboundController;
+use App\Http\Controllers\Warehouse\Outbound\OutboundFreshController;
 
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
@@ -67,14 +68,32 @@ Route::prefix('warehouse/outbound')->name('warehouse.outbound.')->group(function
         Route::get('/cells', [OutboundController::class, 'listCellsWithStock'])->name('cells');
         Route::get('/cells/{cell}', [OutboundController::class, 'getCellContents'])->name('cells.show');
         Route::post('/', [OutboundController::class, 'store'])->name('store');
+
+        // BARU - Outbound Fresh (1 halaman sama dengan Frozen di atas,
+        // dibedakan lewat toggle tab di frontend - guard & middleware
+        // sengaja disamakan persis dengan grup checker Frozen).
+        Route::prefix('fresh')->name('fresh.')->group(function () {
+            Route::get('/purchase-orders', [OutboundFreshController::class, 'listPurchaseOrdersWithFreshStock'])->name('purchase-orders');
+            Route::get('/purchase-orders/{noPo}/items', [OutboundFreshController::class, 'getPoItems'])->name('purchase-orders.items');
+            Route::post('/', [OutboundFreshController::class, 'store'])->name('store');
+        });
     });
 
-    // BARU - Riwayat Outbound. Role lebih luas - Admin/Supervisor Gudang
-    // perlu bisa ikut lihat tanpa perlu akun checker.
+    // BARU - Riwayat Outbound (Frozen & Fresh gabung 1 halaman dengan
+    // tab). Role lebih luas - Admin/Supervisor Gudang perlu bisa ikut
+    // lihat tanpa perlu akun checker.
     Route::middleware(['auth:tally', 'role:checker,admin_gudang,supervisor_gudang', 'no-cache'])->group(function () {
         Route::get('/history', [OutboundController::class, 'history'])->name('history');
         Route::get('/history/data', [OutboundController::class, 'historyData'])->name('history.data');
         Route::get('/history/{shipment}', [OutboundController::class, 'historyDetail'])->name('history.detail');
+
+        // BARU - Riwayat Outbound Fresh, endpoint data terpisah supaya
+        // tidak collide dengan route-model-binding {shipment} Frozen
+        // di atas (beda model: OutboundShipment vs OutboundFreshShipment).
+        Route::prefix('fresh')->name('fresh.')->group(function () {
+            Route::get('/history/data', [OutboundFreshController::class, 'historyData'])->name('history.data');
+            Route::get('/history/{outboundFreshShipment}', [OutboundFreshController::class, 'historyDetail'])->name('history.detail');
+        });
     });
 });
 
