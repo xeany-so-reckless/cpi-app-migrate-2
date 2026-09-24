@@ -73,7 +73,7 @@
 </head>
 <body>
   <div class="container">
-    <img src="{{ asset('images/logo.jpg') }}" alt="Logo" class="logo-img" onerror="this.style.display='none'">
+    <img src="{{ asset('images/logo.png') }}" alt="Logo" class="logo-img" onerror="this.style.display='none'">
     <div class="login-title">PT. CHAROEN POKHPAND INDONESIA - JOMBANG PLANT</div>
     <div class="subtitle">Form Input Hasil Produksi Fresh</div>
 

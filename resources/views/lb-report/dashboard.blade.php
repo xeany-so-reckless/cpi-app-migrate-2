@@ -40,7 +40,7 @@
     <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-5 flex flex-wrap justify-between items-center gap-4">
       <div class="flex items-center gap-4">
         <div class="bg-white border p-2 rounded-lg w-14 h-14 flex items-center justify-center shrink-0">
-          <img src="{{ asset('images/logo.jpg') }}" alt="Logo" class="w-full h-auto object-contain">
+          <img src="{{ asset('images/logo.png') }}" alt="Logo" class="w-full h-auto object-contain">
         </div>
         <div>
           <div class="flex items-center flex-wrap gap-2.5">

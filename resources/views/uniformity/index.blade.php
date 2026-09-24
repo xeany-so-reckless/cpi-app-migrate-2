@@ -22,7 +22,7 @@
               ← Main Dashboard
             </a>
             <div class="bg-white border p-2 rounded-lg w-14 h-14 flex items-center justify-center">
-              <img src="{{ asset('images/logo.jpg') }}" alt="Logo" class="w-full h-auto object-contain">
+              <img src="{{ asset('images/logo.png') }}" alt="Logo" class="w-full h-auto object-contain">
             </div>
             <span class="font-semibold text-lg tracking-wide text-gray-900">Uniformity Apps</span>
           </div>

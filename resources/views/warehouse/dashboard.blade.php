@@ -270,7 +270,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+            <img src="{{ asset('images/logo.png') }}" alt="Logo">
             <span>{{ $plant_name }}</span>
         </div>
     </nav>

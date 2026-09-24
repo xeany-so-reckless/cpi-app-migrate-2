@@ -405,7 +405,7 @@ class ProduksiFreshController extends Controller
 
         // Logo perusahaan - gambar statis dari server, ditaruh mengapung
         // di kolom A (margin kiri kop), tidak terikat text di dalam cell.
-        $logoRealPath = public_path('images/logo.jpg');
+        $logoRealPath = public_path('images/logo.png');
         if (file_exists($logoRealPath)) {
             $logo = new Drawing();
             $logo->setPath($logoRealPath);

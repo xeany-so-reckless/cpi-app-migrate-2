@@ -156,7 +156,7 @@
 
 <nav>
     <div class="logo">
-        <img src="{{ asset('images/logo.jpg') }}" alt="Logo" style="height:38px; background:#fff;">
+        <img src="{{ asset('images/logo.png') }}" alt="Logo" style="height:38px; background:#fff;">
         <span>OUTBOUND</span>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">

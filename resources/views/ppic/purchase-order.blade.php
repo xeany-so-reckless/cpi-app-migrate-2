@@ -90,7 +90,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+            <img src="{{ asset('images/logo.png') }}" alt="Logo">
             <span>PPIC - Input PO</span>
         </div>
         <a href="{{ route('ppic.index') }}" class="back-link">

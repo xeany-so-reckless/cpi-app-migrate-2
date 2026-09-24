@@ -92,7 +92,7 @@
         <table class="data-table" style="margin-bottom: 5px;">
     <tr>
         <td rowspan="4" width="12%" style="text-align:center; vertical-align: middle; font-weight: bold; font-size: 14pt; background: #fafafa;">
-          <img src="{{ asset('images/logo.jpg') }}" alt="CPI LOGO" style="max-width: 100%; max-height: 45px; object-fit: contain;">
+          <img src="{{ asset('images/logo.png') }}" alt="CPI LOGO" style="max-width: 100%; max-height: 45px; object-fit: contain;">
         </td>
         <td rowspan="4" class="title">FORM HASIL PRODUKSI KARKAS</td>
         <td width="10%">No Dokumen</td><td width="15%">: FM-PROD-005</td>

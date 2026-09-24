@@ -113,7 +113,7 @@
 
 <nav>
     <div class="logo">
-        <img src="{{ asset('images/logo.jpg') }}" alt="Logo" style="height:38px;">
+        <img src="{{ asset('images/logo.png') }}" alt="Logo" style="height:38px;">
         <span>RIWAYAT OUTBOUND</span>
     </div>
     <div style="display:flex; align-items:center; gap:16px;">
@@ -219,7 +219,7 @@
 {{-- ==================== AREA CETAK PDF - FROZEN (diisi dinamis via JS) ==================== --}}
 <div id="pdfPrintArea">
     <div class="pdf-header">
-        <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+        <img src="{{ asset('images/logo.png') }}" alt="Logo">
         <div>
             <div class="pdf-title">BUKTI PENGELUARAN BARANG (OUTBOUND)</div>
             <div class="pdf-subtitle">CPI Jombang Plant - Warehouse Department</div>
@@ -235,7 +235,7 @@
      cuma 1 tabel item (tidak ada Cell/Bag/Tir sama sekali) --}}
 <div id="pdfPrintAreaFresh">
     <div class="pdf-header">
-        <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+        <img src="{{ asset('images/logo.png') }}" alt="Logo">
         <div>
             <div class="pdf-title">BUKTI PENGELUARAN BARANG FRESH (OUTBOUND)</div>
             <div class="pdf-subtitle">CPI Jombang Plant - Warehouse Department</div>

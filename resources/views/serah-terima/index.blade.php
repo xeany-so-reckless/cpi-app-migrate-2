@@ -1006,7 +1006,7 @@
 
                 const headerText = `
                     <div class="manifest-head">
-                        <img src="{{ asset('images/logo.jpg') }}"
+                        <img src="{{ asset('images/logo.png') }}"
                              alt="Logo CPI"
                              style="height: 40px; max-width: 110px; object-fit: contain;">
                         <div>

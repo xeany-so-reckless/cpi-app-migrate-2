@@ -315,7 +315,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+            <img src="{{ asset('images/logo.png') }}" alt="Logo">
             <span>STOCK WAREHOUSE</span>
         </div>
         <div style="display:flex; align-items:center; gap:16px;">

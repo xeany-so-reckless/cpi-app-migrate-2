@@ -64,7 +64,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{{ asset('images/logo.jpg') }}" alt="Logo">
+            <img src="{{ asset('images/logo.png') }}" alt="Logo">
             <span>PPIC</span>
         </div>
         <div style="display:flex; align-items:center; gap:16px;">

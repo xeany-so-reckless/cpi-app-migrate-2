@@ -10,7 +10,7 @@ class DashboardController extends Controller
     {
         $system_phase = "Phase: 2026 Production Digitalization";
         $plant_name   = "PRODUCTION DEPARTMENT CPI - PLANT JOMBANG";
-        $version      = "v1.1";
+        $version      = "v1.5";
 
         $production_docs = [
             [
