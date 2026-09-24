@@ -35,7 +35,9 @@
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
     color: #fff;
     background-color: var(--slate);
-    background-image: url('{{ asset('images/dashboard_pict.jpg') }}');
+    background-image:
+            linear-gradient(rgba(15,23,42,.25), rgba(15,23,42,.25)),
+            url('{{ asset('images/dashboard_pict.jpg') }}');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
