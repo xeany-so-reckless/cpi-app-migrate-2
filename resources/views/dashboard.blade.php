@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PT. Charoen Pokphand Indonesia - Plant Jombang</title>
+    <title>Slaughter House Jombang</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,18 +31,16 @@
         html { height: 100%; }
 
         body {
-            min-height: 100%;
-            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
-            color: #fff;
-            background-color: var(--slate);
-            background-image:
-                linear-gradient(180deg, rgba(15,23,42,.50) 0%, rgba(15,23,42,.62) 55%, rgba(15,23,42,.82) 100%),
-                url('{{ asset('images/dashboard_pict.jpg') }}');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }
+    min-height: 100%;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+    color: #fff;
+    background-color: var(--slate);
+    background-image: url('{{ asset('images/dashboard_pict.jpg') }}');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
 
         .material-symbols-outlined { font-family: 'Material Symbols Outlined'; line-height: 1; }
 
