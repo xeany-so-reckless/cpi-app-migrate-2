@@ -121,7 +121,7 @@
         .dock-wrap {
             display: flex; flex-direction: column; align-items: center;
             gap: 8px;
-            margin-top: 2px;
+            margin-top: 20px;
         }
         .dock-label {
             font-size: 11px; font-weight: 500; letter-spacing: .4px;
