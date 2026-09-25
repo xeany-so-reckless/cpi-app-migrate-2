@@ -247,7 +247,7 @@
         }
 
         .hero-subtitle {
-            max-width: 680px;
+            max-width: clamp(520px, 47vw, 680px);
             padding: 11px 26px;
             border-radius: 16px;
             background: rgba(255,255,255,.12);
@@ -277,7 +277,7 @@
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 16px;
             width: 100%;
-            max-width: 960px;
+            max-width: clamp(760px, 67vw, 960px);
             margin-top: 4px;
         }
 
