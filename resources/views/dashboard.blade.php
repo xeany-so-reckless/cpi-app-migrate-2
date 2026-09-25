@@ -121,7 +121,7 @@
         .dock-wrap {
             display: flex; flex-direction: column; align-items: center;
             gap: 8px;
-            margin-top: 20px;
+            margin-top: 32px;
         }
         .dock-label {
             font-size: 11px; font-weight: 500; letter-spacing: .4px;
@@ -622,7 +622,7 @@ a.dock-link:hover .material-symbols-outlined {
 
         {{-- Menu lainnya: ikon bulat kecil, nama tampil lewat tooltip --}}
         <div class="dock-wrap fade-in delay-6">
-            <span class="dock-label">Others Menu</span>
+            <span class="dock-label">Menu Lainnya</span>
             <nav class="dock" aria-label="Menu lainnya">
                 @foreach ($other_docs as $doc)
                     @php $is_soon = ($doc['url'] === '#'); @endphp
