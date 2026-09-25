@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>PPIC - Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0" />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -23,6 +25,11 @@
         .logo img { height: 38px; }
         .back-link { color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
         .back-link:hover { color: var(--primary); }
+        .btn-logout {
+            background: transparent; border: 1px solid var(--line); color: var(--muted);
+            border-radius: 8px; padding: 8px 14px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+        }
+        .btn-logout:hover { color: #dc2626; border-color: #dc2626; }
 
         .page-header { padding: 30px 5% 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
         .page-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 2.2rem; text-transform: uppercase; }
@@ -95,9 +102,24 @@
             <img src="{{ asset('images/logo.png') }}" alt="Logo">
             <span>PPIC - Dashboard</span>
         </div>
-        <a href="{{ route('ppic.index') }}" class="back-link">
-            <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Menu Utama
-        </a>
+
+        {{-- Role 'ppic': tetap link balik ke Menu Utama seperti semula.
+             Role 'manager': tidak punya menu lain untuk dituju (dia akan
+             di-redirect balik ke sini kalau ke ppic.index), jadi
+             tombol-nya diganti Logout langsung. --}}
+        @if(auth()->guard('tally')->user()->hasAnyRole(['ppic']))
+            <a href="{{ route('ppic.index') }}" class="back-link">
+                <span class="material-symbols-outlined" style="font-size:16px;">arrow_back</span> Menu Utama
+            </a>
+        @else
+            <div style="display:flex; align-items:center; gap:16px;">
+                <span style="font-size:0.8rem; color: var(--muted); font-family:'JetBrains Mono',monospace;">{{ auth()->guard('tally')->user()->name }}</span>
+                <form id="logoutForm" method="POST" action="{{ route('ppic.logout') }}">
+                    @csrf
+                    <button type="button" class="btn-logout" onclick="confirmLogout()">Keluar</button>
+                </form>
+            </div>
+        @endif
     </nav>
 
     <div class="page-header">
@@ -201,6 +223,24 @@
     </div>
 
     <script>
+        function confirmLogout() {
+            Swal.fire({
+                title: 'Keluar dari Sistem?',
+                html: '<div style="font-size:14px;color:#6b7280;">Anda akan keluar dari <b>PPIC</b>.</div>',
+                icon: 'question',
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonText: 'Ya, Keluar',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    document.getElementById('logoutForm').submit();
+                }
+            });
+        }
+
         let charts = {};
         const filterBulan = document.getElementById('filterBulan');
         filterBulan.value = new Date().toISOString().substring(0, 7);

@@ -12,7 +12,7 @@ use Illuminate\View\View;
 
 class AuthController extends Controller
 {
-    private const ALLOWED_ROLES = ['ppic'];
+    private const ALLOWED_ROLES = ['ppic', 'manager'];
 
     public function showLogin(): View|RedirectResponse
     {

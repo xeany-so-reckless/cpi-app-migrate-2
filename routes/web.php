@@ -271,16 +271,33 @@ Route::prefix('it')->name('it.')->group(function () {
 });
 
 // ==================== PPIC ====================
-// Login terpisah, khusus role 'ppic' (akun PPIC01).
+// Login terpisah. Role 'ppic' (akun PPIC01) akses penuh (menu, Planning,
+// Purchase Order, Dashboard). Role 'manager' (akun MGR01) HANYA akses
+// Dashboard - dipisah jadi middleware group sendiri di bawah supaya
+// tetap ditolak walau URL Planning/PO diketik langsung.
 Route::prefix('ppic')->name('ppic.')->group(function () {
 
     Route::get('/login', [PpicAuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [PpicAuthController::class, 'login'])->name('login.attempt');
 
-    Route::middleware(['auth:tally', 'role:ppic', 'no-cache'])->group(function () {
+    // --- Akses bersama ppic & manager: menu utama (manager di-redirect
+    // ke dashboard dari dalam PpicController@index) + logout + Dashboard ---
+    Route::middleware(['auth:tally', 'role:ppic,manager', 'no-cache'])->group(function () {
         Route::post('/logout', [PpicAuthController::class, 'logout'])->name('logout');
 
         Route::get('/', [PpicController::class, 'index'])->name('index');
+
+        // --- Dashboard ---
+        Route::prefix('dashboard')->name('dashboard.')->group(function () {
+            Route::get('/', [PpicDashboardController::class, 'index'])->name('index');
+            Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
+            Route::get('/serah-terima-data', [PpicDashboardController::class, 'serahTerimaData'])->name('serah-terima-data');
+            Route::get('/serah-terima-produk-list', [PpicDashboardController::class, 'serahTerimaProdukList'])->name('serah-terima-produk-list');
+        });
+    });
+
+    // --- Khusus role ppic: Planning vs Aktual & Input PO ---
+    Route::middleware(['auth:tally', 'role:ppic', 'no-cache'])->group(function () {
 
         // --- Planning vs Aktual ---
         Route::prefix('planning')->name('planning.')->group(function () {
@@ -292,24 +309,15 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
 
         // --- Input PO ---
         Route::prefix('purchase-order')->name('purchase-order.')->group(function () {
-    Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
-    Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
-    Route::get('/trashed', [PurchaseOrderController::class, 'trashed'])->name('trashed');
-    Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
-    Route::patch('/{purchaseOrder}', [PurchaseOrderController::class, 'updateRit'])->name('update-rit'); // <- INI
-    Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco');
-    Route::post('/{id}/restore', [PurchaseOrderController::class, 'restore'])->name('restore');
-    Route::delete('/{id}/force', [PurchaseOrderController::class, 'forceDeletePermanent'])->name('force-delete');
-    Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
-});
-
-        
-        // --- Dashboard ---
-Route::prefix('dashboard')->name('dashboard.')->group(function () {
-    Route::get('/', [PpicDashboardController::class, 'index'])->name('index');
-    Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
-    Route::get('/serah-terima-data', [PpicDashboardController::class, 'serahTerimaData'])->name('serah-terima-data');
-    Route::get('/serah-terima-produk-list', [PpicDashboardController::class, 'serahTerimaProdukList'])->name('serah-terima-produk-list');
-});
+            Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
+            Route::get('/data', [PurchaseOrderController::class, 'data'])->name('data');
+            Route::get('/trashed', [PurchaseOrderController::class, 'trashed'])->name('trashed');
+            Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
+            Route::patch('/{purchaseOrder}', [PurchaseOrderController::class, 'updateRit'])->name('update-rit'); // <- INI
+            Route::post('/{purchaseOrder}/toggle-teco', [PurchaseOrderController::class, 'toggleTeco'])->name('toggle-teco');
+            Route::post('/{id}/restore', [PurchaseOrderController::class, 'restore'])->name('restore');
+            Route::delete('/{id}/force', [PurchaseOrderController::class, 'forceDeletePermanent'])->name('force-delete');
+            Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
+        });
     });
 });
