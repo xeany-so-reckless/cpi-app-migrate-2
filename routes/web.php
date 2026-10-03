@@ -49,11 +49,11 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
 
-            // Baru: upload Excel penyesuaian stock cell
-    Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
+        // Baru: upload Excel penyesuaian stock cell
+        Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
 
-    // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
-    Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
+        // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
+        Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
     });
 });
 
@@ -216,7 +216,6 @@ Route::prefix('report-lb')->name('lbreport.')->group(function () {
 });
 
 // ==================== PRODUKSI FRESH ====================
-// ==================== PRODUKSI FRESH ====================
 Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
 
     Route::middleware('guest.produksifresh')->group(function () {
@@ -233,6 +232,12 @@ Route::prefix('produksi-fresh')->name('produksifresh.')->group(function () {
         Route::post('/store', [ProduksiFreshController::class, 'store'])->name('store');
 
         Route::post('/export-xlsx', [ProduksiFreshController::class, 'exportXlsx'])->name('export-xlsx');
+
+        // BARU - Verifikasi ID + password penandatangan untuk Cetak Form
+        // Resmi. Memakai method yang sama dengan Rekap Tally Pro, tapi
+        // role-nya mengikuti group Produksi Fresh ini (bukan tally,foreman)
+        // supaya akun tally_by_product (TBP) tidak kena 403.
+        Route::post('/verify-signature', [RekapController::class, 'verifySignature'])->name('verify-signature');
 
         // BARU - Riwayat data yang sudah tersimpan
         Route::get('/riwayat-data', [ProduksiFreshController::class, 'history'])->name('history');

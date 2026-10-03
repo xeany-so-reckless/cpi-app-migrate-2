@@ -751,11 +751,11 @@
       btn.innerHTML = `<span class="material-icons-round">sync</span> Memverifikasi...`;
 
       try {
-        // 1. Verifikasi ID + Password (reuse endpoint Rekap Tally Pro - stateless)
-        const verifyRes = await apiFetch('{{ route('tally.rekap.verify-signature') }}', {
-          method: 'POST',
-          body: JSON.stringify({ employee_code: employeeCode, password: password }),
-        }).catch(err => ({ valid: false, message: err.message }));
+  // 1. Verifikasi ID + Password (route Produksi Fresh, role sama dengan halaman ini)
+  const verifyRes = await apiFetch('{{ route('produksifresh.verify-signature') }}', {
+    method: 'POST',
+    body: JSON.stringify({ employee_code: employeeCode, password: password }),
+  }).catch(err => ({ valid: false, message: err.message }));
 
         if (!verifyRes.valid) {
           errDiv.innerText = verifyRes.message || 'ID Pengguna atau Password salah!';
