@@ -205,20 +205,22 @@
 
         /* ===================== HERO ===================== */
         .hero-content {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 0 4% 24px;
-            text-align: center;
-        }
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: safe center;   /* DIUBAH (tadinya: center) */
+    gap: 12px;
+    padding: 0 4% 24px;
+    text-align: center;
+}
+.hero-content > * { flex-shrink: 0; }   /* BARIS BARU */
 
         .hero-badge {
             position: relative; overflow: hidden;
             display: inline-block;
+            white-space: nowrap;
             background: rgba(217,35,42,.9);
             border: 1px solid rgba(255,255,255,.4);
             border-radius: 50px;
