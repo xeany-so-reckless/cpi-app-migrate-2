@@ -93,6 +93,26 @@
             display: flex; gap: 24px; padding: 14px 4px 4px; font-size: 0.85rem; color: var(--muted);
         }
         .summary-total b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
+
+        /* ==================== BARU: ROW EXPAND REKAP PRODUKSI FRESH ==================== */
+        .col-toggle { width: 32px; padding-right: 0 !important; }
+        tr.po-row { cursor: pointer; }
+        tr.po-row .chevron { font-size: 20px; color: var(--muted); transition: transform .15s; }
+        tr.po-row.open .chevron { transform: rotate(180deg); color: var(--primary); }
+        tr.po-row.open td { background: var(--primary-soft); }
+        tr.po-detail-row > td { background: #fafbff; padding: 14px 18px !important; white-space: normal !important; }
+        tr.po-detail-row:hover > td { background: #fafbff; }
+        .po-detail h5 {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted);
+            text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 8px;
+        }
+        .po-detail h5:not(:first-child) { margin-top: 18px; }
+        .po-detail table.data-table { background: #fff; border: 1px solid var(--line); }
+        .po-detail table.data-table tr:hover td { background: transparent; }
+        .badge-tipe { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+        .badge-tipe.main { background: #eef2ff; color: #4f46e5; }
+        .badge-tipe.by_product { background: #fef3c7; color: #b45309; }
+        tr.subtotal-row td { font-weight: 700; background: #f5f6fb; }
     </style>
 </head>
 <body>
@@ -162,6 +182,7 @@
             <table class="data-table">
             <thead>
                 <tr>
+                    <th class="col-toggle"></th>
                     <th>No. PO</th>
                     <th>Jenis PO</th>
                     <th>Tanggal</th>
@@ -172,7 +193,7 @@
                 </tr>
             </thead>
                 <tbody id="tblProduksiFreshBody">
-                    <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+                    <tr><td colspan="8" class="empty-state">Memuat data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -328,25 +349,127 @@
             }
         }
 
+        // ==================== BARU: REKAP PRODUKSI FRESH (ROW EXPAND) ====================
+
+        // Cache rincian per No. PO supaya klik berikutnya tidak memanggil server lagi.
+        const detailCache = {};
+
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const fmtQty = n => Number(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+        const tipeBadge = t => t === 'main'
+            ? '<span class="badge-tipe main">Main</span>'
+            : '<span class="badge-tipe by_product">By-Product</span>';
+
         function renderProduksiFresh(rows) {
             const tbody = document.getElementById('tblProduksiFreshBody');
+            Object.keys(detailCache).forEach(k => delete detailCache[k]);
 
             if (!rows || rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada input Produksi Fresh bulan ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Belum ada input Produksi Fresh bulan ini.</td></tr>`;
                 return;
             }
 
             tbody.innerHTML = rows.map(r => `
-                <tr>
-                    <td>${r.nomorPo}</td>
-                    <td>${r.jenisPo}</td>
-                    <td>${r.tanggalLabel}</td>
-                    <td class="num">${Number(r.qtyMain).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
-                    <td class="num">${Number(r.qtyByProduct).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
-                    <td class="num">${Number(r.qtyTotal).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</td>
+                <tr class="po-row" data-po="${esc(r.nomorPo)}" onclick="togglePoDetail(this)">
+                    <td class="col-toggle"><span class="material-symbols-outlined chevron">expand_more</span></td>
+                    <td>${esc(r.nomorPo)}</td>
+                    <td>${esc(r.jenisPo)}</td>
+                    <td>${esc(r.tanggalLabel)}</td>
+                    <td class="num">${fmtQty(r.qtyMain)}</td>
+                    <td class="num">${fmtQty(r.qtyByProduct)}</td>
+                    <td class="num">${fmtQty(r.qtyTotal)}</td>
                     <td class="num">${r.jumlahEntri}</td>
                 </tr>
+                <tr class="po-detail-row" hidden>
+                    <td colspan="8"><div class="po-detail"></div></td>
+                </tr>
             `).join('');
+        }
+
+        async function togglePoDetail(tr) {
+            const detailTr = tr.nextElementSibling;
+            const box = detailTr.querySelector('.po-detail');
+            const noPo = tr.dataset.po;
+
+            // Klik lagi = tutup
+            if (!detailTr.hidden) {
+                detailTr.hidden = true;
+                tr.classList.remove('open');
+                return;
+            }
+
+            detailTr.hidden = false;
+            tr.classList.add('open');
+
+            // Sudah pernah dimuat -> pakai cache, tidak panggil server lagi
+            if (detailCache[noPo]) {
+                box.innerHTML = renderPoDetail(detailCache[noPo]);
+                return;
+            }
+
+            box.innerHTML = `<div class="empty-state">Memuat rincian...</div>`;
+            try {
+                const res = await fetch(`{{ route('ppic.dashboard.produksi-fresh-detail') }}?no_po=${encodeURIComponent(noPo)}`);
+                if (!res.ok) throw new Error('Gagal memuat rincian.');
+                const data = await res.json();
+                detailCache[noPo] = data;
+                box.innerHTML = renderPoDetail(data);
+            } catch (err) {
+                box.innerHTML = `<div class="empty-state">${esc(err.message)}</div>`;
+            }
+        }
+
+        function renderPoDetail(d) {
+            const produkRows = d.perProduk.map(p => `
+                <tr>
+                    <td class="mono-cell">${esc(p.kodeProduk)}</td>
+                    <td>${esc(p.namaProduk)}</td>
+                    <td>${tipeBadge(p.tipe)}</td>
+                    <td class="num">${fmtQty(p.qty)}</td>
+                    <td class="num">${Number(p.persen).toLocaleString('id-ID', { maximumFractionDigits: 1 })}%</td>
+                    <td class="num">${p.jumlahEntri}</td>
+                </tr>
+            `).join('');
+
+            const entriRows = d.daftarEntri.map(e => `
+                <tr>
+                    <td class="num">${e.no}</td>
+                    <td class="mono-cell">${esc(e.kodeProduk)}</td>
+                    <td>${esc(e.namaProduk)}</td>
+                    <td>${tipeBadge(e.tipe)}</td>
+                    <td class="num">${fmtQty(e.qty)}</td>
+                    <td>${esc(e.operator)}</td>
+                </tr>
+            `).join('');
+
+            return `
+                <h5>Pecahan per Produk</h5>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead><tr>
+                            <th>Kode Produk</th><th>Nama Produk</th><th>Tipe</th>
+                            <th class="num">Qty</th><th class="num">% dari Total PO</th><th class="num">Jumlah Entri</th>
+                        </tr></thead>
+                        <tbody>
+                            ${produkRows}
+                            <tr class="subtotal-row"><td colspan="3">Subtotal Main</td><td class="num">${fmtQty(d.subtotal.main)}</td><td colspan="2"></td></tr>
+                            <tr class="subtotal-row"><td colspan="3">Subtotal By-Product</td><td class="num">${fmtQty(d.subtotal.byProduct)}</td><td colspan="2"></td></tr>
+                            <tr class="subtotal-row"><td colspan="3">Total</td><td class="num">${fmtQty(d.subtotal.total)}</td><td colspan="2"></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h5>Daftar Entri</h5>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead><tr>
+                            <th class="num">No</th><th>Kode Produk</th><th>Nama Produk</th>
+                            <th>Tipe</th><th class="num">Qty</th><th>Operator</th>
+                        </tr></thead>
+                        <tbody>${entriRows}</tbody>
+                    </table>
+                </div>
+            `;
         }
 
         // ==================== BARU: REKAP SERAH TERIMA (FILTER RENTANG TANGGAL) ====================

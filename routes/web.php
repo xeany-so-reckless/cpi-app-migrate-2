@@ -298,6 +298,8 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
             Route::get('/data', [PpicDashboardController::class, 'data'])->name('data');
             Route::get('/serah-terima-data', [PpicDashboardController::class, 'serahTerimaData'])->name('serah-terima-data');
             Route::get('/serah-terima-produk-list', [PpicDashboardController::class, 'serahTerimaProdukList'])->name('serah-terima-produk-list');
+         // BARU - Rincian satu PO untuk tabel Rekap Produksi Fresh (expand baris)
+            Route::get('/produksi-fresh-detail', [PpicDashboardController::class, 'produksiFreshDetail'])->name('produksi-fresh-detail');
         });
     });
 

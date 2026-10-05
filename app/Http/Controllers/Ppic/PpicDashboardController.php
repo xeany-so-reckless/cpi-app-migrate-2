@@ -244,6 +244,73 @@ class PpicDashboardController extends Controller
     }
 
     /**
+     * BARU - Rincian satu PO untuk baris yang di-expand di tabel
+     * "Rekap Produksi Fresh per PO": pecahan per produk + daftar entri.
+     *
+     * Endpoint: GET /ppic/dashboard/produksi-fresh-detail?no_po=XXXX
+     * READ-ONLY. Angka dihitung dari sumber yang sama dengan
+     * produksiFreshRekap() (semua entri ProduksiFresh per no_po, tanpa
+     * filter tanggal), jadi subtotal selalu cocok dengan baris PO di
+     * tabel utama. Tidak ada jam input yang dikirim.
+     */
+    public function produksiFreshDetail(Request $request): JsonResponse
+    {
+        $request->validate(['no_po' => ['required', 'string', 'max:100']]);
+        $noPo = strtoupper(trim($request->query('no_po')));
+
+        $entries = ProduksiFresh::with(['product:id,code,name', 'user:id,name'])
+            ->where('no_po', $noPo)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        // Nilai tipe_input di DB: 'main' atau 'byproduct'. Di respons
+        // dinormalisasi jadi 'main' / 'by_product' (dipakai badge di UI).
+        $tipeKey = fn (ProduksiFresh $e) => $e->tipe_input === 'main' ? 'main' : 'by_product';
+
+        $totalQty = (float) $entries->sum('qty');
+        $pct = fn (float $qty) => $totalQty > 0 ? round($qty / $totalQty * 100, 1) : 0;
+
+        // Daftar entri, satu per satu, tanpa jam input
+        $daftarEntri = $entries->values()->map(fn (ProduksiFresh $e, $i) => [
+            'no'         => $i + 1,
+            'kodeProduk' => $e->product->code ?? '-',
+            'namaProduk' => $e->product->name ?? '-',
+            'tipe'       => $tipeKey($e),
+            'qty'        => (float) $e->qty,
+            'operator'   => $e->user->name ?? '-',
+        ]);
+
+        // Pecahan per produk, diurutkan dari qty terbesar
+        $perProduk = $entries->groupBy('produk_id')->map(function ($g) use ($pct, $tipeKey) {
+            $first = $g->first();
+            $qty = (float) $g->sum('qty');
+
+            return [
+                'kodeProduk'  => $first->product->code ?? '-',
+                'namaProduk'  => $first->product->name ?? '-',
+                'tipe'        => $tipeKey($first),
+                'qty'         => $qty,
+                'persen'      => $pct($qty),
+                'jumlahEntri' => $g->count(),
+            ];
+        })->sortByDesc('qty')->values();
+
+        $qtyMain = (float) $entries->where('tipe_input', 'main')->sum('qty');
+        $qtyByProduct = (float) $entries->where('tipe_input', 'byproduct')->sum('qty');
+
+        return response()->json([
+            'perProduk'   => $perProduk,
+            'daftarEntri' => $daftarEntri,
+            'subtotal'    => [
+                'main'      => $qtyMain,
+                'byProduct' => $qtyByProduct,
+                'total'     => $qtyMain + $qtyByProduct,
+            ],
+        ]);
+    }
+
+    /**
      * BARU - Rekap total Qty Produksi Fresh per PO, untuk PO-PO di bulan
      * yang sedang difilter. Cuma PO yang SUDAH ADA input Fresh-nya yang
      * ditampilkan (PO tanpa input Fresh sama sekali di-skip, supaya
