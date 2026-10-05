@@ -11,7 +11,6 @@ use App\Models\UniformityRit;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class LbReportController extends Controller
@@ -26,18 +25,13 @@ class LbReportController extends Controller
 
     /**
      * Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
-     * "No PO" di form Sebelum Bongkar. Tidak difilter jenis PO (semua
-     * jenis ditampilkan).
+     * "No PO" di form Sebelum Bongkar. PO yang sudah TECO dikeluarkan.
      *
      * jumlahRit ikut dikirim supaya frontend bisa generate dropdown
      * "RIT-01".."RIT-{jumlah_rit}" begitu PO dipilih.
      */
     public function listPurchaseOrders(): JsonResponse
     {
-        // DIUBAH: PO yang sudah TECO (Technically Complete, ditandai
-        // PPIC) dikeluarkan dari daftar - PO yang sudah ditutup PPIC
-        // tidak boleh lagi dipilih untuk input rit baru. Lihat
-        // PurchaseOrderController::toggleTeco().
         $list = PurchaseOrder::whereNull('teco_at')
             ->orderByDesc('tanggal')
             ->get(['nomor_po', 'jenis_po', 'tanggal', 'jumlah_rit'])
@@ -53,8 +47,6 @@ class LbReportController extends Controller
 
     /**
      * Halaman kerja (Input + Hanging dalam 1 tempat, tab berdasarkan role).
-     * Menggantikan HalamanInput.html & HalamanHanging.html yang tadinya
-     * 2 halaman terpisah dengan login masing-masing.
      */
     public function workspace(): View
     {
@@ -63,9 +55,7 @@ class LbReportController extends Controller
 
     /**
      * Menggantikan ambilRekap() di code.gs.
-     * Sekarang mendukung 3 mode filter: tanggal (harian), bulan (yyyy-MM),
-     * atau no_po. Response sudah termasuk breakdown susut per Area
-     * (kolom `area`), dipakai widget dashboard utama.
+     * Mendukung 3 mode filter: tanggal (harian), bulan (yyyy-MM), atau no_po.
      */
     public function rekap(Request $request): JsonResponse
     {
@@ -108,19 +98,19 @@ class LbReportController extends Controller
             }
 
             $hasil['rincianRit'][] = [
-                'jam'         => $row->jam_kedatangan,
-                'tanggal'     => $row->tanggal->format('d/m/Y'),
-                'noRit'       => $row->no_rit,
-                'asal'        => $row->farm,
-                'area'        => 'Area '.$areaKey,
-                'po'          => $row->no_po,
-                'kgDta'       => (float) $row->kg_dta,
-                'ekorDta'     => (int) $row->ekor_dta,
-                'kgNetto'     => (float) $row->kg_netto,
-                'ekorNetto'   => (int) $row->ekor_netto,
-                'mati'        => (int) $row->ayam_mati,
+                'jam'          => $row->jam_kedatangan,
+                'tanggal'      => $row->tanggal->format('d/m/Y'),
+                'noRit'        => $row->no_rit,
+                'asal'         => $row->farm,
+                'area'         => 'Area '.$areaKey,
+                'po'           => $row->no_po,
+                'kgDta'        => (float) $row->kg_dta,
+                'ekorDta'      => (int) $row->ekor_dta,
+                'kgNetto'      => (float) $row->kg_netto,
+                'ekorNetto'    => (int) $row->ekor_netto,
+                'mati'         => (int) $row->ayam_mati,
                 'susutPercent' => (float) $row->susut_percent,
-                'statusData'  => $row->status,
+                'statusData'   => $row->status,
             ];
         }
 
@@ -141,7 +131,11 @@ class LbReportController extends Controller
 
     /**
      * Menggantikan ambilDetailTerintegrasi() di code.gs. Menggabungkan
-     * data lb_penerimaan + lb_hanging + uniformity_rits (dulu "Data_Import_Truk").
+     * data lb_penerimaan + lb_hanging + uniformity_rits.
+     *
+     * DIUBAH: nomor rit sekarang unik per PO (bukan per hari). Kalau
+     * parameter `po` tidak dikirim dan rit itu ada di lebih dari satu PO
+     * pada tanggal tsb, request ditolak (bukan diam-diam ambil yang pertama).
      */
     public function detail(Request $request): JsonResponse
     {
@@ -155,50 +149,68 @@ class LbReportController extends Controller
         } elseif ($tanggal) {
             $query->where('tanggal', $tanggal);
         }
-        $penerimaan = $query->first();
 
-        if (! $penerimaan) {
-            return response()->json(['error' => 'Data tidak ditemukan.'], 404);
+        $matches = $query->get();
+
+        if ($matches->isEmpty()) {
+            return response()->json([
+                'error'   => 'Data tidak ditemukan.',
+                'message' => 'Data tidak ditemukan.',
+            ], 404);
         }
+
+        if ($matches->count() > 1) {
+            $daftarPo = $matches->pluck('no_po')->implode(', ');
+            $pesan = "Rit '{$noRit}' ada di beberapa PO ({$daftarPo}). Sertakan No PO.";
+
+            return response()->json(['error' => $pesan, 'message' => $pesan], 422);
+        }
+
+        $penerimaan = $matches->first();
 
         $abw = $penerimaan->ekor_netto > 0
             ? $penerimaan->kg_netto / $penerimaan->ekor_netto
             : ($penerimaan->ekor_dta > 0 ? $penerimaan->kg_dta / $penerimaan->ekor_dta : 0);
 
-        $hanging = LbHanging::where('tanggal_penerimaan', $penerimaan->tanggal->format('Y-m-d'))
-            ->where('no_rit', $noRit)
-            ->first();
+        $hanging = $this->queryHanging(
+            $penerimaan->tanggal->format('Y-m-d'),
+            $noRit,
+            (string) $penerimaan->no_po
+        )->first();
 
+        // CATATAN: UniformityRit belum difilter per PO karena belum
+        // diketahui apakah tabelnya punya kolom no_po. Kalau ada, tambahkan
+        // ->where('no_po', $penerimaan->no_po) di bawah ini.
         $uniformity = UniformityRit::where('tanggal', $penerimaan->tanggal->format('Y-m-d'))
             ->where('no_rit', $noRit)
             ->first();
 
         return response()->json([
-            'tanggal'         => $penerimaan->tanggal->format('d/m/Y'),
-            'noRit'           => $penerimaan->no_rit,
-            'size'            => $penerimaan->size ?: '-',
-            'ekspedisi'       => $penerimaan->ekspedisi ?: '-',
-            'noPolisi'        => $penerimaan->no_polisi ?: '-',
-            'noDta'           => $penerimaan->no_dta ?: '-',
-            'area'            => $penerimaan->area,
-            'jamDatang'       => $penerimaan->jam_kedatangan,
-            'totalEkorDta'    => (int) $penerimaan->ekor_dta,
-            'totalKgDta'      => (float) $penerimaan->kg_dta,
-            'abw'             => round($abw, 2),
-            'noSppa'          => $penerimaan->no_sppa ?: '-',
-            'jamHanging'      => $hanging ? "{$hanging->jam_bongkar} - {$hanging->jam_selesai}" : '-',
-            'ayamDiterima'    => $hanging->total_diterima ?? 0,
-            'statusHanging'   => $hanging->status ?? '-',
-            'selisihEkor'     => $penerimaan->ekor_dta - ($hanging->total_diterima ?? 0),
-            'mati'            => (int) $penerimaan->ayam_mati,
-            'undersizeKg'     => (float) $penerimaan->kg_undersize,
+            'tanggal'          => $penerimaan->tanggal->format('d/m/Y'),
+            'noRit'            => $penerimaan->no_rit,
+            'size'             => $penerimaan->size ?: '-',
+            'ekspedisi'        => $penerimaan->ekspedisi ?: '-',
+            'noPolisi'         => $penerimaan->no_polisi ?: '-',
+            'noDta'            => $penerimaan->no_dta ?: '-',
+            'area'             => $penerimaan->area,
+            'jamDatang'        => $penerimaan->jam_kedatangan,
+            'totalEkorDta'     => (int) $penerimaan->ekor_dta,
+            'totalKgDta'       => (float) $penerimaan->kg_dta,
+            'abw'              => round($abw, 2),
+            'noSppa'           => $penerimaan->no_sppa ?: '-',
+            'jamHanging'       => $hanging ? "{$hanging->jam_bongkar} - {$hanging->jam_selesai}" : '-',
+            'ayamDiterima'     => $hanging->total_diterima ?? 0,
+            'statusHanging'    => $hanging->status ?? '-',
+            'selisihEkor'      => $penerimaan->ekor_dta - ($hanging->total_diterima ?? 0),
+            'mati'             => (int) $penerimaan->ayam_mati,
+            'undersizeKg'      => (float) $penerimaan->kg_undersize,
             'beratRejectTotal' => (float) $penerimaan->kg_undersize + ($penerimaan->ayam_mati * $abw),
-            'uniUndersize'    => $uniformity ? $uniformity->undersize_percent.'%' : '-',
-            'uniSizeMasuk'    => $uniformity ? $uniformity->size_masuk_percent.'%' : '-',
-            'uniOversize'     => $uniformity ? $uniformity->oversize_percent.'%' : '-',
-            'kgBasah'         => (float) $penerimaan->kg_basah,
-            'keterangan'      => $penerimaan->keterangan ?: '-',
-            'po'              => $penerimaan->no_po ?: '-',
+            'uniUndersize'     => $uniformity ? $uniformity->undersize_percent.'%' : '-',
+            'uniSizeMasuk'     => $uniformity ? $uniformity->size_masuk_percent.'%' : '-',
+            'uniOversize'      => $uniformity ? $uniformity->oversize_percent.'%' : '-',
+            'kgBasah'          => (float) $penerimaan->kg_basah,
+            'keterangan'       => $penerimaan->keterangan ?: '-',
+            'po'               => $penerimaan->no_po ?: '-',
         ]);
     }
 
@@ -266,11 +278,8 @@ class LbReportController extends Controller
             ], 422);
         }
 
-        // DIUBAH: batas jumlah rit HANYA berlaku untuk PO jenis FEHM,
-        // dimana PPIC sudah menentukan jumlah_rit di depan. Untuk jenis
-        // PO lain, PPIC tidak tahu akan ada berapa rit - nomor rit
-        // ditentukan mandiri oleh tim LB Report saat truk datang, jadi
-        // tidak ada validasi batas maksimal di sini.
+        // Batas jumlah rit HANYA berlaku untuk PO jenis FEHM, dimana PPIC
+        // sudah menentukan jumlah_rit di depan. Jenis PO lain bebas.
         if ($po->jenis_po === 'FEHM') {
             $jumlahRitPo = $po->jumlah_rit ?? 0;
 
@@ -291,14 +300,16 @@ class LbReportController extends Controller
             }
         }
 
+        // DIUBAH: nomor rit unik per PO per tanggal (bukan per tanggal saja).
         $duplikat = LbPenerimaan::where('tanggal', $data['tanggal'])
+            ->where('no_po', $noPo)
             ->where('no_rit', $noRit)
             ->exists();
 
         if ($duplikat) {
             return response()->json([
                 'status'  => 'error',
-                'message' => "Nomor Rit '{$noRit}' sudah pernah didaftarkan pada tanggal {$data['tanggal']}!",
+                'message' => "Nomor Rit '{$noRit}' sudah pernah didaftarkan pada PO '{$noPo}' tanggal {$data['tanggal']}!",
             ], 422);
         }
 
@@ -316,7 +327,7 @@ class LbReportController extends Controller
             'size'           => strtoupper(trim($data['size'])),
             'no_dta'         => isset($data['no_dta']) ? strtoupper(trim($data['no_dta'])) : null,
             'no_sppa'        => isset($data['no_sppa']) ? strtoupper(trim($data['no_sppa'])) : null,
-            'no_po'          => strtoupper(trim($data['no_po'])),
+            'no_po'          => $noPo,
         ]);
 
         ActivityLogger::log(
@@ -353,28 +364,47 @@ class LbReportController extends Controller
 
     /**
      * Menggantikan getEkorNettoDariHanging() di code.gs. Dipakai di form
-     * "Setelah Bongkar" untuk otomatis menarik Ekor Netto dari hasil hanging.
+     * "Setelah Bongkar" untuk menarik Ekor Netto dari hasil hanging.
+     *
+     * DIUBAH: menerima no_po. Kalau kosong dan rit ada di beberapa PO
+     * pada tanggal tsb, ditolak dengan pesan yang jelas.
      */
     public function ekorNettoHanging(Request $request): JsonResponse
     {
         $tanggal = $request->query('tanggal');
         $noRit = strtoupper(trim($request->query('no_rit', '')));
+        $noPo = strtoupper(trim($request->query('no_po', '')));
 
-        $hanging = LbHanging::where('tanggal_penerimaan', $tanggal)
-            ->where('no_rit', $noRit)
-            ->first();
+        $rows = $this->queryHanging($tanggal, $noRit, $noPo)->get();
 
-        if (! $hanging) {
+        if ($rows->isEmpty()) {
+            $infoPo = $noPo !== '' ? " (PO {$noPo})" : '';
+
             return response()->json([
-                'error' => "Data Rit '{$noRit}' pada tanggal {$tanggal} belum diinput di bagian Hanging/Counter!",
+                'message' => "Data Rit '{$noRit}'{$infoPo} pada tanggal {$tanggal} belum diinput di bagian Hanging/Counter!",
             ], 404);
         }
 
-        return response()->json(['ekorNetto' => $hanging->total_diterima]);
+        if ($rows->count() > 1) {
+            return response()->json([
+                'message' => "Rit '{$noRit}' ada di beberapa PO pada tanggal {$tanggal} ({$rows->pluck('no_po')->implode(', ')}). Isi No PO dulu.",
+            ], 422);
+        }
+
+        $hanging = $rows->first();
+
+        return response()->json([
+            'ekorNetto' => $hanging->total_diterima,
+            'noPo'      => $hanging->no_po,
+        ]);
     }
 
     /**
      * Menggantikan simpanDataSetelah() di code.gs. Role: lb_penerimaan_akhir (LGS).
+     *
+     * DIUBAH: menerima no_po_update (nullable supaya frontend lama tidak
+     * langsung rusak). Kalau kosong dan rit ambigu, ditolak. Kalau terisi,
+     * dipakai sebagai filter sehingga tidak menimpa data PO lain.
      */
     public function storeSetelah(Request $request): JsonResponse
     {
@@ -383,6 +413,7 @@ class LbReportController extends Controller
         $data = $request->validate([
             'tanggal_update'  => ['required', 'date'],
             'no_rit_update'   => ['required', 'string'],
+            'no_po_update'    => ['nullable', 'string'],
             'kg_netto'        => ['required', 'numeric', 'min:0'],
             'ekor_netto'      => ['required', 'integer', 'min:0'],
             'ayam_mati'       => ['required', 'integer', 'min:0'],
@@ -395,16 +426,32 @@ class LbReportController extends Controller
         ]);
 
         $noRit = strtoupper(trim($data['no_rit_update']));
+        $noPo = strtoupper(trim($data['no_po_update'] ?? ''));
 
-        $penerimaan = LbPenerimaan::where('tanggal', $data['tanggal_update'])
-            ->where('no_rit', $noRit)
-            ->first();
+        $query = LbPenerimaan::where('tanggal', $data['tanggal_update'])
+            ->where('no_rit', $noRit);
 
-        if (! $penerimaan) {
+        if ($noPo !== '') {
+            $query->where('no_po', $noPo);
+        }
+
+        $matches = $query->get();
+
+        if ($matches->isEmpty()) {
+            $infoPo = $noPo !== '' ? " (PO {$noPo})" : '';
+
             return response()->json([
-                'message' => "Rit '{$noRit}' pada tanggal {$data['tanggal_update']} TIDAK DITEMUKAN.",
+                'message' => "Rit '{$noRit}'{$infoPo} pada tanggal {$data['tanggal_update']} TIDAK DITEMUKAN.",
             ], 404);
         }
+
+        if ($matches->count() > 1) {
+            return response()->json([
+                'message' => "Rit '{$noRit}' ada di beberapa PO pada tanggal {$data['tanggal_update']} ({$matches->pluck('no_po')->implode(', ')}). Isi No PO dulu.",
+            ], 422);
+        }
+
+        $penerimaan = $matches->first();
 
         $susutPercent = $penerimaan->kg_dta > 0
             ? (($penerimaan->kg_dta - $data['kg_netto']) / $penerimaan->kg_dta) * 100
@@ -425,10 +472,7 @@ class LbReportController extends Controller
             'keterangan'     => $data['keterangan'] ?? null,
         ]);
 
-        // BARU - sinkronkan Aktual Ekor/Kg di PPIC Planning vs Aktual
-        // setiap kali data Setelah Bongkar disimpan/diubah. Pakai
-        // $penerimaan->tanggal (bukan $data['tanggal_update'] mentah)
-        // supaya formatnya konsisten dengan yang tersimpan di kolom.
+        // Sinkronkan Aktual Ekor/Kg di PPIC Planning vs Aktual.
         $this->syncAktualPlanning($request, $penerimaan->tanggal->format('Y-m-d'));
 
         ActivityLogger::log(
@@ -444,45 +488,61 @@ class LbReportController extends Controller
     /**
      * Menggantikan getDetailHangingLengkap() di code.gs. Dipakai popup
      * "Lihat Rincian Hanging" di form Setelah Bongkar.
+     *
+     * DIUBAH: menerima no_po, tolak kalau ambigu.
      */
     public function detailHangingLengkap(Request $request): JsonResponse
     {
         $tanggal = $request->query('tanggal');
         $noRit = strtoupper(trim($request->query('no_rit', '')));
+        $noPo = strtoupper(trim($request->query('no_po', '')));
 
-        $hanging = LbHanging::where('tanggal_penerimaan', $tanggal)
-            ->where('no_rit', $noRit)
-            ->first();
+        $rows = $this->queryHanging($tanggal, $noRit, $noPo)->get();
 
-        if (! $hanging) {
-            return response()->json(['error' => 'Data Hanging belum disimpan/diinput untuk Rit tersebut!'], 404);
+        if ($rows->isEmpty()) {
+            return response()->json([
+                'message' => 'Data Hanging belum disimpan/diinput untuk Rit tersebut!',
+            ], 404);
         }
 
-        $penerimaan = LbPenerimaan::where('tanggal', $tanggal)
-            ->where('no_rit', $noRit)
-            ->first();
+        if ($rows->count() > 1) {
+            return response()->json([
+                'message' => "Rit '{$noRit}' ada di beberapa PO pada tanggal {$tanggal} ({$rows->pluck('no_po')->implode(', ')}). Isi No PO dulu.",
+            ], 422);
+        }
+
+        $hanging = $rows->first();
+
+        $queryPenerimaan = LbPenerimaan::where('tanggal', $tanggal)->where('no_rit', $noRit);
+        if (! empty($hanging->no_po)) {
+            $queryPenerimaan->where('no_po', $hanging->no_po);
+        }
+        $penerimaan = $queryPenerimaan->first();
 
         return response()->json([
-            'tanggal'        => $tanggal,
-            'noRit'          => $noRit,
-            'jamBongkar'     => $hanging->jam_bongkar ?: '-',
-            'jamSelesai'     => $hanging->jam_selesai ?: '-',
-            'totalDiterima'  => $hanging->total_diterima,
-            'totalSJ'        => $hanging->total_sj,
-            'totalKosong'    => $hanging->total_kosong,
-            'gridData'       => $hanging->grid_json ?? [],
-            'noPo'           => $hanging->no_po ?: ($penerimaan->no_po ?? ''),
-            'namaTally'      => $hanging->nama_tally ?: '',
-            'namaForeman'    => $hanging->nama_foreman ?: '',
-            'farm'           => $penerimaan->farm ?? '-',
-            'ekorDTA'        => $penerimaan->ekor_dta ?? 0,
-            'ekspedisi'      => $penerimaan->ekspedisi ?? '-',
+            'tanggal'       => $tanggal,
+            'noRit'         => $noRit,
+            'jamBongkar'    => $hanging->jam_bongkar ?: '-',
+            'jamSelesai'    => $hanging->jam_selesai ?: '-',
+            'totalDiterima' => $hanging->total_diterima,
+            'totalSJ'       => $hanging->total_sj,
+            'totalKosong'   => $hanging->total_kosong,
+            'gridData'      => $hanging->grid_json ?? [],
+            'noPo'          => $hanging->no_po ?: ($penerimaan->no_po ?? ''),
+            'namaTally'     => $hanging->nama_tally ?: '',
+            'namaForeman'   => $hanging->nama_foreman ?: '',
+            'farm'          => $penerimaan->farm ?? '-',
+            'ekorDTA'       => $penerimaan->ekor_dta ?? 0,
+            'ekspedisi'     => $penerimaan->ekspedisi ?? '-',
         ]);
     }
 
     /**
      * Menggantikan ambilDataRitase() di code.gs. Dipakai di halaman Hanging
      * untuk cari data rit sebelum mulai input grid.
+     *
+     * DIUBAH: kalau no_po kosong dan rit hari ini ada di lebih dari satu PO,
+     * minta tally mengisi No PO (tidak lagi diam-diam ambil yang pertama).
      */
     public function ritase(Request $request): JsonResponse
     {
@@ -497,9 +557,9 @@ class LbReportController extends Controller
             $query->where('tanggal', now()->format('Y-m-d'));
         }
 
-        $penerimaan = $query->first();
+        $matches = $query->get();
 
-        if (! $penerimaan) {
+        if ($matches->isEmpty()) {
             $pesan = $noPo !== ''
                 ? "Rit '{$noRit}' tidak ditemukan dalam PO '{$noPo}'!"
                 : "No Rit '{$noRit}' tidak ada di jadwal HARI INI! (Gunakan No PO jika data beda hari)";
@@ -507,19 +567,32 @@ class LbReportController extends Controller
             return response()->json(['status' => 'NOT_FOUND', 'message' => $pesan]);
         }
 
+        if ($matches->count() > 1) {
+            $daftarPo = $matches->pluck('no_po')->implode(', ');
+
+            return response()->json([
+                'status'  => 'NOT_FOUND',
+                'message' => "Rit '{$noRit}' ada di beberapa PO ({$daftarPo}). Isi kolom No PO terlebih dahulu.",
+            ]);
+        }
+
+        $penerimaan = $matches->first();
+
         $result = [
-            'status'             => 'SUCCESS',
-            'farm'               => $penerimaan->farm ?: '-',
-            'size'               => $penerimaan->size ?: '-',
-            'ekorSJ'             => (int) $penerimaan->ekor_dta,
-            'kgSJ'               => (float) $penerimaan->kg_dta,
-            'tanggalPenerimaan'  => $penerimaan->tanggal->format('Y-m-d'),
-            'noPo'               => $penerimaan->no_po ?: '',
+            'status'            => 'SUCCESS',
+            'farm'              => $penerimaan->farm ?: '-',
+            'size'              => $penerimaan->size ?: '-',
+            'ekorSJ'            => (int) $penerimaan->ekor_dta,
+            'kgSJ'              => (float) $penerimaan->kg_dta,
+            'tanggalPenerimaan' => $penerimaan->tanggal->format('Y-m-d'),
+            'noPo'              => $penerimaan->no_po ?: '',
         ];
 
-        $hanging = LbHanging::where('tanggal_penerimaan', $result['tanggalPenerimaan'])
-            ->where('no_rit', $noRit)
-            ->first();
+        $hanging = $this->queryHanging(
+            $result['tanggalPenerimaan'],
+            $noRit,
+            (string) $penerimaan->no_po
+        )->first();
 
         if ($hanging) {
             $result['sudahAdaData'] = true;
@@ -538,6 +611,9 @@ class LbReportController extends Controller
 
     /**
      * Menggantikan simpanDataHanging() di code.gs. Role: lb_hanging (TLB).
+     *
+     * DIUBAH: no_po wajib dan jadi bagian kunci updateOrCreate, sehingga
+     * hanging RIT-01 PO 666 tidak menimpa RIT-01 PO 665.
      */
     public function storeHanging(Request $request): JsonResponse
     {
@@ -552,17 +628,19 @@ class LbReportController extends Controller
             'total_kosong'        => ['required', 'integer', 'min:0'],
             'grid'                => ['required', 'array'],
             'tanggal_penerimaan'  => ['required', 'date'],
-            'no_po'               => ['nullable', 'string'],
+            'no_po'               => ['required', 'string'],
             'nama_tally'          => ['required', 'string'],
             'nama_foreman'        => ['required', 'string'],
         ]);
 
         $noRit = strtoupper(trim($data['no_rit']));
+        $noPo = strtoupper(trim($data['no_po']));
         $status = $data['total_diterima'] >= $data['total_sj'] ? 'OVER/PAS' : 'KURANG';
 
         $hanging = LbHanging::updateOrCreate(
             [
                 'tanggal_penerimaan' => $data['tanggal_penerimaan'],
+                'no_po'              => $noPo,
                 'no_rit'             => $noRit,
             ],
             [
@@ -573,7 +651,6 @@ class LbReportController extends Controller
                 'total_kosong'   => $data['total_kosong'],
                 'status'         => $status,
                 'grid_json'      => $data['grid'],
-                'no_po'          => isset($data['no_po']) ? strtoupper(trim($data['no_po'])) : null,
                 'nama_tally'     => $data['nama_tally'],
                 'nama_foreman'   => strtoupper(trim($data['nama_foreman'])),
             ]
@@ -582,7 +659,7 @@ class LbReportController extends Controller
         ActivityLogger::log(
             'report_lb',
             $hanging->wasRecentlyCreated ? 'create' : 'update',
-            "{$request->user('tally')->employee_code} ({$request->user('tally')->name}) input data Hanging Rit {$noRit}".($hanging->no_po ? " (PO {$hanging->no_po})" : ''),
+            "{$request->user('tally')->employee_code} ({$request->user('tally')->name}) input data Hanging Rit {$noRit} (PO {$noPo})",
             $request->user('tally')
         );
 
@@ -600,18 +677,25 @@ class LbReportController extends Controller
     }
 
     /**
-     * BARU - Sinkronisasi Aktual Ekor/Kg di PpicPlan (Planning vs
-     * Aktual PPIC) untuk 1 tanggal, dipanggil setiap kali data Setelah
-     * Bongkar disimpan/diubah lewat storeSetelah().
-     *
-     * Kalau baris Plan tanggal itu SUDAH ADA (PPIC sudah input Plan-nya),
-     * cuma aktual_ekor/aktual_kg yang diupdate - plan_ekor/plan_kg/
-     * keterangan/user_id milik PPIC tidak disentuh.
-     *
-     * Kalau baris Plan tanggal itu BELUM ADA sama sekali, dibuatkan baris
-     * baru dengan plan_ekor/plan_kg default 0 (menunggu PPIC melengkapi
-     * belakangan) - user_id diisi dari user LB yang sedang input, supaya
-     * kolom wajib (foreign key, NOT NULL) tetap valid.
+     * BARU - Query dasar LbHanging berdasarkan tanggal + no_rit, dan
+     * (opsional) no_po. Kalau $noPo kosong, filter PO tidak dipakai
+     * sehingga pemanggil harus mengecek apakah hasilnya lebih dari 1.
+     */
+    private function queryHanging(?string $tanggal, string $noRit, string $noPo = '')
+    {
+        $q = LbHanging::where('tanggal_penerimaan', $tanggal)
+            ->where('no_rit', $noRit);
+
+        if ($noPo !== '') {
+            $q->where('no_po', $noPo);
+        }
+
+        return $q;
+    }
+
+    /**
+     * Sinkronisasi Aktual Ekor/Kg di PpicPlan untuk 1 tanggal, dipanggil
+     * setiap kali data Setelah Bongkar disimpan/diubah lewat storeSetelah().
      */
     private function syncAktualPlanning(Request $request, string $tanggal): void
     {

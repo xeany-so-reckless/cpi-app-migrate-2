@@ -139,7 +139,8 @@
 
       <div id="listRitByPo" class="hidden mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white p-3 rounded border max-h-48 overflow-y-auto shadow-inner"></div>
 
-      <div class="flex items-center gap-2 mb-3 mt-4"><div class="h-px bg-gray-300 flex-1"></div><span class="text-xs text-gray-400 font-bold uppercase tracking-wider">Pencarian Klasik</span><div class="h-px bg-gray-300 flex-1"></div></div>
+      <div class="flex items-center gap-2 mb-1 mt-4"><div class="h-px bg-gray-300 flex-1"></div><span class="text-xs text-gray-400 font-bold uppercase tracking-wider">Pencarian Klasik</span><div class="h-px bg-gray-300 flex-1"></div></div>
+      <p class="text-[10px] text-gray-400 text-center mb-3">Jika kolom No PO di atas terisi, pencarian ini hanya mencari rit di PO tersebut.</p>
 
       <div class="flex flex-col sm:flex-row gap-3">
         <input type="date" id="search_tanggal" class="border rounded-xl p-3 focus:ring-2 focus:ring-emerald-200 outline-none sm:w-1/3 text-gray-600" title="Tanggal Pencarian">
@@ -151,6 +152,9 @@
     <form id="formSetelah" onsubmit="submitSetelah(this); return false;" class="hidden auto-enter">
       <input type="hidden" name="tanggal_update" id="tanggal_update">
       <input type="hidden" name="no_rit_update" id="no_rit_update">
+      <input type="hidden" name="no_po_update" id="no_po_update">
+
+      <div id="infoPoAktif" class="hidden mb-4 bg-blue-50 border border-blue-100 text-blue-700 rounded-xl px-4 py-2 text-xs font-bold"></div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 mb-6">
         <div>
@@ -193,7 +197,7 @@
 
     <form id="form-hanging-tally" onsubmit="event.preventDefault();">
       <div class="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-md p-4 mb-4 text-white">
-        <label class="block text-[11px] font-bold tracking-widest text-blue-200 mb-1"><i class="fas fa-barcode mr-1"></i> NOMOR PO (ISI JIKA DATA BEDA HARI)</label>
+        <label class="block text-[11px] font-bold tracking-widest text-blue-200 mb-1"><i class="fas fa-barcode mr-1"></i> NOMOR PO (WAJIB JIKA RIT SAMA ADA DI LEBIH DARI 1 PO / DATA BEDA HARI)</label>
         <input type="text" id="input-no-po" placeholder="Opsional, Cth: PO-123" class="w-full border-0 rounded-lg px-3 py-2 font-bold text-gray-800 bg-white/90 shadow-inner outline-none focus:ring-2 focus:ring-yellow-400 text-sm uppercase mb-3">
 
         <label class="block text-[11px] font-bold tracking-widest text-blue-200 mb-1"><i class="fas fa-truck-loading mr-1"></i> MASUKKAN NOMOR RITASE</label>
@@ -245,8 +249,9 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 md:col-span-6">
           <h2 class="text-[11px] font-bold text-red-400 mb-2 flex items-center gap-2"><i class="far fa-file-alt"></i> INFORMASI PROSES</h2>
           <div class="grid grid-cols-2 gap-y-3 gap-x-2 text-[11px] mt-1">
+            <div><div class="text-gray-400 font-medium">Nomor PO</div><div id="info-po" class="font-bold text-blue-600 text-xs truncate">-</div></div>
             <div><div class="text-gray-400 font-medium">Asal Kandang (Farm)</div><div id="info-farm" class="font-bold text-gray-700 text-xs truncate">-</div></div>
-            <div><div class="text-gray-400 font-medium">Size / Area</div><div id="info-size" class="font-bold text-gray-700 text-xs">-</div></div>
+            <div class="col-span-2"><div class="text-gray-400 font-medium">Size / Area</div><div id="info-size" class="font-bold text-gray-700 text-xs">-</div></div>
             <div class="col-span-2 border-t border-gray-100 pt-2">
               <div class="text-gray-400 font-medium mb-0.5">Total Target Surat Jalan (DTA)</div>
               <div class="font-bold text-gray-800 text-sm"><span id="info-sj" class="text-blue-600 text-base">0</span> Ekor / <span id="info-kg" class="text-indigo-600">0</span> Kg</div>
@@ -384,7 +389,7 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(data.message || 'Terjadi kesalahan pada server.');
+      throw new Error(data.message || data.error || 'Terjadi kesalahan pada server.');
     }
     return data;
   }
@@ -430,7 +435,7 @@
     if (tglSearch) tglSearch.value = today;
 
     if (document.getElementById('formSebelum')) {
-    initEnterKey(); 
+    initEnterKey();
     loadDaftarPO();
     }
     if (document.getElementById('hanging-mobile-rows')) { renderTableKosong(); initVerticalNavigation(); }
@@ -497,7 +502,8 @@ function generateDropdownRit() {
         return;
     }
 
-    if (po.jenisPo === 'FEH0') {
+    // DIUBAH: 'FEH0' -> 'FEHM' agar sama dengan backend (storeSebelum).
+    if (po.jenisPo === 'FEHM') {
         inputRit.classList.add('hidden');
         inputRit.disabled = true;
         inputRit.value = '';
@@ -552,6 +558,9 @@ function generateDropdownRit() {
 
   {{-- ============ SECTION: SETELAH BONGKAR ============ --}}
   @if ($canSetelah)
+  // PO yang dipakai pada daftar rit terakhir yang ditampilkan ("Tampilkan Rit").
+  let poDaftarRitAktif = '';
+
   function hitungUndersizeKg() {
   let kgNetto = parseFloat(document.getElementById('kg_netto').value) || 0;
   let ekorNetto = parseFloat(document.getElementById('ekor_netto').value) || 0;
@@ -566,7 +575,7 @@ function generateDropdownRit() {
 }
 
   async function cariDaftarPO() {
-    let po = document.getElementById('search_po_setelah').value.trim();
+    let po = document.getElementById('search_po_setelah').value.trim().toUpperCase();
     if (!po) return alert("Masukkan Nomor PO terlebih dahulu!");
     let divList = document.getElementById('listRitByPo');
     divList.innerHTML = `<span class="text-blue-500 font-bold text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> Mencari PO...</span>`;
@@ -575,6 +584,7 @@ function generateDropdownRit() {
     try {
       const res = await apiFetch(`{{ route('lbreport.daftar-rit-po') }}?no_po=${encodeURIComponent(po)}`);
       if (res.list.length === 0) { divList.innerHTML = `<span class="text-gray-500 text-xs">Tidak ada Rit ditemukan untuk PO ini.</span>`; return; }
+      poDaftarRitAktif = po;
       let html = "";
       res.list.forEach(r => {
         let stColor = r.status === "Baru" ? "text-blue-500" : (r.status === "Lama" ? "text-emerald-500" : "text-gray-400");
@@ -589,7 +599,10 @@ function generateDropdownRit() {
     }
   }
 
+  // DIUBAH: PO diambil dari daftar yang sedang ditampilkan, jadi rit yang
+  // dipilih pasti milik PO tersebut (bukan PO lain dengan nomor rit sama).
   function pilihRitDariPO(tgl, rit) {
+    document.getElementById('search_po_setelah').value = poDaftarRitAktif;
     document.getElementById('search_tanggal').value = tgl;
     document.getElementById('search_no_rit').value = rit;
     cariDataAwalRit();
@@ -598,6 +611,7 @@ function generateDropdownRit() {
   async function cariDataAwalRit() {
     let tanggalCari = document.getElementById('search_tanggal').value;
     let noRit = document.getElementById('search_no_rit').value.trim();
+    let noPoCari = document.getElementById('search_po_setelah').value.trim().toUpperCase();
     if (!tanggalCari) return alert('Pilih tanggal pencarian!');
     if (!noRit) return alert('Ketik nomor Ritase!');
 
@@ -606,10 +620,17 @@ function generateDropdownRit() {
     btnCari.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...'; btnCari.disabled = true;
 
     try {
-      const res = await apiFetch(`{{ route('lbreport.ekor-netto-hanging') }}?tanggal=${tanggalCari}&no_rit=${encodeURIComponent(noRit)}`);
+      const res = await apiFetch(`{{ route('lbreport.ekor-netto-hanging') }}?tanggal=${tanggalCari}&no_rit=${encodeURIComponent(noRit)}&no_po=${encodeURIComponent(noPoCari)}`);
+      const noPoFinal = res.noPo || noPoCari;
       document.getElementById('tanggal_update').value = tanggalCari;
       document.getElementById('no_rit_update').value = noRit;
+      document.getElementById('no_po_update').value = noPoFinal;
       document.getElementById('ekor_netto').value = res.ekorNetto;
+
+      const infoPo = document.getElementById('infoPoAktif');
+      infoPo.innerHTML = `<i class="fas fa-info-circle mr-1"></i> Mengisi data untuk PO <b>${noPoFinal || '-'}</b> / <b>${noRit.toUpperCase()}</b> / ${tanggalCari}`;
+      infoPo.classList.remove('hidden');
+
       document.getElementById('formSetelah').classList.remove('hidden');
       document.getElementById('kg_netto').focus();
       hitungUndersizeKg();
@@ -625,6 +646,7 @@ function generateDropdownRit() {
   async function bukaPopupDetailHanging() {
     let tanggalCari = document.getElementById('tanggal_update').value;
     let noRit = document.getElementById('no_rit_update').value;
+    let noPo = document.getElementById('no_po_update').value;
 
     if (!tanggalCari || !noRit) return alert("Silakan proses nomor ritase terlebih dahulu!");
 
@@ -633,7 +655,7 @@ function generateDropdownRit() {
     btnDetail.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menarik Data...'; btnDetail.disabled = true;
 
     try {
-      const res = await apiFetch(`{{ route('lbreport.detail-hanging') }}?tanggal=${tanggalCari}&no_rit=${encodeURIComponent(noRit)}`);
+      const res = await apiFetch(`{{ route('lbreport.detail-hanging') }}?tanggal=${tanggalCari}&no_rit=${encodeURIComponent(noRit)}&no_po=${encodeURIComponent(noPo)}`);
 
       document.getElementById('pop_no_po').innerText = res.noPo || '-';
       document.getElementById('pop_no_rit').innerText = res.noRit || noRit;
@@ -704,6 +726,8 @@ function generateDropdownRit() {
       alert(res.message);
       form.reset();
       document.getElementById('formSetelah').classList.add('hidden');
+      const infoPo = document.getElementById('infoPoAktif');
+      if (infoPo) infoPo.classList.add('hidden');
       const btnDetail = document.getElementById('btnLihatDetailHanging');
       if (btnDetail) btnDetail.classList.add('hidden');
     } catch (err) {
@@ -810,11 +834,17 @@ function getJamSekarang() {
   return `${jam}:${menit}`;
 }
 
+  // DIUBAH: kunci draft memakai PO hasil pencarian (stateNoPo), bukan isi
+  // kolom PO yang bisa kosong, supaya draft RIT-01 PO A tidak tercampur
+  // dengan RIT-01 PO B.
+  function kunciDraft(noRit) {
+    return 'HangingDraft_' + noRit + '_' + (stateNoPo || '');
+  }
 
   function simpanDraftLokal() {
   const noRit = document.getElementById('input-no-rit').value.trim().toUpperCase();
-  const noPo = document.getElementById('input-no-po').value.trim().toUpperCase();
   if (!noRit) return alert("Cari Nomor Ritase terlebih dahulu sebelum menyimpan draft!");
+  if (!stateNoPo) return alert("Cari Nomor Ritase terlebih dahulu (data PO belum termuat) sebelum menyimpan draft!");
 
   const jamSelesaiEl = document.getElementById('jam-selesai');
   if (!jamSelesaiEl.value) jamSelesaiEl.value = getJamSekarang();
@@ -826,13 +856,13 @@ function getJamSekarang() {
         if (input && input.value) draftData.grid[`a${col}_${i}`] = input.value;
       }
     }
-    localStorage.setItem('HangingDraft_' + noRit + '_' + noPo, JSON.stringify(draftData));
+    localStorage.setItem(kunciDraft(noRit), JSON.stringify(draftData));
     alert("Draft berhasil disimpan di perangkat ini!");
   }
 
-  function muatDraftLokal(noRit, noPo) {
+  function muatDraftLokal(noRit) {
     renderTableKosong();
-    const saved = localStorage.getItem('HangingDraft_' + noRit + '_' + noPo);
+    const saved = localStorage.getItem(kunciDraft(noRit));
     if (saved) {
       try {
         const draftData = JSON.parse(saved);
@@ -852,6 +882,7 @@ function getJamSekarang() {
     document.getElementById('jam-bongkar').value = "";
     document.getElementById('jam-selesai').value = "";
     document.getElementById('input-nama-foreman').value = "";
+    document.getElementById('info-po').innerText = "-";
     document.getElementById('info-farm').innerText = "-";
     document.getElementById('info-size').innerText = "-";
     document.getElementById('info-sj').innerText = "0";
@@ -884,6 +915,7 @@ function getJamSekarang() {
       const res = await apiFetch(`{{ route('lbreport.ritase') }}?no_rit=${encodeURIComponent(noRit)}&no_po=${encodeURIComponent(noPo)}`);
 
       if (res && res.status === "SUCCESS") {
+        document.getElementById('info-po').innerText = res.noPo || '-';
         document.getElementById('info-farm').innerText = res.farm;
         document.getElementById('info-size').innerText = res.size;
         document.getElementById('info-sj').innerText = res.ekorSJ;
@@ -914,7 +946,7 @@ function getJamSekarang() {
           statusIndicator.className = "text-[10px] px-2 py-0.5 rounded-full font-bold transition-all duration-300 neon-active shadow-md";
           document.getElementById('text-btn').innerText = "Simpan Final";
           document.getElementById('input-nama-foreman').value = "";
-          muatDraftLokal(noRit.toUpperCase(), noPo.toUpperCase());
+          muatDraftLokal(noRit.toUpperCase());
         }
       } else {
         alert(res ? res.message : "Data tidak ditemukan.");
@@ -942,6 +974,7 @@ function getJamSekarang() {
   const namaTally = document.getElementById('input-nama-tally').value;
     const namaForeman = document.getElementById('input-nama-foreman').value.trim().toUpperCase();
     if (farm === "-" || !noRitInput) return alert("Cari Ritase valid dahulu sebelum menyimpan!");
+    if (!stateNoPo) return alert("Data PO belum termuat. Cari Ritase ulang sebelum menyimpan!");
     if (!jamBongkar || !jamSelesai) return alert("Silakan isi Jam Bongkar dan Jam Selesai terlebih dahulu!");
     if (!namaForeman) return alert("Mohon lengkapi 'Disetujui Oleh (Foreman/SPV)' sebelum menyimpan final!");
 
@@ -975,7 +1008,7 @@ function getJamSekarang() {
     try {
       const res = await apiFetch('{{ route("lbreport.hanging.store") }}', { method: 'POST', body: JSON.stringify(payload) });
       alert(res.message || "Data berhasil disimpan!");
-      localStorage.removeItem('HangingDraft_' + noRitInput.toUpperCase() + '_' + (document.getElementById('input-no-po').value.trim().toUpperCase()));
+      localStorage.removeItem(kunciDraft(noRitInput.toUpperCase()));
       resetFormState();
     } catch (err) {
       alert("Gagal menyimpan: " + err.message);
