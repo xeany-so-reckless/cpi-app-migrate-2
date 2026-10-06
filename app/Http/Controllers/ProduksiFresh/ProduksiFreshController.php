@@ -18,6 +18,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Pdf\Dompdf as PdfWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -34,6 +35,33 @@ class ProduksiFreshController extends Controller
     private const DOC_EFFECTIVE_DATE = '01 September 2026';
     private const DOC_REVISION = '0.0/ -';
     private const COMPANY_LABEL = 'JOMBANG - INDONESIA';
+
+    /**
+     * BARU - Pengaturan pagination untuk export PDF (A4 landscape).
+     *
+     * Semua angka di bawah adalah PERKIRAAN kapasitas baris data per
+     * halaman dan WAJIB dites dengan beberapa jumlah baris (misal 15,
+     * 22, 30, 45) lalu disetel ulang sesuai hasil PDF sebenarnya:
+     * - Kalau baris data masih keluar halaman sebelum waktunya -> KECILKAN
+     *   FIRST_PAGE_ROWS / NEXT_PAGE_ROWS.
+     * - Kalau halaman terlalu longgar -> BESARKAN.
+     *
+     * DATA_ROW_HEIGHT        : tinggi tetap tiap baris data (pt), supaya
+     *                          perhitungan page break bisa diprediksi.
+     * FIRST_PAGE_ROWS        : kapasitas baris data di halaman 1 (ada kop).
+     * NEXT_PAGE_ROWS         : kapasitas baris data di halaman lanjutan
+     *                          (hanya ada header tabel yang diulang).
+     * SIGNATURE_ROW_EQUIV    : tinggi blok tanda tangan dalam satuan
+     *                          "setara berapa baris data".
+     * MIN_ROWS_WITH_SIGNATURE: minimal baris data yang harus ikut
+     *                          menemani tanda tangan di halaman terakhir
+     *                          (supaya ttd tidak sendirian di halaman baru).
+     */
+    private const DATA_ROW_HEIGHT = 18;
+    private const FIRST_PAGE_ROWS = 18;
+    private const NEXT_PAGE_ROWS = 26;
+    private const SIGNATURE_ROW_EQUIV = 9;
+    private const MIN_ROWS_WITH_SIGNATURE = 3;
 
     public function workspace(Request $request): View
     {
@@ -342,6 +370,51 @@ class ProduksiFreshController extends Controller
     }
 
     /**
+     * BARU - Hitung jumlah baris data per halaman untuk export PDF.
+     *
+     * Aturan:
+     * 1. Halaman 1 muat FIRST_PAGE_ROWS baris (ada kop), halaman
+     *    lanjutan muat NEXT_PAGE_ROWS baris.
+     * 2. Blok tanda tangan (setara SIGNATURE_ROW_EQUIV baris) harus
+     *    muat di halaman terakhir. Kalau tidak muat, halaman terakhir
+     *    dipecah supaya MIN_ROWS_WITH_SIGNATURE baris data terakhir
+     *    pindah bersama tanda tangan -> ttd TIDAK PERNAH sendirian
+     *    di halaman baru.
+     *
+     * @return int[] jumlah baris data di tiap halaman, berurutan.
+     */
+    private function computePageRowCounts(int $totalRows): array
+    {
+        $pageCounts = [];
+        $remaining = $totalRows;
+        $capacity = self::FIRST_PAGE_ROWS;
+
+        while ($remaining > 0) {
+            $take = min($remaining, $capacity);
+            $pageCounts[] = $take;
+            $remaining -= $take;
+            $capacity = self::NEXT_PAGE_ROWS;
+        }
+
+        if (empty($pageCounts)) {
+            return [0];
+        }
+
+        $lastCapacity = count($pageCounts) === 1 ? self::FIRST_PAGE_ROWS : self::NEXT_PAGE_ROWS;
+        $lastCount = end($pageCounts);
+
+        $signatureFits = ($lastCount + self::SIGNATURE_ROW_EQUIV) <= $lastCapacity;
+
+        if (! $signatureFits && $lastCount > self::MIN_ROWS_WITH_SIGNATURE) {
+            array_pop($pageCounts);
+            $pageCounts[] = $lastCount - self::MIN_ROWS_WITH_SIGNATURE;
+            $pageCounts[] = self::MIN_ROWS_WITH_SIGNATURE;
+        }
+
+        return $pageCounts;
+    }
+
+    /**
      * Susun workbook sesuai layout template kosongan FM-PROD-018:
      * kop (logo + judul + no dokumen), header No PO/Date/Shift/Tipe,
      * tabel item (Kode, Nama Produk, Kode Produksi, Qty Pack/Bag & Kg,
@@ -349,10 +422,13 @@ class ProduksiFreshController extends Controller
      *
      * Dipakai untuk KEDUA format output (Excel & PDF) - method ini
      * tidak tahu dan tidak peduli mau di-export jadi apa, cukup
-     * menghasilkan objek Spreadsheet yang lengkap. setFitToPage() di
-     * bagian akhir ditambahkan supaya saat di-convert ke PDF (lewat
-     * Dompdf) kolom paling kanan (area tanda tangan+QR) tidak terpotong
-     * ke halaman berikutnya; untuk Excel native ini tidak berpengaruh.
+     * menghasilkan objek Spreadsheet yang lengkap.
+     *
+     * DIUBAH: pagination untuk PDF - kertas A4 landscape, margin
+     * dikecilkan, header tabel diulang di halaman lanjutan, tinggi
+     * baris data tetap, dan page break manual (lihat
+     * computePageRowCounts()) supaya tanda tangan tidak pernah
+     * sendirian di halaman baru.
      */
     private function buildFormFreshSpreadsheet(
         string $noPo,
@@ -471,6 +547,10 @@ class ProduksiFreshController extends Controller
         $row = $dataStartRow;
 
         foreach ($rows as $item) {
+            // Tinggi baris tetap -> kapasitas per halaman bisa diprediksi
+            // untuk perhitungan page break PDF.
+            $sheet->getRowDimension($row)->setRowHeight(self::DATA_ROW_HEIGHT);
+
             $sheet->setCellValue('B'.$row, $item->product->code ?? '-');
 
             $sheet->setCellValue('C'.$row, $item->product->name ?? '-');
@@ -498,6 +578,26 @@ class ProduksiFreshController extends Controller
         $sheet->getStyle($tableRange)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getStyle("B{$dataStartRow}:L{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
         $sheet->getStyle("C{$dataStartRow}:D{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+
+        // ---------- PAGE BREAK MANUAL (untuk PDF) ----------
+        // Hitung berapa baris data per halaman, lalu pasang break setelah
+        // baris terakhir tiap halaman (kecuali halaman terakhir). Hasilnya
+        // tanda tangan selalu ditemani minimal MIN_ROWS_WITH_SIGNATURE
+        // baris data di halaman terakhir.
+        $pageCounts = $this->computePageRowCounts($rows->count());
+        $cumulative = 0;
+        $lastPageIndex = count($pageCounts) - 1;
+
+        foreach ($pageCounts as $index => $count) {
+            $cumulative += $count;
+
+            if ($index === $lastPageIndex) {
+                break;
+            }
+
+            $breakAfterRow = $dataStartRow + $cumulative - 1;
+            $sheet->setBreak('A'.$breakAfterRow, Worksheet::BREAK_ROW);
+        }
 
         // ---------- TANDA TANGAN "DIBUAT OLEH" + QR ----------
         $signatureLabelRow = $lastDataRow + 3;
@@ -528,14 +628,29 @@ class ProduksiFreshController extends Controller
         $sheet->getStyle('I'.$signatureNameRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $sheet->getStyle('A1:M'.$signatureNameRow)->getFont()->setName('Arial')->setSize(9);
-        $sheet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
 
-        // BARU - fit-to-page: penting terutama untuk export PDF (Dompdf)
-        // supaya kolom L (area tanda tangan+QR) tidak terpotong ke
-        // halaman kedua. Tidak berdampak ke tampilan file Excel native.
-        $sheet->getPageSetup()->setFitToPage(true);
-        $sheet->getPageSetup()->setFitToWidth(1);
-        $sheet->getPageSetup()->setFitToHeight(0);
+        // ---------- PAGE SETUP ----------
+        $pageSetup = $sheet->getPageSetup();
+        $pageSetup->setOrientation(PageSetup::ORIENTATION_LANDSCAPE);
+        $pageSetup->setPaperSize(PageSetup::PAPERSIZE_A4);
+
+        // Fit-to-width: kolom L (area tanda tangan+QR) tidak terpotong ke
+        // halaman samping. Tinggi dibiarkan bebas (0) -> multi halaman.
+        $pageSetup->setFitToPage(true);
+        $pageSetup->setFitToWidth(1);
+        $pageSetup->setFitToHeight(0);
+
+        // Header tabel (baris 10-11) diulang di halaman lanjutan.
+        $pageSetup->setRowsToRepeatAtTop([$headerRow, $subHeaderRow]);
+
+        // Margin dikecilkan (satuan inci) supaya kapasitas baris maksimal.
+        $margins = $sheet->getPageMargins();
+        $margins->setTop(0.4);
+        $margins->setBottom(0.4);
+        $margins->setLeft(0.4);
+        $margins->setRight(0.4);
+        $margins->setHeader(0.2);
+        $margins->setFooter(0.2);
 
         return $spreadsheet;
     }
