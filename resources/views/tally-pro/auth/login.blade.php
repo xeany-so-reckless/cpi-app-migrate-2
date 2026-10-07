@@ -328,6 +328,7 @@
                 <div class="card-footer">
                     <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard Utama</a>
                 </div>
+                <x-logout-warning />
             </div>
         </div>
 

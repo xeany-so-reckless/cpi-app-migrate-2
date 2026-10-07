@@ -216,7 +216,7 @@ class ProduksiFreshController extends Controller
             $query->whereDate('created_at', '<=', $request->date('tanggal_sampai'));
         }
 
-        $perPage = min((int) $request->get('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 20), 100);
         $paginated = $query->orderByDesc('created_at')->paginate($perPage);
 
         return response()->json([

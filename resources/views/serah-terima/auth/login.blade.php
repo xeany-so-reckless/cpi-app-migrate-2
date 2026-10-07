@@ -145,6 +145,7 @@
             <a href="{{ route('dashboard') }}" class="back-link">← Dashboard Produksi</a>
             <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Dashboard Warehouse</a>
         </div>
+        <x-logout-warning />
     </div>
 
     <!-- Sisi kanan otomatis penuh dan diam -->

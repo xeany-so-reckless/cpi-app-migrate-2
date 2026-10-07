@@ -220,6 +220,8 @@
         <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Kembali ke Warehouse Console</a>
 
         <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard Utama</a>
+
+        <x-logout-warning />
     </div>
 
     <div class="visual-side">

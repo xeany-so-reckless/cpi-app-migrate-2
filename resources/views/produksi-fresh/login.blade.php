@@ -104,6 +104,7 @@
       <button class="btn" type="submit">MASUK</button>
     </form>
     <a href="{{ route('dashboard') }}" class="back-link">← Kembali ke Dashboard Produksi</a>
+    <x-logout-warning />
   </div>
 </body>
 </html>

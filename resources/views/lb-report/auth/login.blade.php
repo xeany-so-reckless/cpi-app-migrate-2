@@ -49,6 +49,7 @@
       <div class="text-center mt-2">
         <a href="{{ route('dashboard') }}" class="text-xs text-gray-400 hover:text-blue-600 transition">← Kembali ke Dashboard Utama</a>
       </div>
+      <x-logout-warning />
     </div>
   </div>
 
