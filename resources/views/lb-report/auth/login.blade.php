@@ -7,7 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: 'Inter', system-ui, sans-serif; background-color: #f3f4f6; }
+        body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background:
+        radial-gradient(rgba(37, 99, 235, .08) 1.2px, transparent 1.2px) 0 0 / 22px 22px,
+        linear-gradient(160deg, #eff6ff 0%, #dbeafe 100%);
+    background-attachment: fixed;
+}
 
         /* Panel visual: gradien biru + pola titik (murni CSS) */
         .lb-panel {
