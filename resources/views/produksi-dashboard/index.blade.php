@@ -9,55 +9,59 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <style>
+    body { background-color: #f4f7f6; }
+
+    /* Input form (dipakai di form input & modal edit) */
+    .inp { width: 100%; background: #f9fafb; border: 1px solid #d1d5db; border-radius: 0.25rem; padding: 0.375rem 0.75rem; }
+    .inp:focus { outline: none; border-color: #0d9488; }
+
+    /* Efek Neon untuk Achieve / Not Achieve */
+    .neon-green { color: #39ff14; text-shadow: 0 0 8px rgba(57, 255, 20, 0.9), 0 0 18px rgba(57, 255, 20, 0.6); }
+    .neon-red { color: #ff3366; text-shadow: 0 0 8px rgba(255, 51, 102, 0.9), 0 0 18px rgba(255, 51, 102, 0.6); }
+
     @media print {
       body { background: white; color: black; padding: 0; margin: 0; }
       .no-print { display: none !important; }
       .print-card { page-break-inside: avoid; border: 1px solid #e5e7eb !important; background: white !important; color: black !important; border-radius: 8px !important; margin-bottom: 1.5rem !important; }
+      .bg-gradient-to-r { background: white !important; color: black !important; }
+      .bg-gradient-to-r span { color: black !important; }
 
-      #yieldGridContainer { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0.5rem !important; }
-      #yieldGridContainer > div { padding: 0.5rem !important; }
-      #yieldGridContainer .text-2xl { font-size: 1.25rem !important; }
-      #yieldGridContainer .text-xs { font-size: 0.65rem !important; }
-
-      #mainChartsGroup { display: flex !important; flex-direction: column !important; gap: 1.5rem !important; width: 100% !important; }
-      #mainChartsGroup > div:first-child { width: 100% !important; max-width: 400px !important; margin: 0 auto !important; height: 320px !important; }
-      #mainChartsGroup > div:last-child { width: 100% !important; height: 350px !important; }
-
-      #yieldChartsSection { display: grid !important; grid-template-columns: 1fr !important; gap: 1.5rem !important; width: 100% !important; }
+      #printGrid { padding-top: 0.5rem !important; }
+      #leftCardsContainer { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0.5rem !important; }
+      #yieldChartsSection:not(.hidden) { display: grid !important; grid-template-columns: 1fr !important; gap: 1.5rem !important; width: 100% !important; }
       #yieldChartsSection > div { width: 100% !important; height: 320px !important; }
-
       canvas { width: 100% !important; height: 100% !important; }
       .h-64, .h-48 { height: 280px !important; }
     }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen font-sans relative">
+<body class="text-gray-800 min-h-screen font-sans relative">
 
   <header class="bg-white border-b border-gray-200 sticky top-0 z-40 no-print shadow-sm">
     <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
       <div class="flex items-center gap-3">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 px-3 py-2 rounded-lg text-xs font-bold transition">← Dashboard Utama</a>
-        <h1 class="text-xl font-bold tracking-tight text-blue-600">DASHBOARD YIELD PRODUKSI</h1>
+        <h1 class="text-xl font-bold tracking-tight text-teal-600">DASHBOARD YIELD PRODUKSI</h1>
         <span id="updateBadge" class="hidden bg-emerald-500 text-xs text-white font-semibold px-2 py-0.5 rounded-full animate-pulse">Data Baru Tersedia</span>
       </div>
 
       <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-        <select id="viewMode" onchange="switchViewMode()" class="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-700">
+        <select id="viewMode" onchange="switchViewMode()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 text-gray-700 shadow-sm">
           <option value="harian">Harian</option>
           <option value="bulanan">Bulanan</option>
           <option value="tahunan">Tahunan</option>
         </select>
-        <input id="datePicker" type="date" onchange="filterAndRender()" class="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-gray-700" />
-        <button onclick="downloadPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm">
+        <input id="datePicker" type="date" onchange="filterAndRender()" class="bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 text-gray-700 shadow-sm" />
+        <button onclick="downloadPDF()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm">
           Cetak Laporan
         </button>
       </div>
     </div>
   </header>
 
-  <nav class="max-w-7xl mx-auto px-4 mt-6 no-print">
+  <nav class="max-w-7xl mx-auto px-4 mt-4 no-print">
     <div class="border-b border-gray-200 flex gap-2">
-      <button id="tabGrafik" onclick="switchTab('grafik')" class="py-2 px-4 border-b-2 font-medium transition text-blue-600 border-blue-600">Dashboard Grafik</button>
+      <button id="tabGrafik" onclick="switchTab('grafik')" class="py-2 px-4 border-b-2 font-medium transition text-teal-600 border-teal-600">Dashboard Grafik</button>
       <button id="tabRekap" onclick="switchTab('rekap')" class="py-2 px-4 border-b-2 font-medium transition text-gray-500 hover:text-gray-700 border-transparent">Tabel Rekap</button>
       <button id="tabInput" onclick="switchTab('input')" class="py-2 px-4 border-b-2 font-medium transition text-gray-500 hover:text-gray-700 border-transparent">Input Data Harian</button>
     </div>
@@ -67,31 +71,75 @@
     <div id="printDateRange" class="hidden text-center text-sm font-bold text-gray-800 mb-4 block"></div>
 
     <section id="sectionGrafik" class="space-y-6">
-      <div id="yieldGridContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 print-card"></div>
-
-      <div id="mainChartsGroup" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-80 print-card">
-          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Komposisi Hasil Produksi</h3>
-          <div class="h-64 relative"><canvas id="pieChart"></canvas></div>
+      <!-- HERO BANNER -->
+      <div class="bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-600 rounded-2xl p-4 sm:p-5 relative shadow-sm border border-teal-600/30 flex items-center justify-between h-24 print-card">
+        <div class="hidden sm:flex flex-col text-white/90">
+          <span class="text-xs font-semibold uppercase tracking-widest text-teal-200">Performa Produksi</span>
+          <span class="text-sm font-bold">Rangkuman Yield & Achievement</span>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-80 lg:col-span-2 print-card">
-          <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Monitoring Defect</h3>
-          <div class="h-64 relative" id="qualityChartWrapper"><canvas id="areaChart"></canvas></div>
+
+        <!-- LINGKARAN FINAL YIELD (tidak ikut cetak) -->
+        <div class="absolute -bottom-14 left-1/2 transform -translate-x-1/2 flex flex-col items-center justify-center no-print z-20">
+          <div class="bg-gradient-to-b from-teal-600 via-teal-500 to-emerald-600 rounded-full w-44 h-44 sm:w-48 sm:h-48 border-[8px] border-[#f4f7f6] flex flex-col items-center justify-center shadow-2xl relative overflow-hidden p-2">
+            <span id="finalYieldStatus" class="z-10 text-center leading-none font-black text-xl sm:text-2xl tracking-widest drop-shadow-md"></span>
+            <span class="text-[10px] uppercase tracking-widest mt-1 z-10 text-white/90 font-semibold bg-black/20 backdrop-blur-md px-3 py-0.5 rounded-full border border-white/10">Data Final Yield</span>
+            <span id="finalYieldValue" class="text-3xl sm:text-4xl font-extrabold mt-1 z-10 text-white tracking-tight drop-shadow">0%</span>
+            <span class="text-[10px] mt-0.5 z-10 text-white/80 font-medium tracking-wide">Standar: 93%</span>
+            <div class="absolute inset-2 border-2 border-white/25 rounded-full z-0 pointer-events-none"></div>
+            <div class="absolute inset-4 border border-white/15 rounded-full z-0 pointer-events-none"></div>
+          </div>
         </div>
       </div>
 
-      <div id="yieldChartsSection" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
-          <h3 class="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Tren Yield Titik Nol</h3>
-          <div class="h-48 relative"><canvas id="lineChartTitikNol"></canvas></div>
+      <div id="emptyState" class="hidden mt-20 text-center p-8 bg-white border border-gray-200 rounded-xl text-gray-400 font-medium">
+        Tidak ada data transaksi ter-input pada koordinat tanggal tersebut. Dashboard Kosong.
+      </div>
+
+      <div id="graphContent" class="space-y-6">
+        <div id="printGrid" class="grid grid-cols-1 lg:grid-cols-4 gap-6 pt-16">
+          <div class="flex flex-col gap-4 print-card" id="leftCardsContainer"></div>
+
+          <div class="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col print-card">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-50 pb-2">
+              <h3 id="middleChartTitle" class="font-bold text-gray-700 text-sm">Trend Final Yield</h3>
+            </div>
+            <div class="flex-1 relative min-h-[220px]">
+              <canvas id="trendFinalYieldChart"></canvas>
+              <canvas id="dailyBarChart" class="hidden"></canvas>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col print-card">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-50 pb-2">
+              <h3 class="font-bold text-gray-700 text-sm">Komposisi Hasil Produksi</h3>
+            </div>
+            <div class="flex-1 relative min-h-[220px]"><canvas id="pieChart"></canvas></div>
+          </div>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
-          <h3 class="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">Tren Yield FG + BP Others</h3>
-          <div class="h-48 relative"><canvas id="lineChartFgBp"></canvas></div>
+
+        <div id="bottomDefectSection" class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col print-card">
+          <h3 class="font-bold text-gray-700 text-sm mb-4">Monitoring Defect</h3>
+          <div class="h-64 relative"><canvas id="areaChart"></canvas></div>
         </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
-          <h3 class="text-xs font-semibold text-rose-600 uppercase tracking-wider mb-1">Tren Yield By Product</h3>
-          <div class="h-48 relative"><canvas id="lineChartByProduct"></canvas></div>
+
+        <div id="dailyDetailSection" class="hidden bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col print-card">
+          <h3 class="font-bold text-teal-700 text-sm mb-4 border-b border-gray-100 pb-2">Detail Data Input Harian</h3>
+          <div id="dailyDetailContent" class="space-y-4"></div>
+        </div>
+
+        <div id="yieldChartsSection" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
+            <h3 class="text-xs font-semibold text-teal-600 uppercase tracking-wider mb-1">Tren Yield Titik Nol</h3>
+            <div class="h-48 relative"><canvas id="lineChartTitikNol"></canvas></div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
+            <h3 class="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-1">Tren Yield FG + BP Others</h3>
+            <div class="h-48 relative"><canvas id="lineChartFgBp"></canvas></div>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm h-64 print-card">
+            <h3 class="text-xs font-semibold text-rose-600 uppercase tracking-wider mb-1">Tren Yield By Product</h3>
+            <div class="h-48 relative"><canvas id="lineChartByProduct"></canvas></div>
+          </div>
         </div>
       </div>
     </section>
@@ -138,54 +186,52 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-gray-600 mb-1 text-xs font-semibold">ID Pengguna</label>
-            <input type="text" id="inputIdUser" class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none text-sm uppercase" />
+            <input type="text" id="inputIdUser" class="inp text-sm uppercase" />
           </div>
           <div>
             <label class="block text-gray-600 mb-1 text-xs font-semibold">Kata Sandi</label>
-            <input type="password" id="inputPassUser" class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none text-sm" />
+            <input type="password" id="inputPassUser" class="inp text-sm" />
           </div>
         </div>
-        <button onclick="verifyInputAccess()" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-2 rounded text-white text-sm transition shadow-sm">Masuk Form Input</button>
+        <button onclick="verifyInputAccess()" class="w-full bg-teal-600 hover:bg-teal-700 font-bold py-2 rounded text-white text-sm transition shadow-sm">Masuk Form Input</button>
       </div>
 
       <div id="inputFormContainer" class="hidden">
         <div class="flex justify-between items-center border-b border-gray-200 pb-2 mb-4">
-          <h2 class="text-lg font-bold text-blue-600">Input Lap. Produksi Harian</h2>
-          <span class="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded font-semibold" id="activeUserLabel"></span>
+          <h2 class="text-lg font-bold text-emerald-600">Input Lap. Produksi Harian</h2>
+          <span class="bg-teal-100 text-teal-800 text-xs px-2 py-0.5 rounded font-semibold" id="activeUserLabel"></span>
         </div>
         <form id="prodForm" onsubmit="submitForm(event)" class="space-y-4 text-sm text-gray-700">
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-gray-600 mb-1 font-medium">No PO</label>
-              <select name="noPo" id="inputNoPo" required onchange="onNoPoChange(this.value)"
-                class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none">
+              <select name="noPo" id="inputNoPo" required onchange="onNoPoChange(this.value)" class="inp">
                 <option value="">-- Pilih No PO --</option>
               </select>
               <div id="poSummaryWarning" class="hidden mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5"></div>
             </div>
             <div>
               <label class="block text-gray-600 mb-1 font-medium">Tanggal (otomatis dari PO)</label>
-              <input type="text" id="inputTanggalInfo" disabled placeholder="-"
-                class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 text-gray-500" />
+              <input type="text" id="inputTanggalInfo" disabled placeholder="-" class="inp !bg-gray-100 text-gray-500" />
             </div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-gray-200 pt-3">
-            <div><label class="block text-gray-500 mb-1">Kg DTA</label><input type="number" step="any" name="kgDta" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Ekor DTA</label><input type="number" name="ekorDta" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" name="kgNetto" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Ayam Mati (Ekor)</label><input type="number" name="ayamMati" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" name="kgTitikNol" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" name="kgBuluDarah" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Kg FG + BP Others</label><input type="number" step="any" name="kgFgBp" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" name="kgByProduct" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">% KW 2 / Griller PR</label><input type="number" step="any" name="pctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
-            <div><label class="block text-gray-500 mb-1">% Defect Proses</label><input type="number" step="any" name="pctDefect" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5 focus:border-blue-500 focus:outline-none" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg DTA</label><input type="number" step="any" name="kgDta" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Ekor DTA</label><input type="number" name="ekorDta" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" name="kgNetto" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Ayam Mati (Ekor)</label><input type="number" name="ayamMati" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" name="kgTitikNol" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" name="kgBuluDarah" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg FG + BP Others</label><input type="number" step="any" name="kgFgBp" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" name="kgByProduct" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">% KW 2 / Griller PR</label><input type="number" step="any" name="pctKw2" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">% Defect Proses</label><input type="number" step="any" name="pctDefect" required class="inp" /></div>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-200 pt-3">
-            <div><label class="block text-gray-500 mb-1">Prod Griller</label><input type="number" step="any" name="prodGriller" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5" /></div>
-            <div><label class="block text-gray-500 mb-1">Prod Parting</label><input type="number" step="any" name="prodParting" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5" /></div>
-            <div><label class="block text-gray-500 mb-1">Prod Marinasi</label><input type="number" step="any" name="prodMarinasi" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5" /></div>
-            <div><label class="block text-gray-500 mb-1">Total Hasil</label><input type="number" step="any" name="totalHasil" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1.5" /></div>
+            <div><label class="block text-gray-500 mb-1">Prod Griller</label><input type="number" step="any" name="prodGriller" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Prod Parting</label><input type="number" step="any" name="prodParting" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Prod Marinasi</label><input type="number" step="any" name="prodMarinasi" required class="inp" /></div>
+            <div><label class="block text-gray-500 mb-1">Total Hasil</label><input type="number" step="any" name="totalHasil" required class="inp" /></div>
           </div>
           <div class="pt-4"><button type="submit" id="btnSimpan" class="w-full bg-emerald-600 hover:bg-emerald-700 font-bold py-2.5 rounded text-white transition shadow-sm">Simpan Data Ke Database</button></div>
         </form>
@@ -204,30 +250,30 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-gray-600 mb-1 font-semibold">No PO (Kunci Utama)</label>
-            <input type="text" id="editNoPo" disabled class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 font-medium text-gray-500" />
+            <input type="text" id="editNoPo" disabled class="inp !bg-gray-100 font-medium text-gray-500" />
           </div>
           <div>
             <label class="block text-gray-600 mb-1 font-semibold">Tanggal Produksi</label>
-            <input type="text" id="editTanggal" disabled class="w-full bg-gray-100 border border-gray-300 rounded px-3 py-1.5 font-medium text-gray-500" />
+            <input type="text" id="editTanggal" disabled class="inp !bg-gray-100 font-medium text-gray-500" />
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-gray-100 pt-3">
-          <div><label class="block text-gray-500 mb-1">Kg DTA</label><input type="number" step="any" id="editKgDta" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Ekor DTA</label><input type="number" id="editEkorDta" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" id="editKgNetto" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Ayam Mati (Ek)</label><input type="number" id="editAyamMati" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" id="editKgTitikNol" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" id="editKgBuluDarah" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Kg FG + BP Oth</label><input type="number" step="any" id="editKgFgBp" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" id="editKgByProduct" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">% KW 2 / Pr</label><input type="number" step="any" id="editPctKw2" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">% Defect Pros</label><input type="number" step="any" id="editPctDefect" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg DTA</label><input type="number" step="any" id="editKgDta" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Ekor DTA</label><input type="number" id="editEkorDta" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg Netto</label><input type="number" step="any" id="editKgNetto" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Ayam Mati (Ek)</label><input type="number" id="editAyamMati" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg Titik Nol</label><input type="number" step="any" id="editKgTitikNol" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg Bulu Darah</label><input type="number" step="any" id="editKgBuluDarah" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg FG + BP Oth</label><input type="number" step="any" id="editKgFgBp" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Kg By Product</label><input type="number" step="any" id="editKgByProduct" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">% KW 2 / Pr</label><input type="number" step="any" id="editPctKw2" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">% Defect Pros</label><input type="number" step="any" id="editPctDefect" required class="inp" /></div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-gray-100 pt-3">
-          <div><label class="block text-gray-500 mb-1">Prod Griller</label><input type="number" step="any" id="editProdGriller" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Prod Parting</label><input type="number" step="any" id="editProdParting" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Prod Marinasi</label><input type="number" step="any" id="editProdMarinasi" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
-          <div><label class="block text-gray-500 mb-1">Total Hasil</label><input type="number" step="any" id="editTotalHasil" required class="w-full bg-gray-50 border border-gray-300 rounded px-3 py-1" /></div>
+          <div><label class="block text-gray-500 mb-1">Prod Griller</label><input type="number" step="any" id="editProdGriller" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Prod Parting</label><input type="number" step="any" id="editProdParting" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Prod Marinasi</label><input type="number" step="any" id="editProdMarinasi" required class="inp" /></div>
+          <div><label class="block text-gray-500 mb-1">Total Hasil</label><input type="number" step="any" id="editTotalHasil" required class="inp" /></div>
         </div>
         <div class="flex justify-end gap-3 pt-4 border-t border-gray-200">
           <button type="button" onclick="closeEditModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded font-medium transition">Batal</button>
@@ -245,9 +291,8 @@
     let charts = {};
     let hasEditAccess = false;
     let hasInputAccess = false;
-    // Menggantikan USERS object hardcode - kredensial disimpan sesaat di
-    // memori setelah tervalidasi ke server, dipakai ulang untuk tiap
-    // request simpan/edit (modul ini stateless, tidak ada sesi login).
+    // Kredensial disimpan sesaat di memori setelah tervalidasi ke server,
+    // dipakai ulang untuk tiap request simpan/edit (tidak ada sesi login).
     let activeCredentials = null;
 
     Chart.register(ChartDataLabels);
@@ -286,9 +331,7 @@
       }
     }
 
-    // BARU - Load daftar No PO dari PPIC untuk dropdown form Input.
-    // Dipanggil saat halaman pertama kali load, dan setiap kali tab
-    // Input dibuka lagi, supaya PO baru dari PPIC ikut muncul.
+    // Load daftar No PO dari PPIC untuk dropdown form Input.
     async function loadPurchaseOrders(selectId) {
       try {
         poListGlobal = await apiFetch('{{ route('produksi-dashboard.purchase-orders') }}');
@@ -300,10 +343,8 @@
       }
     }
 
-    // DIUBAH: sekarang async - selain isi info tanggal, juga auto-fill
-    // 4 field (Kg DTA, Ekor DTA, Kg Netto, Ayam Mati) dari data Report
-    // Harian Bahan Baku LB terkait PO ini. Field tetap BISA diedit manual
-    // kalau perlu koreksi - tidak dikunci disabled.
+    // Isi info tanggal + auto-fill 4 field dari Report Harian Bahan Baku LB.
+    // Field tetap bisa diedit manual kalau perlu koreksi.
     async function onNoPoChange(nomorPo) {
       const po = poListGlobal.find(p => p.nomorPo === nomorPo);
       document.getElementById('inputTanggalInfo').value = po ? po.tanggal : '';
@@ -365,22 +406,19 @@
 
     function switchTab(tab) {
       const tabs = {
-        grafik: { sec: 'sectionGrafik', btn: 'tabGrafik', baseClass: 'text-blue-600 border-blue-600' },
-        rekap: { sec: 'sectionRekap', btn: 'tabRekap', baseClass: 'text-blue-600 border-transparent' },
-        input: { sec: 'sectionInput', btn: 'tabInput', baseClass: 'text-blue-600 border-transparent' }
+        grafik: { sec: 'sectionGrafik', btn: 'tabGrafik' },
+        rekap: { sec: 'sectionRekap', btn: 'tabRekap' },
+        input: { sec: 'sectionInput', btn: 'tabInput' }
       };
       Object.keys(tabs).forEach(k => {
-        if (k === tab) {
-          document.getElementById(tabs[k].sec).classList.remove('hidden');
-          document.getElementById(tabs[k].btn).className = `py-2 px-4 border-b-2 font-medium ${tabs[k].baseClass.split(' ')[0]} border-current`;
-        } else {
-          document.getElementById(tabs[k].sec).classList.add('hidden');
-          document.getElementById(tabs[k].btn).className = `py-2 px-4 border-b-2 border-transparent font-medium text-gray-500 hover:text-gray-300`;
-        }
+        const active = k === tab;
+        document.getElementById(tabs[k].sec).classList.toggle('hidden', !active);
+        document.getElementById(tabs[k].btn).className = active
+          ? 'py-2 px-4 border-b-2 font-medium transition text-teal-600 border-teal-600'
+          : 'py-2 px-4 border-b-2 font-medium transition text-gray-500 hover:text-gray-700 border-transparent';
       });
 
-      // BARU - Refresh daftar No PO tiap kali tab Input dibuka, biar
-      // PO yang baru diinput PPIC ikut kebawa tanpa perlu reload halaman.
+      // Refresh daftar No PO tiap kali tab Input dibuka.
       if (tab === 'input') loadPurchaseOrders('inputNoPo');
     }
 
@@ -505,23 +543,26 @@
       const btn = document.getElementById('btnSimpanEdit');
       btn.disabled = true; btn.innerText = "Memperbarui...";
 
+      const num = id => parseFloat(document.getElementById(id).value) || 0;
+      const int = id => parseInt(document.getElementById(id).value) || 0;
+
       const payload = {
         ...activeCredentials,
         no_po: document.getElementById('editOldNoPo').value,
-        kg_dta: parseFloat(document.getElementById('editKgDta').value) || 0,
-        ekor_dta: parseInt(document.getElementById('editEkorDta').value) || 0,
-        kg_netto: parseFloat(document.getElementById('editKgNetto').value) || 0,
-        ayam_mati: parseInt(document.getElementById('editAyamMati').value) || 0,
-        kg_titik_nol: parseFloat(document.getElementById('editKgTitikNol').value) || 0,
-        kg_bulu_darah: parseFloat(document.getElementById('editKgBuluDarah').value) || 0,
-        kg_fg_bp: parseFloat(document.getElementById('editKgFgBp').value) || 0,
-        kg_by_product: parseFloat(document.getElementById('editKgByProduct').value) || 0,
-        pct_kw2: parseFloat(document.getElementById('editPctKw2').value) || 0,
-        pct_defect: parseFloat(document.getElementById('editPctDefect').value) || 0,
-        prod_griller: parseFloat(document.getElementById('editProdGriller').value) || 0,
-        prod_parting: parseFloat(document.getElementById('editProdParting').value) || 0,
-        prod_marinasi: parseFloat(document.getElementById('editProdMarinasi').value) || 0,
-        total_hasil: parseFloat(document.getElementById('editTotalHasil').value) || 0,
+        kg_dta: num('editKgDta'),
+        ekor_dta: int('editEkorDta'),
+        kg_netto: num('editKgNetto'),
+        ayam_mati: int('editAyamMati'),
+        kg_titik_nol: num('editKgTitikNol'),
+        kg_bulu_darah: num('editKgBuluDarah'),
+        kg_fg_bp: num('editKgFgBp'),
+        kg_by_product: num('editKgByProduct'),
+        pct_kw2: num('editPctKw2'),
+        pct_defect: num('editPctDefect'),
+        prod_griller: num('editProdGriller'),
+        prod_parting: num('editProdParting'),
+        prod_marinasi: num('editProdMarinasi'),
+        total_hasil: num('editTotalHasil'),
       };
 
       try {
@@ -555,132 +596,233 @@
     }
 
     function renderGridContainer(data, mode) {
-      const container = document.getElementById('yieldGridContainer');
-      const chartsGroup = document.getElementById('mainChartsGroup');
+      const container = document.getElementById('leftCardsContainer');
+      const statusEl = document.getElementById('finalYieldStatus');
+      const valueEl = document.getElementById('finalYieldValue');
+      const graphContent = document.getElementById('graphContent');
+      const emptyState = document.getElementById('emptyState');
 
       if (!data || data.length === 0) {
-        container.innerHTML = `<div class="col-span-3 text-center p-8 bg-white border border-gray-200 rounded-xl text-gray-400 font-medium">Tidak ada data transaksi ter-input pada koordinat tanggal tersebut. Dashboard Kosong.</div>`;
-        chartsGroup.classList.add('hidden');
-        document.getElementById('yieldChartsSection').classList.add('hidden');
+        container.innerHTML = '';
+        graphContent.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        statusEl.innerText = "-";
+        statusEl.className = "z-10 text-center leading-none font-black text-xl sm:text-2xl tracking-widest drop-shadow-md";
+        valueEl.innerText = "0%";
         return;
       }
 
-      chartsGroup.classList.remove('hidden');
-      let totalNetto = data.reduce((a, b) => a + b.kgNetto, 0);
-      let totalTitikNol = data.reduce((a, b) => a + b.kgTitikNol, 0);
-      let totalFg = data.reduce((a, b) => a + b.kgFgBp, 0);
-      let totalBp = data.reduce((a, b) => a + b.kgByProduct, 0);
-      let yTitikNol = totalNetto > 0 ? (totalTitikNol / totalNetto) * 100 : 0;
-      let yFg = totalNetto > 0 ? (totalFg / totalNetto) * 100 : 0;
-      let yBp = totalNetto > 0 ? (totalBp / totalNetto) * 100 : 0;
+      graphContent.classList.remove('hidden');
+      emptyState.classList.add('hidden');
 
-      const targetStandar = 73.00;
-      let achievement = yTitikNol > 0 ? (yTitikNol / targetStandar) * 100 : 0;
-      let achColor = achievement >= 100 ? 'text-emerald-600' : 'text-rose-600';
-      container.innerHTML = `
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Yield Titik Nol</div>
-          <div class="text-2xl font-bold text-teal-600 mt-1">${yTitikNol.toFixed(2)}%</div>
-          <div class="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-xs">
-            <span class="text-gray-400">Standar: <b class="text-gray-600">${targetStandar.toFixed(2)}%</b></span>
-            <span class="font-bold ${achColor}">Ach: ${achievement.toFixed(1)}%</span>
+      const totalNetto = data.reduce((a, b) => a + b.kgNetto, 0);
+      const totalTitikNol = data.reduce((a, b) => a + b.kgTitikNol, 0);
+      const totalFg = data.reduce((a, b) => a + b.kgFgBp, 0);
+      const totalBp = data.reduce((a, b) => a + b.kgByProduct, 0);
+
+      const yTitikNol = totalNetto > 0 ? (totalTitikNol / totalNetto) * 100 : 0;
+      const yFg = totalNetto > 0 ? (totalFg / totalNetto) * 100 : 0;
+      const yBp = totalNetto > 0 ? (totalBp / totalNetto) * 100 : 0;
+      const yFinal = yFg + yBp;
+
+      const stdTitikNol = 73.00, stdFgBp = 73.00, stdBp = 20.00, stdFinal = 93.00;
+
+      const achTitikNol = (yTitikNol / stdTitikNol) * 100;
+      const achFgBp = (yFg / stdFgBp) * 100;
+      const achBp = (yBp / stdBp) * 100;
+
+      const colorTN = yTitikNol >= stdTitikNol ? 'text-emerald-600' : 'text-rose-600';
+      const colorFG = yFg >= stdFgBp ? 'text-emerald-600' : 'text-rose-600';
+      const colorBP = yBp >= stdBp ? 'text-emerald-600' : 'text-rose-600';
+
+      const kpiCard = (label, val, color, std, ach) => `
+        <div class="bg-white text-gray-700 p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">${label}</div>
+          <div class="text-3xl font-bold ${color} mb-1">${val.toFixed(2)}%</div>
+          <div class="text-[11px] font-medium text-gray-500 border-t border-gray-100 pt-2 mt-auto">
+            Standar: <span class="font-bold text-gray-700">${std.toFixed(2)}%</span> &bull; Ach: <span class="font-bold ${color}">${ach.toFixed(1)}%</span>
           </div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Yield Finished Goods + BP Others</div>
-          <div class="text-2xl font-bold text-amber-600 mt-1">${yFg.toFixed(2)}%</div>
-          <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">Kumulatif Hasil / Total Netto</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div class="text-xs text-gray-500 font-semibold uppercase tracking-wider">Yield By Product</div>
-          <div class="text-2xl font-bold text-rose-600 mt-1">${yBp.toFixed(2)}%</div>
-          <div class="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">Sampingan Proses Produksi</div>
-        </div>
-      `;
+        </div>`;
+
+      container.innerHTML =
+        kpiCard('Yield Titik Nol', yTitikNol, colorTN, stdTitikNol, achTitikNol) +
+        kpiCard('Yield FG & BP Others', yFg, colorFG, stdFgBp, achFgBp) +
+        kpiCard('Yield By Product', yBp, colorBP, stdBp, achBp);
+
+      valueEl.innerText = yFinal.toFixed(2) + '%';
+      if (yFinal >= stdFinal) {
+        statusEl.innerText = "ACHIEVE";
+        statusEl.className = "font-black text-xl sm:text-2xl uppercase tracking-widest neon-green z-10 mt-1 drop-shadow-md";
+      } else {
+        statusEl.innerText = "NOT ACHIEVE";
+        statusEl.className = "font-black text-base sm:text-lg uppercase tracking-widest neon-red z-10 mt-1 drop-shadow-md";
+      }
     }
 
-    function getLabelConfig(color = '#374151') {
-      return { display: true, align: 'top', anchor: 'end', color: color, font: { size: 9, weight: 'bold' }, formatter: (val) => val.toFixed(1) + '%' };
-    }
+    const getCommonTrendOptions = (hideLegend = false) => ({
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 10 } } },
+        y: { grid: { color: '#f3f4f6', borderDash: [5, 5] }, ticks: { color: '#9ca3af', font: { size: 10 } } }
+      },
+      plugins: {
+        legend: { display: !hideLegend, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#6b7280' } },
+        datalabels: { display: false }
+      }
+    });
+
+    const lineDS = (label, data, color, bg) => ({
+      label, data, borderColor: color, backgroundColor: bg, borderWidth: 3, tension: 0.4, fill: true,
+      pointBackgroundColor: '#ffffff', pointBorderColor: color, pointRadius: 4, pointHoverRadius: 6
+    });
 
     function renderCharts(data, mode, filterValue) {
-      ['pie', 'lineTN', 'lineFG', 'lineBP', 'area'].forEach(k => { if (charts[k]) { charts[k].destroy(); charts[k] = null; } });
-      if (!data || data.length === 0) return;
+      ['pie', 'lineTN', 'lineFG', 'lineBP', 'area', 'trendFinal', 'dailyBar'].forEach(k => {
+        if (charts[k]) { charts[k].destroy(); charts[k] = null; }
+      });
+      if (!data || data.length === 0) {
+        document.getElementById('dailyDetailContent').innerHTML = '';
+        return;
+      }
 
-      const wrapper = document.getElementById('qualityChartWrapper');
-      if (wrapper) { wrapper.innerHTML = '<canvas id="areaChart"></canvas>'; }
-
-      let chartLabels = data.map(d => {
+      const chartLabels = data.map(d => {
         if (mode === 'bulanan') { const parts = d.tanggal.split('-'); return parts.length === 3 ? parts[2] : d.tanggal; }
+        if (mode === 'harian') return d.noPo;
         return d.tanggal;
       });
 
-      let griller = data.reduce((a,b) => a + b.prodGriller, 0);
-      let parting = data.reduce((a,b) => a + b.prodParting, 0);
-      let marinasi = data.reduce((a,b) => a + b.prodMarinasi, 0);
-      let totalHasil = data.reduce((a,b) => a + b.totalHasil, 0);
+      const griller = data.reduce((a, b) => a + b.prodGriller, 0);
+      const parting = data.reduce((a, b) => a + b.prodParting, 0);
+      const marinasi = data.reduce((a, b) => a + b.prodMarinasi, 0);
+      const totalHasil = data.reduce((a, b) => a + b.totalHasil, 0);
 
-      const ctxPie = document.getElementById('pieChart').getContext('2d');
-      charts.pie = new Chart(ctxPie, {
+      charts.pie = new Chart(document.getElementById('pieChart').getContext('2d'), {
         type: 'pie',
         data: {
           labels: ['Griller', 'Parting', 'Marinasi'],
-          datasets: [{ data: totalHasil > 0 ? [(griller/totalHasil)*100, (parting/totalHasil)*100, (marinasi/totalHasil)*100] : [0,0,0], backgroundColor: ['#0d9488', '#d97706', '#e11d48'] }]
+          datasets: [{
+            data: totalHasil > 0 ? [(griller / totalHasil) * 100, (parting / totalHasil) * 100, (marinasi / totalHasil) * 100] : [0, 0, 0],
+            backgroundColor: ['#8bb4ba', '#e48385', '#eeb142'],
+            borderWidth: 2, borderColor: '#ffffff'
+          }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
-            legend: { labels: { color: '#374151' } },
-            datalabels: { color: '#fff', font: { weight: 'bold', size: 11 }, formatter: (value) => value > 0 ? value.toFixed(1) + '%' : '' }
+            legend: { position: 'bottom', labels: { color: '#6b7280', usePointStyle: true, boxWidth: 8 } },
+            datalabels: { color: '#fff', font: { weight: 'bold', size: 10 }, formatter: (value) => value > 0 ? value.toFixed(1) + '%' : '' }
           }
         }
       });
 
-      const yieldSection = document.getElementById('yieldChartsSection');
-      if (mode === 'bulanan' || mode === 'tahunan') {
-        if (yieldSection) yieldSection.classList.remove('hidden');
-        const chartOptions = (color) => ({
-          responsive: true, maintainAspectRatio: false,
-          scales: { x: { ticks: { color: '#4b5563', autoSkip: false, maxRotation: 0, minRotation: 0, font: { size: 9 } } }, y: { ticks: { color: '#4b5563' } } },
-          plugins: { legend: { labels: { color: '#374151' } }, datalabels: getLabelConfig(color) }
-        });
-        charts.lineTN = new Chart(document.getElementById('lineChartTitikNol').getContext('2d'), {
-          type: 'line', data: { labels: chartLabels, datasets: [{ label: 'Titik Nol', data: data.map(d => d.yieldTitikNol), borderColor: '#0d9488', tension: 0.1, fill: false }] }, options: chartOptions('#0d9488')
-        });
-        charts.lineFG = new Chart(document.getElementById('lineChartFgBp').getContext('2d'), {
-          type: 'line', data: { labels: chartLabels, datasets: [{ label: 'FG + BP Others', data: data.map(d => d.yieldFgBp), borderColor: '#d97706', tension: 0.1, fill: false }] }, options: chartOptions('#d97706')
-        });
-        charts.lineBP = new Chart(document.getElementById('lineChartByProduct').getContext('2d'), {
-          type: 'line', data: { labels: chartLabels, datasets: [{ label: 'By Product', data: data.map(d => d.yieldByProduct), borderColor: '#e11d48', tension: 0.1, fill: false }] }, options: chartOptions('#e11d48')
-        });
-      } else {
-        if (yieldSection) yieldSection.classList.add('hidden');
-      }
+      const trendFinalYieldData = data.map(d => {
+        const yFG = d.kgNetto > 0 ? (d.kgFgBp / d.kgNetto) * 100 : 0;
+        const yBP = d.kgNetto > 0 ? (d.kgByProduct / d.kgNetto) * 100 : 0;
+        return yFG + yBP;
+      });
 
-      const ctxArea = document.getElementById('areaChart').getContext('2d');
-      const baseOptions = {
-        responsive: true, maintainAspectRatio: false,
-        scales: { x: { ticks: { color: '#4b5563', autoSkip: false, font: { size: 9 } } }, y: { beginAtZero: true, ticks: { color: '#4b5563' } } },
-        plugins: { legend: { labels: { color: '#374151' } } }
-      };
+      const trendCanvas = document.getElementById('trendFinalYieldChart');
+      const dailyBarCanvas = document.getElementById('dailyBarChart');
+      const middleTitle = document.getElementById('middleChartTitle');
+      const bottomDefectSection = document.getElementById('bottomDefectSection');
+      const dailyDetailSection = document.getElementById('dailyDetailSection');
+      const yieldSection = document.getElementById('yieldChartsSection');
 
       if (mode === 'harian') {
-        charts.area = new Chart(ctxArea, {
+        trendCanvas.classList.add('hidden');
+        dailyBarCanvas.classList.remove('hidden');
+        middleTitle.innerText = "Monitoring Defect & Persen KW 2";
+        bottomDefectSection.classList.add('hidden');
+        dailyDetailSection.classList.remove('hidden');
+        yieldSection.classList.add('hidden');
+
+        charts.dailyBar = new Chart(dailyBarCanvas.getContext('2d'), {
           type: 'bar',
-          data: { labels: chartLabels, datasets: [
-            { label: '% Defect Proses', data: data.map(d => d.pctDefect), backgroundColor: '#e11d48' },
-            { label: '% KW 2 / Griller PR', data: data.map(d => d.pctKw2), backgroundColor: '#7c3aed' }
-          ] },
-          options: { ...baseOptions, plugins: { ...baseOptions.plugins, datalabels: { display: true, align: 'top', anchor: 'end', color: '#374151', font: { size: 10, weight: 'bold' }, formatter: (val) => (val > 0) ? val.toFixed(1) + '%' : '0%' } } }
+          data: {
+            labels: chartLabels,
+            datasets: [
+              { label: '% Defect Proses', data: data.map(d => d.pctDefect), backgroundColor: '#e11d48', borderRadius: 4 },
+              { label: '% KW 2 / Griller PR', data: data.map(d => d.pctKw2), backgroundColor: '#7c3aed', borderRadius: 4 }
+            ]
+          },
+          options: {
+            ...getCommonTrendOptions(),
+            plugins: {
+              ...getCommonTrendOptions().plugins,
+              datalabels: { display: true, align: 'top', anchor: 'end', color: '#374151', font: { size: 10, weight: 'bold' }, formatter: (val) => (val > 0) ? val.toFixed(1) + '%' : '0%' }
+            }
+          }
         });
+
+        // Detail per PO (semua PO di hari tsb ditampilkan)
+        const createCard = (label, value, colorClass = "text-gray-800") => `
+          <div class="bg-gray-50 p-2.5 rounded-lg border border-gray-100 flex flex-col items-center justify-center text-center shadow-sm">
+            <span class="text-[9px] uppercase text-gray-500 font-bold tracking-wider mb-1">${label}</span>
+            <span class="font-bold text-sm ${colorClass}">${value}</span>
+          </div>`;
+        const fmt = v => (v || v === 0) ? Number(v).toLocaleString() : '0';
+
+        document.getElementById('dailyDetailContent').innerHTML = data.map(d => `
+          <div>
+            <div class="text-xs font-bold text-blue-600 mb-2">No PO: ${d.noPo}</div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-sm">
+              ${createCard('Kg DTA', fmt(d.kgDta))}
+              ${createCard('Ekor DTA', fmt(d.ekorDta))}
+              ${createCard('Kg Netto', fmt(d.kgNetto))}
+              ${createCard('Mati', fmt(d.ayamMati), 'text-rose-600')}
+              ${createCard('ABW', d.abw ? d.abw.toFixed(2) : '0', 'text-teal-600')}
+              ${createCard('Kg Susut', fmt(d.kgSusut), 'text-amber-600')}
+              ${createCard('% Susut', d.pctSusut ? d.pctSusut.toFixed(2) + '%' : '0%', 'text-rose-600')}
+              ${createCard('Kg TN', fmt(d.kgTitikNol))}
+              ${createCard('Kg BD', fmt(d.kgBuluDarah))}
+              ${createCard('Kg FG+BP', fmt(d.kgFgBp))}
+              ${createCard('Kg BP', fmt(d.kgByProduct))}
+              ${createCard('% KW2', (d.pctKw2 ?? 0) + '%')}
+              ${createCard('% Defect', (d.pctDefect ?? 0) + '%')}
+              <div class="bg-teal-50 p-2.5 rounded-lg border border-teal-200 flex flex-col items-center justify-center text-center shadow-sm">
+                <span class="text-[9px] uppercase text-teal-600 font-bold tracking-wider mb-1">Total Hasil</span>
+                <span class="font-bold text-sm text-teal-800">${fmt(d.totalHasil)}</span>
+              </div>
+            </div>
+          </div>`).join('');
       } else {
-        charts.area = new Chart(ctxArea, {
+        trendCanvas.classList.remove('hidden');
+        dailyBarCanvas.classList.add('hidden');
+        middleTitle.innerText = "Trend Final Yield";
+        bottomDefectSection.classList.remove('hidden');
+        dailyDetailSection.classList.add('hidden');
+        yieldSection.classList.remove('hidden');
+
+        charts.trendFinal = new Chart(trendCanvas.getContext('2d'), {
           type: 'line',
-          data: { labels: chartLabels, datasets: [
-            { label: '% Defect Proses', data: data.map(d => d.pctDefect), backgroundColor: 'rgba(225, 29, 72, 0.15)', borderColor: '#e11d48', fill: true },
-            { label: '% KW 2 / Griller PR', data: data.map(d => d.pctKw2), backgroundColor: 'rgba(124, 58, 237, 0.15)', borderColor: '#7c3aed', fill: true }
-          ] },
-          options: { ...baseOptions, scales: { x: { stacked: true, ticks: { color: '#4b5563', autoSkip: false } }, y: { stacked: true, ticks: { color: '#4b5563' } } }, plugins: { ...baseOptions.plugins, datalabels: { display: true, align: 'center', anchor: 'center', color: '#374151', font: { size: 9, weight: 'bold' }, formatter: (val) => (val > 0) ? val.toFixed(1) + '%' : '' } } }
+          data: { labels: chartLabels, datasets: [lineDS('Final Yield (%)', trendFinalYieldData, '#eeb142', 'rgba(238, 177, 66, 0.1)')] },
+          options: getCommonTrendOptions(true)
+        });
+        charts.lineTN = new Chart(document.getElementById('lineChartTitikNol').getContext('2d'), {
+          type: 'line',
+          data: { labels: chartLabels, datasets: [lineDS('Titik Nol', data.map(d => d.yieldTitikNol), '#0d9488', 'rgba(13, 148, 136, 0.1)')] },
+          options: getCommonTrendOptions(true)
+        });
+        charts.lineFG = new Chart(document.getElementById('lineChartFgBp').getContext('2d'), {
+          type: 'line',
+          data: { labels: chartLabels, datasets: [lineDS('FG + BP Others', data.map(d => d.yieldFgBp), '#d97706', 'rgba(217, 119, 6, 0.1)')] },
+          options: getCommonTrendOptions(true)
+        });
+        charts.lineBP = new Chart(document.getElementById('lineChartByProduct').getContext('2d'), {
+          type: 'line',
+          data: { labels: chartLabels, datasets: [lineDS('By Product', data.map(d => d.yieldByProduct), '#e11d48', 'rgba(225, 29, 72, 0.1)')] },
+          options: getCommonTrendOptions(true)
+        });
+        charts.area = new Chart(document.getElementById('areaChart').getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: chartLabels,
+            datasets: [
+              lineDS('% Defect Proses', data.map(d => d.pctDefect), '#e11d48', 'rgba(225, 29, 72, 0.15)'),
+              lineDS('% KW 2 / Griller PR', data.map(d => d.pctKw2), '#7c3aed', 'rgba(124, 58, 237, 0.15)')
+            ]
+          },
+          options: getCommonTrendOptions(false)
         });
       }
     }
@@ -705,13 +847,13 @@
         return;
       }
 
-      data.forEach(d => {
-        const hiddenClass = hasEditAccess ? "" : "hidden";
+      const hiddenClass = hasEditAccess ? "" : "hidden";
+      tbody.innerHTML = data.map(d => {
         let displayDate = d.tanggal;
         if (mode === 'bulanan') { const parts = d.tanggal.split('-'); if (parts.length === 3) displayDate = parts[2]; }
 
-        tbody.innerHTML += `
-          <tr class="hover:bg-gray-50 transition">
+        return `
+          <tr class="hover:bg-gray-50 transition border-b border-gray-100">
             <td class="p-2.5 font-semibold text-blue-600">${d.noPo}</td>
             <td class="p-2.5 font-medium text-gray-800">${displayDate}</td>
             <td class="p-2.5">${d.kgDta.toLocaleString()}</td>
@@ -729,11 +871,10 @@
             <td class="p-2.5">${d.pctDefect}%</td>
             <td class="p-2.5 font-bold text-gray-800">${d.totalHasil.toLocaleString()}</td>
             <td class="p-2.5 text-center action-column ${hiddenClass}">
-              <button onclick="openEditModal('${d.noPo}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded text-[10px] transition">Edit Baris</button>
+              <button onclick="openEditModal('${d.noPo}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded text-[10px] transition shadow-sm">Edit Baris</button>
             </td>
-          </tr>
-        `;
-      });
+          </tr>`;
+      }).join('');
     }
 
     function downloadPDF() {
