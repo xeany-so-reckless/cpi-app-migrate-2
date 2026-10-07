@@ -218,6 +218,8 @@
         </form>
 
         <a href="{{ route('warehouse.dashboard') }}" class="back-link">← Kembali ke Warehouse Console</a>
+
+        <x-logout-warning />
     </div>
 
     <div class="visual-side">

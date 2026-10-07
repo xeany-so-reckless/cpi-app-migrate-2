@@ -39,18 +39,6 @@ class WarehouseDashboardController extends Controller
                 "url"  => "#",
             ],
             [
-                "name" => "Produk Fresh",
-                "icon" => "handshake",
-                "info" => "Transaksi barang fresh yang tidak masuk Cell gudang",
-                "url"  => "#",
-            ],
-            [
-                "name" => "Transfer Cell",
-                "icon" => "swap_horiz",
-                "info" => "Pemindahan stock antar Cell - untuk kasus overstock atau relokasi",
-                "url"  => "#",
-            ],
-            [
                 "name" => "E-GMP",
                 "icon" => "shield_lock",
                 "info" => "Web GMP Patrol: Digitalisasi audit, pantau kepatuhan real-time, dan pelaporan instan",
