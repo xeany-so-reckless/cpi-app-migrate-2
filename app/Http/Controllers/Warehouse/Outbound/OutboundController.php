@@ -116,10 +116,15 @@ class OutboundController extends Controller
      * Daftar Cell untuk dropdown "Kode Cell" di form Outbound. Cuma
      * menampilkan Cell yang benar-benar ada stock-nya (stockBag() > 0) -
      * Cell kosong tidak ada gunanya dipilih untuk dikeluarkan barangnya.
+     *
+     * REVISI STEP 8: tambah info nama produk yang sedang mengunci Cell
+     * (currentProduct) ke response - murni tambahan informasi untuk UX
+     * Checker, tidak mengubah logic filter stockBag() > 0 yang sudah ada.
      */
     public function listCellsWithStock(): JsonResponse
     {
-        $cells = Cell::where('is_active', true)
+        $cells = Cell::with('currentProduct:id,code,name')
+            ->where('is_active', true)
             ->orderBy('kode_cell')
             ->get()
             ->filter(fn (Cell $cell) => $cell->stockBag() > 0)
@@ -130,6 +135,7 @@ class OutboundController extends Controller
                 'lantai'      => $cell->lantai,
                 'stockBag'    => $cell->stockBag(),
                 'stockKg'     => round($cell->stockKg(), 2),
+                'produkNama'  => $cell->currentProduct->name ?? null,
             ])
             ->values();
 
@@ -249,6 +255,11 @@ class OutboundController extends Controller
      * Proses 1 Cell dalam 1 DO: validasi ulang bag yang dicentang masih
      * benar-benar tersedia (anti race-condition/manipulasi), lalu buat
      * 1 baris cell_stock_adjustment (sumber='outbound') + detail bag-nya.
+     *
+     * REVISI STEP 8: di ujung method ini, setelah adjustment tercatat,
+     * dipanggil $cell->releaseJikaKosong() - supaya begitu barang yang
+     * keluar membuat stock fisik Cell ini jadi 0, kunci current_product_id
+     * otomatis dilepas dan Cell ini kembali terbuka untuk produk apapun.
      */
     private function processCellOutbound(OutboundShipment $shipment, array $cellInput): void
     {
@@ -368,6 +379,11 @@ class OutboundController extends Controller
                 'outbound_shipment_cell_id' => $shipmentCell->id,
             ]));
         }
+
+        // STEP 8 - stock Cell ini baru saja berkurang (bisa jadi sampai
+        // 0 kalau ini pengeluaran terakhir). Cek & lepas kunci produk
+        // kalau memang sudah kosong sekarang.
+        $cell->releaseJikaKosong();
     }
 
     /**

@@ -357,12 +357,12 @@
                         Pilih Cell tujuan sebelum Tally Produksi input trolly. Sistem akan hitung otomatis sisa kapasitas & maksimal bag yang boleh masuk.
                     </p>
 
-                    <div class="mb-2">
-                        <label>Pilih Cell</label>
-                        <select id="wh_cell_id" class="form-select">
-                            <option value="">-- Memuat daftar cell... --</option>
-                        </select>
-                    </div>
+                    <div class="mb-2" style="position: relative;">
+    <label>Pilih Cell</label>
+    <input type="text" id="wh_cell_search" class="form-control" placeholder="Ketik kode cell (mis. 1A02)..." autocomplete="off">
+    <input type="hidden" id="wh_cell_id" value="">
+    <div id="wh_cell_dropdown" class="list-group shadow-sm" style="position:absolute; z-index:1000; width:100%; max-height:260px; overflow-y:auto; display:none;"></div>
+</div>
 
                     <button id="btnBuatReservasi" class="btn btn-primary w-100 fw-bold" onclick="submitWhReservation()">
                         <i class="fa-solid fa-plus me-1"></i> Buat Reservasi
@@ -465,7 +465,7 @@
         let verifiedNamaItem = "";
         let currentReservations = []; // daftar reservasi PENDING untuk dropdown TPR
         let selectedReservationMaxBag = null;
-        let selectedReservationProdukCodes = null; // null = belum pilih reservasi (belum bisa divalidasi)
+        let selectedReservationProdukCode = null;
 
         async function apiFetch(url, options = {}) {
             const response = await fetch(url, {
@@ -511,24 +511,62 @@
 
         // ============ RESERVASI CELL - SISI TALLY GUDANG (TWH) ============
 
-        async function loadWhCellOptions() {
-            const select = document.getElementById('wh_cell_id');
-            if (!select) return;
-            select.innerHTML = `<option value="">-- Memuat... --</option>`;
-            try {
-                const cells = await apiFetch(`/serah-terima/cells`);
-                if (cells.length === 0) {
-                    select.innerHTML = `<option value="">Tidak ada Cell aktif</option>`;
-                    return;
-                }
-                select.innerHTML = `<option value="">-- Pilih Cell --</option>` + cells.map(c =>
-                    `<option value="${c.id}" ${c.sisa <= 0 ? 'disabled' : ''}>${c.kode_cell} (Sisa: ${c.sisa}/${c.kapasitas_max} Bag)${c.sisa <= 0 ? ' - PENUH' : ''}</option>`
-                ).join('');
-            } catch (err) {
-                select.innerHTML = `<option value="">Gagal memuat cell</option>`;
-                console.error(err);
-            }
-        }
+        let allCellsData = []; // simpan hasil fetch, dipakai untuk filter
+
+async function loadWhCellOptions() {
+    const searchInput = document.getElementById('wh_cell_search');
+    searchInput.value = '';
+    document.getElementById('wh_cell_id').value = '';
+    try {
+        allCellsData = await apiFetch(`/serah-terima/cells`);
+    } catch (err) {
+        allCellsData = [];
+        console.error(err);
+    }
+}
+
+function renderCellDropdown(filterText) {
+    const dropdown = document.getElementById('wh_cell_dropdown');
+    const keyword = filterText.trim().toUpperCase();
+
+    const hasil = keyword === ''
+        ? allCellsData
+        : allCellsData.filter(c => c.kode_cell.toUpperCase().includes(keyword));
+
+    if (hasil.length === 0) {
+        dropdown.innerHTML = `<div class="list-group-item text-muted small">Cell tidak ditemukan</div>`;
+        dropdown.style.display = 'block';
+        return;
+    }
+
+    dropdown.innerHTML = hasil.map(c => {
+        const statusProduk = c.is_kosong ? '<span class="text-success">Kosong</span>' : `<span class="text-danger">Terkunci: ${c.produk_name}</span>`;
+        const disabled = c.sisa <= 0 ? 'text-muted' : '';
+        return `<button type="button" class="list-group-item list-group-item-action ${disabled}" style="font-size:12px;" ${c.sisa <= 0 ? 'disabled' : ''} onclick="pilihCell(${c.id}, '${c.kode_cell}')">
+            <b>${c.kode_cell}</b> - ${statusProduk} - Sisa: ${c.sisa}/${c.kapasitas_max} Bag${c.sisa <= 0 ? ' (PENUH)' : ''}
+        </button>`;
+    }).join('');
+    dropdown.style.display = 'block';
+}
+
+function pilihCell(id, kodeCell) {
+    document.getElementById('wh_cell_id').value = id;
+    document.getElementById('wh_cell_search').value = kodeCell;
+    document.getElementById('wh_cell_dropdown').style.display = 'none';
+}
+
+document.getElementById('wh_cell_search')?.addEventListener('input', (e) => {
+    document.getElementById('wh_cell_id').value = ''; // reset pilihan kalau user ngetik ulang
+    renderCellDropdown(e.target.value);
+});
+document.getElementById('wh_cell_search')?.addEventListener('focus', (e) => renderCellDropdown(e.target.value));
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('wh_cell_dropdown');
+    if (!dropdown) return;
+    if (!e.target.closest('#wh_cell_search') && !e.target.closest('#wh_cell_dropdown')) {
+        dropdown.style.display = 'none';
+    }
+});
 
         async function submitWhReservation() {
             const cellId = document.getElementById('wh_cell_id').value;
@@ -601,7 +639,7 @@
 
             if (!select.value) {
                 selectedReservationMaxBag = null;
-                selectedReservationProdukCodes = null;
+                selectedReservationProdukCode = null;
                 preview.innerText = "";
                 qtyInput.removeAttribute('max');
                 hint.innerText = "";
@@ -614,7 +652,7 @@
             selectedReservationMaxBag = maxBag;
 
             const reservationData = currentReservations.find(r => String(r.id) === String(select.value));
-            selectedReservationProdukCodes = reservationData ? reservationData.produk_codes : [];
+selectedReservationProdukCode = reservationData ? reservationData.produk_code : null;
 
             preview.innerHTML = `✓ Cell <b>${kodeCell}</b> dipilih, maksimal <b>${maxBag} Bag</b>`;
             preview.style.color = "#0f7a3d";
@@ -641,7 +679,7 @@
             // produk ini terdaftar untuk Cell reservasi yang sedang dipilih
             // (kalau reservasinya sudah dipilih) - validasi real-time,
             // tanpa perlu submit dulu untuk tahu gagal.
-            if (selectedReservationProdukCodes !== null && !selectedReservationProdukCodes.includes(kode)) {
+            if (selectedReservationProdukCode !== null && selectedReservationProdukCode !== kode) {
                 verifiedNamaItem = "";
                 previewDiv.innerHTML = `❌ "${MASTER_ITEM_LOCAL[kode]}" TIDAK terdaftar untuk Cell reservasi ini!`;
                 previewDiv.style.color = "#c0392b";
@@ -884,7 +922,7 @@
             const resSelect = document.getElementById('p_reservation_id');
             if (resSelect) resSelect.value = "";
             selectedReservationMaxBag = null;
-            selectedReservationProdukCodes = null;
+            selectedReservationProdukCode = null;
             const preview = document.getElementById('reservation_info_preview');
             if (preview) preview.innerText = "";
             const hint = document.getElementById('qty_max_hint');

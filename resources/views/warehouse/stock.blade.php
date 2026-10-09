@@ -581,10 +581,10 @@ opts.kategori
             tbody.innerHTML = data.map(d => {
                 const kodeChips = d.produk.length > 0
                     ? d.produk.map(p => `<span class="produk-chip">${p.code}</span>`).join('')
-                    : `<span class="produk-chip">-</span>`;
+                    : `<span class="produk-chip" style="opacity:.6;">Kosong</span>`;
                 const namaChips = d.produk.length > 0
                     ? d.produk.map(p => `<span class="produk-chip">${p.name}</span>`).join('')
-                    : `<span class="produk-chip">-</span>`;
+                    : `<span class="produk-chip" style="opacity:.6;">Kosong</span>`;
 
                 const fmt = (v) => (v === null || v === undefined || v === '-') ? '-' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: 1 });
 

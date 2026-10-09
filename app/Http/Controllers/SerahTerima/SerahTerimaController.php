@@ -150,20 +150,29 @@ class SerahTerimaController extends Controller
 
     /**
      * BARU - Daftar Cell aktif beserta sisa kapasitas live saat ini.
-     * Dipakai untuk dropdown TWH saat mau membuat reservasi baru, supaya
-     * bisa lihat dulu Cell mana yang masih ada sisa sebelum pilih.
+     * Dipakai untuk dropdown TWH saat mau membuat reservasi baru.
+     *
+     * REVISI STEP 7: tambah info status lock produk (kode_cell mana yang
+     * kosong vs sedang terkunci ke produk apa) - sesuai opsi A: TWH tetap
+     * boleh reservasi Cell manapun (termasuk yang terkunci produk lain),
+     * validasi keras baru terjadi nanti di store() saat TPR submit. Info
+     * ini murni supaya TWH bisa milih dengan sadar dari sisi UI.
      */
     public function listCells(Request $request): JsonResponse
     {
         $cells = Cell::query()
+            ->with('currentProduct:id,code,name')
             ->where('is_active', true)
             ->orderBy('kode_cell')
             ->get()
             ->map(fn (Cell $c) => [
-                'id'            => $c->id,
-                'kode_cell'     => $c->kode_cell,
-                'kapasitas_max' => $c->kapasitas_max,
-                'sisa'          => $c->sisaKapasitas(),
+                'id'                => $c->id,
+                'kode_cell'         => $c->kode_cell,
+                'kapasitas_max'     => $c->kapasitasBagUntukProduk($c->currentProduct),
+                'sisa'              => $c->sisaKapasitas(),
+                'is_kosong'         => $c->isKosong(),
+                'produk_code'       => $c->currentProduct->code ?? null,
+                'produk_name'       => $c->currentProduct->name ?? null,
             ]);
 
         return response()->json($cells);
@@ -226,10 +235,15 @@ class SerahTerimaController extends Controller
     /**
      * BARU - Daftar reservasi Cell yang masih PENDING (belum dipakai TPR),
      * dipakai untuk dropdown di form input Tally Produksi.
+     *
+     * REVISI STEP 7: `produk_codes` (array, dari pivot product_cell)
+     * diganti jadi `produk_code` tunggal (string kode produk yang sedang
+     * mengunci Cell ini, atau null kalau Cell masih kosong/bebas produk
+     * apapun) - mengikuti model lock per kode produk spesifik.
      */
     public function listCellReservations(Request $request): JsonResponse
     {
-        $reservations = CellReservation::with(['cell.products'])
+        $reservations = CellReservation::with(['cell.currentProduct:id,code'])
             ->where('status', 'PENDING')
             ->orderBy('created_at')
             ->get()
@@ -239,10 +253,9 @@ class SerahTerimaController extends Controller
                 'max_bag_allowed' => $r->max_bag_allowed,
                 'dibuat_oleh'     => $r->createdBy->name ?? '-',
                 'dibuat_pada'     => $r->created_at->format('d/m/Y H:i'),
-                // Kode produk yang sah untuk Cell reservasi ini (Master
-                // Produk-Cell), dipakai frontend untuk validasi real-time
-                // saat TPR ketik Kode Item - tanpa perlu submit dulu.
-                'produk_codes'    => $r->cell->products->pluck('code')->values(),
+                // null = Cell ini masih kosong, boleh produk apapun.
+                // Diisi = Cell ini SUDAH terkunci ke 1 kode produk itu saja.
+                'produk_code'     => $r->cell->currentProduct->code ?? null,
             ]);
 
         return response()->json($reservations);
@@ -250,9 +263,12 @@ class SerahTerimaController extends Controller
 
     /**
      * Menggantikan saveDataTallyProduksi() di code.gs.
-     * REVISI: sekarang wajib pilih reservation_id (dibuat TWH duluan).
-     * jumlah_bag dibatasi oleh max_bag_allowed reservasi, dan produk yang
-     * dipilih harus terdaftar untuk Cell reservasi tsb (Master Produk-Cell).
+     * REVISI STEP 7: validasi produk-cell sekarang pakai
+     * Cell::bisaMenerimaProduk() (lock dinamis per kode produk), bukan
+     * lagi pivot product_cell statis. Cell dikunci ke produk ini
+     * (Cell::lockKeProduk()) setelah batch berhasil disimpan. Dibungkus
+     * lockForUpdate() untuk cegah race condition 2 produk berbeda
+     * rebutan Cell kosong yang sama secara bersamaan.
      */
     public function store(Request $request): JsonResponse
     {
@@ -271,19 +287,6 @@ class SerahTerimaController extends Controller
             return response()->json(['message' => 'Kode item tidak ditemukan.'], 422);
         }
 
-        $produkBolehDiCell = $produk->cells()->where('cells.id', $reservation->cell_id)->exists();
-        if (! $produkBolehDiCell) {
-            return response()->json([
-                'message' => "Produk \"{$produk->name}\" tidak terdaftar untuk Cell {$reservation->cell->kode_cell}. Pilih reservasi Cell lain yang sesuai.",
-            ], 422);
-        }
-
-        if ($data['jumlah_bag'] > $reservation->max_bag_allowed) {
-            return response()->json([
-                'message' => "Jumlah bag ({$data['jumlah_bag']}) melebihi sisa kapasitas reservasi Cell {$reservation->cell->kode_cell} (maks {$reservation->max_bag_allowed} bag).",
-            ], 422);
-        }
-
         if ($this->isDuplicateTrolly($data['tanggal_produksi'], $data['no_trolly'])) {
             return response()->json([
                 'message' => 'Nomor Trolly sudah pernah dimasukkan pada kode produksi tanggal ini!',
@@ -297,6 +300,15 @@ class SerahTerimaController extends Controller
         $qrProdUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=100x100&data='.urlencode($qrText);
 
         $batch = DB::transaction(function () use ($data, $produk, $kodeProduksi, $qrProdUrl, $user, $reservation) {
+            // Lock row Cell di dalam transaksi - cegah 2 produk berbeda
+            // rebutan Cell kosong yang sama pada saat hampir bersamaan.
+            $cell = Cell::where('id', $reservation->cell_id)->lockForUpdate()->firstOrFail();
+
+            if (! $cell->bisaMenerimaProduk($produk)) {
+                $namaTerkunci = $cell->currentProduct->name ?? '-';
+                abort(422, "Produk \"{$produk->name}\" tidak bisa masuk Cell {$cell->kode_cell} - Cell ini sedang terkunci untuk produk \"{$namaTerkunci}\". Pilih reservasi Cell lain, atau tunggu Cell ini kosong.");
+            }
+
             $batch = new SerahTerimaBatch([
                 'kode_produksi'    => $kodeProduksi,
                 'tanggal_produksi' => $data['tanggal_produksi'],
@@ -305,7 +317,7 @@ class SerahTerimaController extends Controller
                 'jumlah_bag'       => $data['jumlah_bag'],
                 'status_approval'  => 'BELUM APPROVED',
                 'qr_prod_url'      => $qrProdUrl,
-                'kode_cell'        => $reservation->cell->kode_cell,
+                'kode_cell'        => $cell->kode_cell,
             ]);
 
             $this->applyBagSlots($batch, $data['jumlah_bag'], $data['kg_bags']);
@@ -316,6 +328,8 @@ class SerahTerimaController extends Controller
                 'status'   => 'USED',
                 'batch_id' => $batch->id,
             ]);
+
+            $cell->lockKeProduk($produk);
 
             return $batch;
         });
@@ -342,6 +356,12 @@ class SerahTerimaController extends Controller
      * CATATAN: koreksi TIDAK mengubah reservasi Cell (Cell & jumlah_bag
      * maksimalnya tetap terikat ke reservasi awal). Kalau jumlah_bag mau
      * dinaikkan melebihi max_bag_allowed reservasi awal, harus ditolak.
+     *
+     * REVISI STEP 7: validasi produk-cell pakai Cell::bisaMenerimaProduk().
+     * Karena batch ini SUDAH tercatat sebagai isi Cell tsb, produk yang
+     * sama dengan currentProduct Cell pasti lolos - baru jadi masalah
+     * kalau TPR coba ganti ke produk lain sementara Cell itu (secara
+     * data) masih terkunci ke produk lama/produk lain.
      */
     public function update(Request $request, SerahTerimaBatch $batch): JsonResponse
     {
@@ -372,16 +392,19 @@ class SerahTerimaController extends Controller
 
         $reservation = $batch->cellReservation;
         if ($reservation) {
-            $produkBolehDiCell = $produk->cells()->where('cells.id', $reservation->cell_id)->exists();
-            if (! $produkBolehDiCell) {
+            $cell = $reservation->cell;
+
+            if (! $cell->bisaMenerimaProduk($produk)) {
+                $namaTerkunci = $cell->currentProduct->name ?? '-';
+
                 return response()->json([
-                    'message' => "Produk \"{$produk->name}\" tidak terdaftar untuk Cell {$reservation->cell->kode_cell} (Cell reservasi batch ini). Hapus & buat ulang dengan reservasi baru kalau perlu ganti produk.",
+                    'message' => "Produk \"{$produk->name}\" tidak bisa dipakai di Cell {$cell->kode_cell} - Cell ini sedang terkunci untuk produk \"{$namaTerkunci}\". Hapus & buat ulang dengan reservasi baru kalau perlu ganti produk.",
                 ], 422);
             }
 
             if ($data['jumlah_bag'] > $reservation->max_bag_allowed) {
                 return response()->json([
-                    'message' => "Jumlah bag melebihi kapasitas reservasi Cell {$reservation->cell->kode_cell} (maks {$reservation->max_bag_allowed} bag).",
+                    'message' => "Jumlah bag melebihi kapasitas reservasi Cell {$cell->kode_cell} (maks {$reservation->max_bag_allowed} bag).",
                 ], 422);
             }
         }
@@ -398,6 +421,12 @@ class SerahTerimaController extends Controller
 
         $batch->status_approval = 'BELUM APPROVED';
         $batch->save();
+
+        // Kalau produk diganti lewat koreksi ini, kunci Cell ikut produk
+        // baru (Cell ini memang isinya cuma batch ini saja secara data).
+        if ($reservation) {
+            $reservation->cell->lockKeProduk($produk);
+        }
 
         ActivityLogger::log(
             'serah_terima',

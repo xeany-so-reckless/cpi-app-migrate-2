@@ -38,7 +38,7 @@ class StockController extends Controller
      */
     public function data(Request $request): JsonResponse
     {
-        $query = Cell::with(['products:id,code,name,category'])
+        $query = Cell::with(['currentProduct:id,code,name,category'])
             ->where('is_active', true);
 
         if ($request->filled('cold_storage')) {
@@ -51,14 +51,14 @@ class StockController extends Controller
 
         if ($request->filled('kategori')) {
             $kategori = $request->query('kategori');
-            $query->whereHas('products', fn ($q) => $q->where('category', $kategori));
+            $query->whereHas('currentProduct', fn ($q) => $q->where('category', $kategori));
         }
 
         if ($request->filled('search')) {
             $search = $request->query('search');
             $query->where(function ($q) use ($search) {
                 $q->where('kode_cell', 'like', "%{$search}%")
-                    ->orWhereHas('products', fn ($qq) => $qq->where('name', 'like', "%{$search}%")
+                    ->orWhereHas('currentProduct', fn ($qq) => $qq->where('name', 'like', "%{$search}%")
                         ->orWhere('code', 'like', "%{$search}%"));
             });
         }
@@ -155,9 +155,16 @@ class StockController extends Controller
             $pending = (int) ($pendingAgg[$c->id] ?? 0);
             $adjustment = (int) ($adjustmentAgg[$c->id] ?? 0);
             $terpakai = max(0, $used + $pending + $adjustment);
-            $sisa = max(0, $c->kapasitas_max - $terpakai);
-            $persenTerisi = $c->kapasitas_max > 0
-                ? round(($terpakai / $c->kapasitas_max) * 100, 1)
+
+            // REVISI STEP 8: kapasitas acuan sekarang dinamis mengikuti
+            // produk yang sedang mengunci Cell ini (fallback ke
+            // kapasitas_max statis kalau Cell kosong / kombinasi belum
+            // ada di standard_capacities) - lihat Cell::kapasitasBagUntukProduk().
+            $kapasitasBag = $c->kapasitasBagUntukProduk($c->currentProduct) ?? $c->kapasitas_max;
+
+            $sisa = max(0, $kapasitasBag - $terpakai);
+            $persenTerisi = $kapasitasBag > 0
+                ? round(($terpakai / $kapasitasBag) * 100, 1)
                 : 0;
 
             $usedKg = (float) ($usedKgAgg[$c->id] ?? 0);
@@ -194,7 +201,8 @@ class StockController extends Controller
                 'kodeCell'       => $c->kode_cell,
                 'coldStorage'    => $c->cold_storage,
                 'lantai'         => $c->lantai,
-                'kapasitasMax'   => $c->kapasitas_max,
+                'isKosong'       => $c->isKosong(),
+                'kapasitasMax'   => $kapasitasBag,
                 'terpakai'       => $terpakai,
                 'terpakaiUsed'   => $used,
                 'terpakaiPending'=> $pending,
@@ -206,11 +214,13 @@ class StockController extends Controller
                 'sisaKg'         => $sisaKg,
                 'persenTerisiKg' => $persenTerisiKg,
                 'breakdownWarna' => $breakdownWarna,
-                'produk'         => $c->products->map(fn (Product $p) => [
-                    'code'     => $p->code,
-                    'name'     => $p->name,
-                    'category' => $p->category,
-                ])->values(),
+                // REVISI STEP 8: dari occupant tunggal (currentProduct),
+                // bukan lagi relasi products() statis (banyak produk).
+                'produk'         => $c->currentProduct ? [[
+                    'code'     => $c->currentProduct->code,
+                    'name'     => $c->currentProduct->name,
+                    'category' => $c->currentProduct->category,
+                ]] : [],
             ];
         });
 
@@ -289,6 +299,14 @@ class StockController extends Controller
      *
      * Baris dengan kode cell yang tidak ditemukan di sistem di-skip
      * (bukan gagal total), dan dilaporkan balik ke frontend.
+     *
+     * CATATAN PENTING: fitur upload Excel ini TIDAK diubah logikanya
+     * sama sekali di Step 8 - ini fitur penyesuaian stok fisik rutin
+     * yang sudah ada, terpisah total dari mekanisme StandardCapacity
+     * (Step 4) yang cuma dipakai sekali untuk isi data master. Satu-
+     * satunya tambahan di method ini adalah panggilan
+     * $cell->releaseJikaKosong() di akhir setiap baris yang berhasil
+     * diproses.
      */
     public function uploadExcel(Request $request): JsonResponse
     {
@@ -424,6 +442,11 @@ class StockController extends Controller
                 'nama_file'             => $file->getClientOriginalName(),
                 'user_id'               => $user->id,
             ]);
+
+            // STEP 8 - hasil penyesuaian fisik baris ini bisa saja membuat
+            // stock Cell jadi 0 (misal audit gudang menemukan Cell ini
+            // ternyata sudah kosong). Cek & lepas kunci produk kalau iya.
+            $cell->releaseJikaKosong();
 
             $berhasil++;
         }

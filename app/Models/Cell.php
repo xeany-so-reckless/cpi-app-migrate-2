@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -12,8 +13,10 @@ class Cell extends Model
         'kode_cell',
         'cold_storage',
         'lantai',
+        'tipe_rak',
         'kapasitas_max',
         'kapasitas_max_kg',
+        'current_product_id',
         'is_active',
     ];
 
@@ -27,6 +30,20 @@ class Cell extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'product_cell', 'cell_id', 'produk_id');
+    }
+
+    /**
+     * BARU - Produk yang SEDANG mengunci/mengisi Cell ini sekarang.
+     * null = Cell kosong, boleh diisi produk apapun.
+     *
+     * CATATAN: relasi `products()` (pivot statis, di atas) TIDAK dihapus
+     * dan TIDAK dipakai lagi untuk validasi/lock - dibiarkan ada dulu
+     * sebagai jaga-jaga, sampai dipastikan tidak ada bagian lain yang
+     * masih bergantung ke situ.
+     */
+    public function currentProduct(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'current_product_id');
     }
 
     public function reservations(): HasMany
@@ -118,8 +135,98 @@ class Cell extends Model
         ];
     }
 
+    // =====================================================================
+    // BARU (STEP 6) - Lock/release produk & kapasitas dinamis per produk.
+    // =====================================================================
+
+    /**
+     * True kalau Cell ini kosong (tidak sedang terkunci ke produk manapun).
+     * Sumber kebenarannya `current_product_id` - kolom ini HARUS selalu
+     * sinkron lewat lockKeProduk() / releaseJikaKosong(), jangan diubah
+     * manual di tempat lain.
+     */
+    public function isKosong(): bool
+    {
+        return $this->current_product_id === null;
+    }
+
+    /**
+     * True kalau Cell ini boleh menerima produk $produk sekarang:
+     * - Cell kosong -> boleh produk apapun.
+     * - Cell terkunci -> HANYA boleh produk yang sama persis (lock per
+     *   kode produk spesifik, bukan per kategori - sesuai keputusan).
+     */
+    public function bisaMenerimaProduk(Product $produk): bool
+    {
+        return $this->isKosong() || $this->current_product_id === $produk->id;
+    }
+
+    /**
+     * Kunci Cell ini ke produk $produk. Idempotent - aman dipanggil
+     * berkali-kali untuk produk yang sama (tidak melakukan write kalau
+     * sudah terkunci ke produk itu juga).
+     *
+     * TIDAK memvalidasi bisaMenerimaProduk() di sini secara sengaja -
+     * pengecekan itu tanggung jawab pemanggil (Controller) SEBELUM
+     * transaksi utama jalan, supaya pesan error yang tepat bisa
+     * ditampilkan ke user. Method ini murni aksi "kunci", bukan gate.
+     */
+    public function lockKeProduk(Product $produk): void
+    {
+        if ($this->current_product_id !== $produk->id) {
+            $this->update(['current_product_id' => $produk->id]);
+        }
+    }
+
+    /**
+     * Lepas kunci Cell ini KALAU stock fisiknya sudah 0 (habis).
+     * Dipanggil setiap kali ada aksi yang berpotensi menghabiskan stock:
+     * - StockController::uploadExcel() (penyesuaian fisik manual)
+     * - OutboundController::processCellOutbound() (barang keluar)
+     *
+     * Sengaja pakai stockBag() (stock FISIK riil) sebagai acuan "kosong",
+     * BUKAN sisaKapasitas() (itu ruang sisa, bukan stock) - supaya
+     * konsisten dengan makna "kosong" yang dipakai di seluruh sistem.
+     */
+    public function releaseJikaKosong(): void
+    {
+        if ($this->stockBag() <= 0 && $this->current_product_id !== null) {
+            $this->update(['current_product_id' => null]);
+        }
+    }
+
+    /**
+     * Kapasitas bag yang berlaku SEKARANG untuk Cell ini, tergantung
+     * produk yang dipakai sebagai acuan:
+     * - $produk diisi (biasanya currentProduct milik Cell ini) -> lookup
+     *   ke standard_capacities berdasarkan (produk, lantai, tipe_rak).
+     * - Kalau kombinasinya tidak ketemu di standard_capacities (data
+     *   belum lengkap dari gudang), ATAU $produk null (Cell kosong,
+     *   belum tahu produk apa yang akan masuk) -> fallback ke
+     *   kapasitas_max statis milik Cell ini sendiri.
+     */
+    public function kapasitasBagUntukProduk(?Product $produk): ?int
+{
+    if ($produk === null) {
+        return $this->kapasitas_max;
+    }
+
+    if (! $this->lantai || ! $this->tipe_rak) {
+        return $this->kapasitas_max;
+    }
+
+    $standar = StandardCapacity::untukProdukDanCell($produk->id, $this->lantai, $this->tipe_rak)->first();
+
+    return $standar->kapasitas_bag ?? $this->kapasitas_max;
+}
+
     /**
      * Sisa kapasitas (dalam bag) saat ini.
+     * REVISI STEP 6: kapasitas acuan sekarang DINAMIS mengikuti produk
+     * yang sedang mengunci Cell ini (currentProduct), bukan lagi selalu
+     * pakai kapasitas_max statis secara langsung - lihat
+     * kapasitasBagUntukProduk() untuk aturan fallback-nya.
+     *
      * Terpakai = SUM bag dari reservasi yang sudah USED (jumlah_bag batch
      * sebenarnya) + reservasi yang masih PENDING (pakai max_bag_allowed,
      * supaya tidak dobel-reservasi lebih dari fisik yang tersedia)
@@ -138,7 +245,9 @@ class Cell extends Model
 
         $adjustment = $this->totalAdjustment();
 
-        return max(0, $this->kapasitas_max - $terpakaiUsed - $terpakaiPending - $adjustment);
+        $kapasitas = $this->kapasitasBagUntukProduk($this->currentProduct) ?? $this->kapasitas_max;
+
+        return max(0, $kapasitas - $terpakaiUsed - $terpakaiPending - $adjustment);
     }
 
     // =====================================================================
@@ -150,14 +259,16 @@ class Cell extends Model
      * Total bag yang FISIK ada di cell ini SEKARANG (stock riil).
      *
      * Beda dengan sisaKapasitas(): method itu menghitung SISA RUANG
-     * (kapasitas_max dikurangi terpakai), sedangkan ini menghitung STOCK
-     * yang ada, tanpa melibatkan kapasitas_max sama sekali. Reservasi
+     * (kapasitas dikurangi terpakai), sedangkan ini menghitung STOCK
+     * yang ada, tanpa melibatkan kapasitas sama sekali. Reservasi
      * PENDING sengaja TIDAK diikutkan karena itu baru "dijatah", belum
      * tentu benar-benar sudah terisi produk.
      *
      * Setelah Outbound berjalan, baris adjustment sumber='outbound'
      * (selisih negatif) otomatis mengurangi angka ini juga - karena
      * totalAdjustment() menjumlahkan SEMUA sumber adjustment.
+     *
+     * Ini juga acuan utama releaseJikaKosong() di atas.
      */
     public function stockBag(): int
     {
