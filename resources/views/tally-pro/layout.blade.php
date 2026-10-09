@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>TALLY PRO 2026 - @yield('title', 'Dashboard')</title>
+    @include('partials.favicon')
     <style>
         :root {
             --sidebar-color: #1e293b;
