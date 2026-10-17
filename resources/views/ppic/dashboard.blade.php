@@ -44,6 +44,11 @@
         .stat-value { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.7rem; color: var(--text); }
         .stat-box.primary .stat-value { color: var(--primary); }
 
+        /* BARU: warna selisih (hijau = melebihi plan, merah = kurang dari plan) */
+        .pos { color: var(--success) !important; }
+        .neg { color: var(--danger) !important; }
+        .stat-box.selisih { border-width: 2px; }
+
         .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; padding: 0 5% 26px; }
         .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
         .chart-card h4 { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
@@ -52,8 +57,9 @@
 
         .section-card {
             background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-            padding: 18px; margin: 0 5% 60px;
+            padding: 18px; margin: 0 5% 26px;
         }
+        .section-card:last-of-type { margin-bottom: 60px; }
         .section-card h4 {
             font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted);
             text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
@@ -90,12 +96,13 @@
         table.data-table th.num, table.data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         table.data-table tr:hover td { background: var(--primary-soft); }
         table.data-table td.mono-cell { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; }
+        table.data-table td.selisih-cell { font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
         .summary-total {
             display: flex; gap: 24px; padding: 14px 4px 4px; font-size: 0.85rem; color: var(--muted);
         }
         .summary-total b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
 
-        /* ==================== BARU: ROW EXPAND REKAP PRODUKSI FRESH ==================== */
+        /* ROW EXPAND REKAP PRODUKSI FRESH */
         .col-toggle { width: 32px; padding-right: 0 !important; }
         tr.po-row { cursor: pointer; }
         tr.po-row .chevron { font-size: 20px; color: var(--muted); transition: transform .15s; }
@@ -153,8 +160,10 @@
     <div class="stat-strip" id="statStrip">
         <div class="stat-box primary"><div class="stat-label">Total Plan Ekor</div><div class="stat-value" id="statPlanEkor">-</div></div>
         <div class="stat-box"><div class="stat-label">Total Aktual Ekor</div><div class="stat-value" id="statAktualEkor">-</div></div>
+        <div class="stat-box selisih"><div class="stat-label">Selisih Ekor (Aktual − Plan)</div><div class="stat-value" id="statSelisihEkor">-</div></div>
         <div class="stat-box primary"><div class="stat-label">Total Plan Kg</div><div class="stat-value" id="statPlanKg">-</div></div>
         <div class="stat-box"><div class="stat-label">Total Aktual Kg</div><div class="stat-value" id="statAktualKg">-</div></div>
+        <div class="stat-box selisih"><div class="stat-label">Selisih Kg (Aktual − Plan)</div><div class="stat-value" id="statSelisihKg">-</div></div>
         <div class="stat-box"><div class="stat-label">Total PO Bulan Ini</div><div class="stat-value" id="statTotalPo">-</div></div>
     </div>
 
@@ -168,12 +177,40 @@
             <div class="chart-body"><canvas id="chartKg"></canvas></div>
         </div>
         <div class="chart-card">
-            <h4>% Selisih Ekor per Hari</h4>
-            <div class="chart-body"><canvas id="chartPersenEkor"></canvas></div>
+            <h4>Selisih Ekor per Hari (Aktual − Plan)</h4>
+            <div class="chart-body"><canvas id="chartSelisihEkor"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h4>Selisih Kg per Hari (Aktual − Plan)</h4>
+            <div class="chart-body"><canvas id="chartSelisihKg"></canvas></div>
         </div>
         <div class="chart-card">
             <h4>PO per Jenis</h4>
             <div class="chart-body"><canvas id="chartPo"></canvas></div>
+        </div>
+    </div>
+
+    {{-- ==================== BARU: TABEL SELISIH PER TANGGAL ==================== --}}
+    <div class="section-card">
+        <h4>Selisih Plan vs Aktual per Tanggal</h4>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tanggal</th>
+                        <th class="num">Plan Ekor</th>
+                        <th class="num">Aktual Ekor</th>
+                        <th class="num">Selisih Ekor</th>
+                        <th class="num">Plan Kg</th>
+                        <th class="num">Aktual Kg</th>
+                        <th class="num">Selisih Kg</th>
+                    </tr>
+                </thead>
+                <tbody id="tblSelisihBody">
+                    <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+                </tbody>
+                <tfoot id="tblSelisihFoot"></tfoot>
+            </table>
         </div>
     </div>
 
@@ -200,7 +237,7 @@
         </div>
     </div>
 
-    {{-- ==================== BARU: REKAP SERAH TERIMA PER PRODUK ==================== --}}
+    {{-- REKAP SERAH TERIMA PER PRODUK --}}
     <div class="section-card">
         <div class="section-head">
             <h4>Rekap Serah Terima per Produk</h4>
@@ -267,79 +304,158 @@
         const filterBulan = document.getElementById('filterBulan');
         filterBulan.value = new Date().toISOString().substring(0, 7);
 
+        // ==================== HELPER FORMAT ====================
+        // Selisih = Aktual − Plan. Positif = melebihi plan, negatif = kurang dari plan.
+        const fmtNum = (n, maxFrac = 0) => Number(n).toLocaleString('id-ID', { maximumFractionDigits: maxFrac });
+        const fmtSigned = (n, maxFrac = 0) => {
+            const v = Number(n);
+            const abs = Math.abs(v).toLocaleString('id-ID', { maximumFractionDigits: maxFrac });
+            if (v > 0) return '+' + abs;
+            if (v < 0) return '−' + abs;
+            return abs;
+        };
+        const signClass = n => Number(n) > 0 ? 'pos' : (Number(n) < 0 ? 'neg' : '');
+        // Hindari artefak floating point (mis. 0.30000000000000004)
+        const round2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
         async function loadDashboard() {
             try {
                 const res = await fetch(`{{ route('ppic.dashboard.data') }}?bulan=${filterBulan.value}`);
                 const data = await res.json();
                 renderStats(data.summary, data.totalPo);
                 renderCharts(data.trend, data.poByJenis);
+                renderSelisihTable(data.trend);
                 renderProduksiFresh(data.produksiFresh);
             } catch (err) {
                 console.error(err);
             }
         }
 
+        function setSelisihStat(id, value, maxFrac) {
+            const el = document.getElementById(id);
+            el.innerText = fmtSigned(value, maxFrac);
+            el.classList.remove('pos', 'neg');
+            const cls = signClass(value);
+            if (cls) el.classList.add(cls);
+        }
+
         function renderStats(s, totalPo) {
-            document.getElementById('statPlanEkor').innerText = Number(s.totalPlanEkor).toLocaleString('id-ID');
-            document.getElementById('statAktualEkor').innerText = Number(s.totalAktualEkor).toLocaleString('id-ID');
-            document.getElementById('statPlanKg').innerText = Number(s.totalPlanKg).toLocaleString('id-ID', { maximumFractionDigits: 1 });
-            document.getElementById('statAktualKg').innerText = Number(s.totalAktualKg).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+            document.getElementById('statPlanEkor').innerText = fmtNum(s.totalPlanEkor);
+            document.getElementById('statAktualEkor').innerText = fmtNum(s.totalAktualEkor);
+            document.getElementById('statPlanKg').innerText = fmtNum(s.totalPlanKg, 1);
+            document.getElementById('statAktualKg').innerText = fmtNum(s.totalAktualKg, 1);
             document.getElementById('statTotalPo').innerText = totalPo;
+
+            setSelisihStat('statSelisihEkor', round2(Number(s.totalAktualEkor) - Number(s.totalPlanEkor)), 0);
+            setSelisihStat('statSelisihKg', round2(Number(s.totalAktualKg) - Number(s.totalPlanKg)), 1);
+        }
+
+        // Setiap render, isi ulang area chart dengan canvas baru
+        // (supaya chart tetap bisa muncul lagi setelah ganti bulan dari kondisi kosong).
+        function resetChartBody(canvasId) {
+            const body = document.getElementById(canvasId)?.parentElement
+                || document.querySelector(`[data-chart="${canvasId}"]`);
+            return body;
+        }
+
+        function setChartEmpty(canvasId, message) {
+            const body = resetChartBody(canvasId);
+            if (!body) return;
+            body.dataset.chart = canvasId;
+            body.innerHTML = `<div class="empty-state">${message}</div>`;
+        }
+
+        function setChartCanvas(canvasId) {
+            const body = resetChartBody(canvasId);
+            if (!body) return null;
+            body.dataset.chart = canvasId;
+            body.innerHTML = `<canvas id="${canvasId}"></canvas>`;
+            return document.getElementById(canvasId);
+        }
+
+        function buildSelisihChart(canvasId, labels, selisihData, planData, aktualData, unit, maxFrac) {
+            return new Chart(setChartCanvas(canvasId), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `Selisih ${unit}`,
+                        data: selisihData,
+                        backgroundColor: selisihData.map(v => v >= 0 ? 'rgba(22,163,74,.7)' : 'rgba(220,38,38,.7)'),
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `Selisih: ${fmtSigned(ctx.parsed.y, maxFrac)} ${unit}`,
+                                afterLabel: ctx => [
+                                    `Plan: ${fmtNum(planData[ctx.dataIndex], maxFrac)} ${unit}`,
+                                    `Aktual: ${fmtNum(aktualData[ctx.dataIndex], maxFrac)} ${unit}`,
+                                ],
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { ticks: { callback: v => fmtSigned(v, maxFrac) } }
+                    }
+                }
+            });
         }
 
         function renderCharts(trend, poByJenis) {
             Object.values(charts).forEach(c => c && c.destroy());
+            charts = {};
 
-            if (trend.length === 0) {
-                ['chartEkor', 'chartKg', 'chartPersenEkor'].forEach(id => {
-                    document.getElementById(id).parentElement.innerHTML = `<div class="empty-state">Belum ada data bulan ini.</div>`;
-                });
+            const trendIds = ['chartEkor', 'chartKg', 'chartSelisihEkor', 'chartSelisihKg'];
+
+            if (!trend || trend.length === 0) {
+                trendIds.forEach(id => setChartEmpty(id, 'Belum ada data bulan ini.'));
             } else {
                 const labels = trend.map(t => t.tanggal);
+                const planEkor = trend.map(t => Number(t.planEkor));
+                const aktualEkor = trend.map(t => Number(t.aktualEkor));
+                const planKg = trend.map(t => Number(t.planKg));
+                const aktualKg = trend.map(t => Number(t.aktualKg));
+                const selisihEkor = trend.map((t, i) => round2(aktualEkor[i] - planEkor[i]));
+                const selisihKg = trend.map((t, i) => round2(aktualKg[i] - planKg[i]));
 
-                charts.ekor = new Chart(document.getElementById('chartEkor'), {
+                charts.ekor = new Chart(setChartCanvas('chartEkor'), {
                     type: 'line',
                     data: {
                         labels,
                         datasets: [
-                            { label: 'Plan', data: trend.map(t => t.planEkor), borderColor: '#a5b4fc', backgroundColor: 'rgba(165,180,252,.15)', fill: true, tension: 0.2 },
-                            { label: 'Aktual', data: trend.map(t => t.aktualEkor), borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.15)', fill: true, tension: 0.2 },
+                            { label: 'Plan', data: planEkor, borderColor: '#a5b4fc', backgroundColor: 'rgba(165,180,252,.15)', fill: true, tension: 0.2 },
+                            { label: 'Aktual', data: aktualEkor, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.15)', fill: true, tension: 0.2 },
                         ]
                     },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
                 });
 
-                charts.kg = new Chart(document.getElementById('chartKg'), {
+                charts.kg = new Chart(setChartCanvas('chartKg'), {
                     type: 'line',
                     data: {
                         labels,
                         datasets: [
-                            { label: 'Plan Kg', data: trend.map(t => t.planKg), borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,.15)', fill: true, tension: 0.2 },
-                            { label: 'Aktual Kg', data: trend.map(t => t.aktualKg), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.2 },
+                            { label: 'Plan Kg', data: planKg, borderColor: '#fbbf24', backgroundColor: 'rgba(251,191,36,.15)', fill: true, tension: 0.2 },
+                            { label: 'Aktual Kg', data: aktualKg, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.2 },
                         ]
                     },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
                 });
 
-                charts.persen = new Chart(document.getElementById('chartPersenEkor'), {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: '% Selisih Ekor',
-                            data: trend.map(t => t.persenSelisihEkor),
-                            backgroundColor: trend.map(t => t.persenSelisihEkor >= 0 ? 'rgba(22,163,74,.6)' : 'rgba(220,38,38,.6)'),
-                        }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-                });
+                charts.selisihEkor = buildSelisihChart('chartSelisihEkor', labels, selisihEkor, planEkor, aktualEkor, 'ekor', 0);
+                charts.selisihKg = buildSelisihChart('chartSelisihKg', labels, selisihKg, planKg, aktualKg, 'kg', 1);
             }
 
-            const poLabels = Object.keys(poByJenis);
+            const poLabels = Object.keys(poByJenis || {});
             if (poLabels.length === 0) {
-                document.getElementById('chartPo').parentElement.innerHTML = `<div class="empty-state">Belum ada PO bulan ini.</div>`;
+                setChartEmpty('chartPo', 'Belum ada PO bulan ini.');
             } else {
-                charts.po = new Chart(document.getElementById('chartPo'), {
+                charts.po = new Chart(setChartCanvas('chartPo'), {
                     type: 'doughnut',
                     data: {
                         labels: poLabels,
@@ -350,7 +466,58 @@
             }
         }
 
-        // ==================== BARU: REKAP PRODUKSI FRESH (ROW EXPAND) ====================
+        // ==================== BARU: TABEL SELISIH PER TANGGAL ====================
+        function renderSelisihTable(trend) {
+            const tbody = document.getElementById('tblSelisihBody');
+            const tfoot = document.getElementById('tblSelisihFoot');
+
+            if (!trend || trend.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Belum ada data bulan ini.</td></tr>`;
+                tfoot.innerHTML = '';
+                return;
+            }
+
+            let tPlanEkor = 0, tAktualEkor = 0, tPlanKg = 0, tAktualKg = 0;
+
+            tbody.innerHTML = trend.map(t => {
+                const planEkor = Number(t.planEkor), aktualEkor = Number(t.aktualEkor);
+                const planKg = Number(t.planKg), aktualKg = Number(t.aktualKg);
+                const selEkor = round2(aktualEkor - planEkor);
+                const selKg = round2(aktualKg - planKg);
+
+                tPlanEkor += planEkor; tAktualEkor += aktualEkor;
+                tPlanKg += planKg; tAktualKg += aktualKg;
+
+                return `
+                    <tr>
+                        <td>${esc(t.tanggal)}</td>
+                        <td class="num">${fmtNum(planEkor)}</td>
+                        <td class="num">${fmtNum(aktualEkor)}</td>
+                        <td class="num selisih-cell ${signClass(selEkor)}">${fmtSigned(selEkor, 0)}</td>
+                        <td class="num">${fmtNum(planKg, 1)}</td>
+                        <td class="num">${fmtNum(aktualKg, 1)}</td>
+                        <td class="num selisih-cell ${signClass(selKg)}">${fmtSigned(selKg, 1)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const totSelEkor = round2(tAktualEkor - tPlanEkor);
+            const totSelKg = round2(tAktualKg - tPlanKg);
+
+            tfoot.innerHTML = `
+                <tr class="subtotal-row">
+                    <td>Total</td>
+                    <td class="num">${fmtNum(tPlanEkor)}</td>
+                    <td class="num">${fmtNum(tAktualEkor)}</td>
+                    <td class="num selisih-cell ${signClass(totSelEkor)}">${fmtSigned(totSelEkor, 0)}</td>
+                    <td class="num">${fmtNum(tPlanKg, 1)}</td>
+                    <td class="num">${fmtNum(tAktualKg, 1)}</td>
+                    <td class="num selisih-cell ${signClass(totSelKg)}">${fmtSigned(totSelKg, 1)}</td>
+                </tr>
+            `;
+        }
+
+        // ==================== REKAP PRODUKSI FRESH (ROW EXPAND) ====================
 
         // Cache rincian per No. PO supaya klik berikutnya tidak memanggil server lagi.
         const detailCache = {};
@@ -473,7 +640,7 @@
             `;
         }
 
-        // ==================== BARU: REKAP SERAH TERIMA (FILTER RENTANG TANGGAL) ====================
+        // ==================== REKAP SERAH TERIMA (FILTER RENTANG TANGGAL) ====================
 
         async function loadSerahTerima() {
             const dari = document.getElementById('stDari').value;
@@ -495,7 +662,7 @@
             }
         }
 
-        // BARU - Isi dropdown "Nama Produk", DIPERSEMPIT sesuai Jenis PO
+        // Isi dropdown "Nama Produk", DIPERSEMPIT sesuai Jenis PO
         // yang sedang dipilih (dropdown kosong = Semua Jenis PO -> semua
         // produk yang relevan ke Serah Terima ditampilkan).
         async function loadProdukOptions() {
