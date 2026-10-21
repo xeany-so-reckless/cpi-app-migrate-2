@@ -74,6 +74,7 @@ class PpicDashboardController extends Controller
      *   58 - 60 -> FEH2
      *   54 - 57 -> FEHM
      *   61 - 68 -> FEH0
+     *   79 - 82 -> FEH0 (produk CP: Ampela/Hati/Jantung 1 KG, Hati 5 KG)
      *
      * Kode produk di luar range-range ini dianggap TIDAK terkait Serah
      * Terima -> return null (nanti no_po ditampilkan "-" di UI).
@@ -90,6 +91,7 @@ class PpicDashboardController extends Controller
             $kode >= 58 && $kode <= 60 => 'FEH2',
             $kode >= 54 && $kode <= 57 => 'FEHM',
             $kode >= 61 && $kode <= 68 => 'FEH0',
+            $kode >= 79 && $kode <= 82 => 'FEH0',
             default => null,
         };
     }
@@ -211,9 +213,10 @@ class PpicDashboardController extends Controller
      *
      * Endpoint: GET /ppic/dashboard/serah-terima-produk-list?jenis_po=FEH0
      * Kalau jenis_po tidak dikirim/kosong -> return SEMUA produk yang
-     * termasuk salah satu dari 4 jenis PO (kode 1-36, 47-68), diurutkan
-     * per kode. Produk di luar range mapping (37-46, 69+) tidak pernah
-     * disertakan di sini karena memang tidak relevan untuk Serah Terima.
+     * termasuk salah satu dari 4 jenis PO (kode 1-36, 47-68, 79-82),
+     * diurutkan per kode. Produk di luar range mapping (37-46, 69-78,
+     * 83+) tidak pernah disertakan di sini karena memang tidak relevan
+     * untuk Serah Terima.
      *
      * Mapping kode->jenis_po dihitung di PHP (bukan query DB) karena
      * murni aturan statis - lalu dipakai untuk memfilter produk yang
