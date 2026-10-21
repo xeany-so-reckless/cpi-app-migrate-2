@@ -296,6 +296,8 @@
     // dipakai ulang untuk tiap request simpan/edit (tidak ada sesi login).
     let activeCredentials = null;
 
+    const NAMA_BULAN_SINGKAT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
     Chart.register(ChartDataLabels);
 
     async function apiFetch(url, options = {}) {
@@ -677,6 +679,35 @@
       pointBackgroundColor: '#ffffff', pointBorderColor: color, pointRadius: 4, pointHoverRadius: 6
     });
 
+    // Kelompokkan data per bulan untuk Trend Final Yield mode Tahunan.
+    // Final Yield per bulan = (total Kg FG+BP + total Kg By Product) / total Kg Netto x 100.
+    // Bulan tanpa data otomatis tidak muncul (hanya bulan yang ada datanya).
+    function buildMonthlyFinalYield(data, filterValue) {
+      const perBulan = {};
+      data.forEach(d => {
+        const key = d.bulan || (d.tanggal ? d.tanggal.substring(0, 7) : null);
+        if (!key) return;
+        if (!perBulan[key]) perBulan[key] = { netto: 0, fg: 0, bp: 0 };
+        perBulan[key].netto += d.kgNetto;
+        perBulan[key].fg += d.kgFgBp;
+        perBulan[key].bp += d.kgByProduct;
+      });
+
+      const keys = Object.keys(perBulan).sort();
+      const labels = keys.map(k => {
+        const [tahun, bulan] = k.split('-');
+        const nama = NAMA_BULAN_SINGKAT[parseInt(bulan) - 1] || k;
+        // Kalau tidak ada filter tahun (data lintas tahun), sertakan tahun di label.
+        return filterValue ? nama : `${nama} ${tahun}`;
+      });
+      const values = keys.map(k => {
+        const m = perBulan[k];
+        return m.netto > 0 ? ((m.fg + m.bp) / m.netto) * 100 : 0;
+      });
+
+      return { labels, values };
+    }
+
     function renderCharts(data, mode, filterValue) {
       ['pie', 'lineTN', 'lineFG', 'lineBP', 'area', 'trendFinal', 'dailyBar'].forEach(k => {
         if (charts[k]) { charts[k].destroy(); charts[k] = null; }
@@ -794,9 +825,19 @@
         dailyDetailSection.classList.add('hidden');
         yieldSection.classList.remove('hidden');
 
+        // Mode Tahunan: Trend Final Yield dikelompokkan per bulan (agregat).
+        // Mode Bulanan: tetap per PO seperti sebelumnya.
+        let trendLabels = chartLabels;
+        let trendValues = trendFinalYieldData;
+        if (mode === 'tahunan') {
+          const monthly = buildMonthlyFinalYield(data, filterValue);
+          trendLabels = monthly.labels;
+          trendValues = monthly.values;
+        }
+
         charts.trendFinal = new Chart(trendCanvas.getContext('2d'), {
           type: 'line',
-          data: { labels: chartLabels, datasets: [lineDS('Final Yield (%)', trendFinalYieldData, '#eeb142', 'rgba(238, 177, 66, 0.1)')] },
+          data: { labels: trendLabels, datasets: [lineDS('Final Yield (%)', trendValues, '#eeb142', 'rgba(238, 177, 66, 0.1)')] },
           options: getCommonTrendOptions(true)
         });
         charts.lineTN = new Chart(document.getElementById('lineChartTitikNol').getContext('2d'), {
