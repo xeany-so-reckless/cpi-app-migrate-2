@@ -176,14 +176,35 @@ class PpicDashboardController extends Controller
             ->get(['tanggal', 'jenis_po', 'nomor_po'])
             ->keyBy(fn ($po) => $po->tanggal->format('Y-m-d').'|'.$po->jenis_po);
 
-        $perBatch = $rows->map(function ($r) use ($poLookup) {
-            $jenisPo = $this->mapKodeProdukKeJenisPo($r->kode_produk);
-            $noPo = null;
+        // FALLBACK FEHT: PO FEHT (transformasi stok) berlaku untuk semua produk,
+        // jadi tidak bisa dipetakan dari kode produk. Dikelompokkan per tanggal
+        // (bukan keyBy) supaya bisa dideteksi kalau ada lebih dari 1 PO FEHT
+        // di tanggal yang sama (ambigu -> tidak dipakai).
+        $fehtPerTanggal = PurchaseOrder::query()
+            ->where('jenis_po', 'FEHT')
+            ->whereBetween('tanggal', [$dari, $sampai])
+            ->get(['tanggal', 'nomor_po'])
+            ->groupBy(fn ($po) => $po->tanggal->format('Y-m-d'));
 
-            if ($jenisPo) {
-                $key = $r->tanggal_produksi.'|'.$jenisPo;
-                $noPo = $poLookup->get($key)?->nomor_po;
-            }
+        $perBatch = $rows->map(function ($r) use ($poLookup, $fehtPerTanggal) {
+                $jenisPo = $this->mapKodeProdukKeJenisPo($r->kode_produk);
+                $noPo = null;
+
+                if ($jenisPo) {
+                    $key = $r->tanggal_produksi.'|'.$jenisPo;
+                    $noPo = $poLookup->get($key)?->nomor_po;
+
+                    // Fallback FEHT: hanya kalau PO normal tidak ketemu DAN di
+                    // tanggal itu ada tepat 1 PO FEHT. Jenis ikut tampil FEHT.
+                    if ($noPo === null) {
+                        $feht = $fehtPerTanggal->get($r->tanggal_produksi);
+
+                        if ($feht && $feht->count() === 1) {
+                            $noPo = $feht->first()->nomor_po;
+                            $jenisPo = 'FEHT';
+                        }
+                    }
+                }
 
             return [
                 'no_po'            => $noPo ?? '-',
