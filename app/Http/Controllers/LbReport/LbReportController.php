@@ -24,23 +24,38 @@ class LbReportController extends Controller
     }
 
     /**
-     * Daftar semua Nomor PO dari modul PPIC, dipakai buat dropdown
-     * "No PO" di form Sebelum Bongkar. PO yang sudah TECO dikeluarkan.
+     * Daftar Nomor PO dari modul PPIC, dipakai buat dropdown "No PO" di
+     * form Sebelum Bongkar.
+     *
+     * DIUBAH: nomor PO yang sama (PO ganda FEH2/FEHM, maks 2 tanggal)
+     * digabung jadi SATU entri, dan semua tanggalnya ditampilkan dalam
+     * satu string (mis. "20/10/2026, 21/10/2026"). Pengiriman hanya
+     * terjadi di tanggal PO pertama, PO kedua hanya untuk produksi
+     * (serah terima), jadi status TECO yang dipakai adalah milik baris
+     * PERTAMA (tanggal paling awal): kalau baris pertama sudah TECO,
+     * nomor PO tersebut hilang dari dropdown.
      *
      * jumlahRit ikut dikirim supaya frontend bisa generate dropdown
-     * "RIT-01".."RIT-{jumlah_rit}" begitu PO dipilih.
+     * "RIT-01".."RIT-{jumlah_rit}" begitu PO FEH0 dipilih.
      */
     public function listPurchaseOrders(): JsonResponse
     {
-        $list = PurchaseOrder::whereNull('teco_at')
-            ->orderByDesc('tanggal')
-            ->get(['nomor_po', 'jenis_po', 'tanggal', 'jumlah_rit'])
-            ->map(fn (PurchaseOrder $po) => [
-                'nomorPo'   => $po->nomor_po,
-                'jenisPo'   => $po->jenis_po,
-                'tanggal'   => $po->tanggal->format('d/m/Y'),
-                'jumlahRit' => $po->jumlah_rit,
-            ]);
+        $list = PurchaseOrder::orderBy('tanggal')
+            ->get(['nomor_po', 'jenis_po', 'tanggal', 'jumlah_rit', 'teco_at'])
+            ->groupBy('nomor_po')
+            ->filter(fn ($rows) => $rows->first()->teco_at === null)
+            ->sortByDesc(fn ($rows) => $rows->first()->tanggal->format('Y-m-d'))
+            ->map(function ($rows) {
+                $pertama = $rows->first();
+
+                return [
+                    'nomorPo'   => $pertama->nomor_po,
+                    'jenisPo'   => $pertama->jenis_po,
+                    'tanggal'   => $rows->map(fn (PurchaseOrder $po) => $po->tanggal->format('d/m/Y'))->implode(', '),
+                    'jumlahRit' => $pertama->jumlah_rit,
+                ];
+            })
+            ->values();
 
         return response()->json($list);
     }
@@ -245,6 +260,12 @@ class LbReportController extends Controller
 
     /**
      * Menggantikan simpanDataSebelum() di code.gs. Role: lb_penerimaan_awal (APP).
+     *
+     * DIUBAH: validasi 'exists:purchase_orders,nomor_po' diganti cek manual
+     * lewat model. Rule 'exists' bawaan Laravel TIDAK mengecualikan baris
+     * soft-deleted, sehingga PO yang sudah dihapus PPIC bisa lolos validasi
+     * tapi tidak ketemu lewat model (null -> error). Sekarang PO yang tidak
+     * ada / sudah dihapus ditolak dengan pesan yang jelas.
      */
     public function storeSebelum(Request $request): JsonResponse
     {
@@ -263,13 +284,22 @@ class LbReportController extends Controller
             'ekor_dta'       => ['required', 'integer', 'min:0'],
             'no_dta'         => ['nullable', 'string'],
             'no_sppa'        => ['nullable', 'string'],
-            'no_po'          => ['required', 'string', 'exists:purchase_orders,nomor_po'],
+            'no_po'          => ['required', 'string'],
         ]);
 
         $noRit = strtoupper(trim($data['no_rit']));
         $noPo = strtoupper(trim($data['no_po']));
 
-        $po = PurchaseOrder::where('nomor_po', $noPo)->first();
+        // Kalau nomor PO dobel (FEH2/FEHM), ambil baris pertama (tanggal
+        // paling awal) - jenisnya dijamin sama di semua baris.
+        $po = PurchaseOrder::where('nomor_po', $noPo)->orderBy('tanggal')->first();
+
+        if (! $po) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => "Nomor PO '{$noPo}' tidak ditemukan atau sudah dihapus oleh PPIC.",
+            ], 422);
+        }
 
         if (! preg_match('/^RIT-(\d+)$/', $noRit)) {
             return response()->json([
@@ -278,9 +308,10 @@ class LbReportController extends Controller
             ], 422);
         }
 
-        // Batas jumlah rit HANYA berlaku untuk PO jenis FEHM, dimana PPIC
-        // sudah menentukan jumlah_rit di depan. Jenis PO lain bebas.
-        if ($po->jenis_po === 'FEHM') {
+        // DIUBAH: batas jumlah rit berlaku untuk PO jenis FEH0 (sebelumnya
+        // FEHM), sesuai PPIC yang hanya mengisi jumlah_rit untuk FEH0.
+        // Jenis PO lain bebas.
+        if ($po->jenis_po === 'FEH0') {
             $jumlahRitPo = $po->jumlah_rit ?? 0;
 
             if ($jumlahRitPo < 1) {
@@ -300,7 +331,7 @@ class LbReportController extends Controller
             }
         }
 
-        // DIUBAH: nomor rit unik per PO per tanggal (bukan per tanggal saja).
+        // Nomor rit unik per PO per tanggal (bukan per tanggal saja).
         $duplikat = LbPenerimaan::where('tanggal', $data['tanggal'])
             ->where('no_po', $noPo)
             ->where('no_rit', $noRit)
@@ -677,9 +708,9 @@ class LbReportController extends Controller
     }
 
     /**
-     * BARU - Query dasar LbHanging berdasarkan tanggal + no_rit, dan
-     * (opsional) no_po. Kalau $noPo kosong, filter PO tidak dipakai
-     * sehingga pemanggil harus mengecek apakah hasilnya lebih dari 1.
+     * Query dasar LbHanging berdasarkan tanggal + no_rit, dan (opsional)
+     * no_po. Kalau $noPo kosong, filter PO tidak dipakai sehingga pemanggil
+     * harus mengecek apakah hasilnya lebih dari 1.
      */
     private function queryHanging(?string $tanggal, string $noRit, string $noPo = '')
     {

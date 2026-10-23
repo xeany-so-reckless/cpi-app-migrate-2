@@ -22,8 +22,10 @@ class PpicDashboardController extends Controller
      * Data ringkasan & tren buat grafik Dashboard PPIC.
      * Default bulan berjalan kalau tidak dikasih parameter ?bulan=yyyy-MM.
      *
-     * TIDAK DIUBAH - tetap dipakai untuk chart Plan vs Aktual & PO per
-     * Jenis, filternya tetap per bulan seperti semula.
+     * DIUBAH: "Total PO" dan grafik "PO per Jenis" sekarang dihitung per
+     * NOMOR PO UNIK, bukan per baris. PO ganda FEH2/FEHM (1 nomor, 2
+     * tanggal) dihitung 1 PO, karena secara bisnis itu satu PO.
+     * Chart Plan vs Aktual tetap per bulan seperti semula.
      */
     public function data(Request $request): JsonResponse
     {
@@ -52,13 +54,16 @@ class PpicDashboardController extends Controller
         ];
 
         $poBulanIni = PurchaseOrder::whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$bulan])->get();
-        $poByJenis = $poBulanIni->groupBy('jenis_po')->map->count();
+
+        // Per nomor PO unik (PO ganda dihitung 1).
+        $poUnik = $poBulanIni->unique('nomor_po');
+        $poByJenis = $poUnik->groupBy('jenis_po')->map->count();
 
         return response()->json([
             'bulan'         => $bulan,
             'trend'         => $trend,
             'summary'       => $summary,
-            'totalPo'       => $poBulanIni->count(),
+            'totalPo'       => $poUnik->count(),
             'poByJenis'     => $poByJenis,
             'produksiFresh' => $this->produksiFreshRekap($poBulanIni),
         ]);
@@ -78,6 +83,10 @@ class PpicDashboardController extends Controller
      *
      * Kode produk di luar range-range ini dianggap TIDAK terkait Serah
      * Terima -> return null (nanti no_po ditampilkan "-" di UI).
+     *
+     * CATATAN: FEHT (transformasi stok, berlaku untuk semua produk)
+     * sengaja TIDAK dipetakan di sini - belum perlu muncul di Rekap
+     * Serah Terima.
      */
     private function mapKodeProdukKeJenisPo(string $kodeProduk): ?string
     {
@@ -112,6 +121,11 @@ class PpicDashboardController extends Controller
      * punya beberapa batch dalam rentang tanggal ini, semuanya tampil
      * sebagai baris terpisah. Ringkasan total (jumlah batch, total bag,
      * total kg) disertakan di key 'summary' untuk ditampilkan di UI.
+     *
+     * TIDAK DIUBAH untuk PO ganda: lookup PO memakai kunci
+     * "tanggal|jenis_po", jadi batch tanggal 20 cocok ke baris PO tanggal
+     * 20 dan batch tanggal 21 cocok ke baris PO tanggal 21 (nomor PO bisa
+     * sama, tanggalnya beda).
      */
     public function serahTerimaData(Request $request): JsonResponse
     {
@@ -319,12 +333,19 @@ class PpicDashboardController extends Controller
      * ditampilkan (PO tanpa input Fresh sama sekali di-skip, supaya
      * tabel tidak penuh baris kosong).
      *
+     * DIUBAH: satu baris per NOMOR PO. PO ganda FEH2/FEHM (1 nomor, 2
+     * tanggal) digabung jadi satu baris dengan tanggal digabung
+     * (mis. "20/10/2026, 21/10/2026"), karena data ProduksiFresh hanya
+     * punya no_po (tanpa tanggal) sehingga totalnya memang gabungan
+     * seluruh hari. Tanggal yang ditampilkan hanya yang jatuh di bulan
+     * yang sedang difilter.
+     *
      * Ini murni tampilan READ-ONLY - tidak ada data yang ditulis balik
      * dari sini, PPIC cuma melihat rekap hasil input tim Produksi Fresh.
      */
     private function produksiFreshRekap($poBulanIni)
     {
-        $nomorPoList = $poBulanIni->pluck('nomor_po');
+        $nomorPoList = $poBulanIni->pluck('nomor_po')->unique()->values();
 
         $freshRows = ProduksiFresh::whereIn('no_po', $nomorPoList)
             ->selectRaw('no_po, tipe_input, SUM(qty) as total_qty, COUNT(*) as jumlah_entri')
@@ -332,22 +353,28 @@ class PpicDashboardController extends Controller
             ->get()
             ->groupBy('no_po');
 
-        return $poBulanIni->map(function (PurchaseOrder $po) use ($freshRows) {
-            $rows = $freshRows->get($po->nomor_po, collect());
+        return $poBulanIni
+            ->sortBy(fn (PurchaseOrder $po) => $po->tanggal->format('Y-m-d'))
+            ->groupBy('nomor_po')
+            ->map(function ($group) use ($freshRows) {
+                $pertama = $group->first();
+                $rows = $freshRows->get($pertama->nomor_po, collect());
 
-            $qtyMain = (float) ($rows->firstWhere('tipe_input', 'main')->total_qty ?? 0);
-            $qtyByProduct = (float) ($rows->firstWhere('tipe_input', 'byproduct')->total_qty ?? 0);
-            $jumlahEntri = (int) $rows->sum('jumlah_entri');
+                $qtyMain = (float) ($rows->firstWhere('tipe_input', 'main')->total_qty ?? 0);
+                $qtyByProduct = (float) ($rows->firstWhere('tipe_input', 'byproduct')->total_qty ?? 0);
+                $jumlahEntri = (int) $rows->sum('jumlah_entri');
 
-            return [
-                'nomorPo'      => $po->nomor_po,
-                'jenisPo'      => $po->jenis_po,
-                'tanggalLabel' => $po->tanggal->format('d/m/Y'),
-                'qtyMain'      => $qtyMain,
-                'qtyByProduct' => $qtyByProduct,
-                'qtyTotal'     => $qtyMain + $qtyByProduct,
-                'jumlahEntri'  => $jumlahEntri,
-            ];
-        })->filter(fn ($row) => $row['jumlahEntri'] > 0)->values();
+                return [
+                    'nomorPo'      => $pertama->nomor_po,
+                    'jenisPo'      => $pertama->jenis_po,
+                    'tanggalLabel' => $group->map(fn (PurchaseOrder $po) => $po->tanggal->format('d/m/Y'))->implode(', '),
+                    'qtyMain'      => $qtyMain,
+                    'qtyByProduct' => $qtyByProduct,
+                    'qtyTotal'     => $qtyMain + $qtyByProduct,
+                    'jumlahEntri'  => $jumlahEntri,
+                ];
+            })
+            ->filter(fn ($row) => $row['jumlahEntri'] > 0)
+            ->values();
     }
 }

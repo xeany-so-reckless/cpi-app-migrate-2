@@ -113,6 +113,7 @@
                 <option value="FEH1">FEH1</option>
                 <option value="FEH2">FEH2</option>
                 <option value="FEHM">FEHM</option>
+                <option value="FEHT">FEHT</option>
             </select>
 
             <label>Nomor PO</label>

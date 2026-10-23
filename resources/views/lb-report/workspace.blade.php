@@ -503,8 +503,8 @@ function generateDropdownRit() {
         return;
     }
 
-    // DIUBAH: 'FEH0' -> 'FEHM' agar sama dengan backend (storeSebelum).
-    if (po.jenisPo === 'FEHM') {
+    // Batas rit berlaku untuk FEH0 (sama dengan backend storeSebelum).
+    if (po.jenisPo === 'FEH0') {
         inputRit.classList.add('hidden');
         inputRit.disabled = true;
         inputRit.value = '';
