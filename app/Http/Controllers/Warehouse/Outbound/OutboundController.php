@@ -80,10 +80,26 @@ class OutboundController extends Controller
      * BARU - Detail 1 DO (dipanggil saat baris di-expand, dan juga jadi
      * sumber data untuk generate PDF di sisi client). Isinya breakdown
      * per Cell + bag yang keluar + daftar Tir.
+     *
+     * REVISI (PDF Tally Loading):
+     * - Eager-load diperluas ke cells.bags.batch.produk supaya tiap bag
+     *   membawa 'namaProduk' (dipakai FE untuk memecah blok per produk
+     *   di form Tally Loading). Bag Stock Adjustment tidak punya batch,
+     *   jadi namaProduk = null -> FE menaruhnya di blok "Stock Adjustment".
+     * - Tambah 'checkerKode' (employee_code checker) untuk teks QR
+     *   tanda tangan Warehouse.
+     * - Cell & bag diurutkan by id supaya urutan di PDF = urutan saat muat.
      */
     public function historyDetail(OutboundShipment $shipment): JsonResponse
     {
-        $shipment->load(['checker', 'cells.cell', 'cells.bags', 'tirs']);
+        $shipment->load([
+            'checker',
+            'cells'      => fn ($q) => $q->orderBy('id'),
+            'cells.cell',
+            'cells.bags' => fn ($q) => $q->orderBy('id'),
+            'cells.bags.batch.produk',
+            'tirs',
+        ]);
 
         return response()->json([
             'id'           => $shipment->id,
@@ -94,6 +110,7 @@ class OutboundController extends Controller
             'noPol'        => $shipment->no_pol,
             'namaDriver'   => $shipment->nama_driver,
             'checkerNama'  => $shipment->checker->name ?? '-',
+            'checkerKode'  => $shipment->checker->employee_code ?? '-',
             'cells'        => $shipment->cells->map(fn (OutboundShipmentCell $sc) => [
                 'kodeCell' => $sc->cell->kode_cell ?? '-',
                 'totalBag' => $sc->total_bag,
@@ -103,6 +120,7 @@ class OutboundController extends Controller
                     'kodeProduksi' => $bag->kode_produksi,
                     'kg'           => (float) $bag->kg,
                     'keterangan'   => $bag->keterangan,
+                    'namaProduk'   => $bag->batch->produk->name ?? null,
                 ]),
             ]),
             'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [

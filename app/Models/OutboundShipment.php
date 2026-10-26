@@ -47,6 +47,15 @@ class OutboundShipment extends Model
     }
 
     /**
+     * BARU - Data Tir (opsional, khusus truk besar). Diurutkan
+     * berdasarkan tir_ke supaya "Tir 1, Tir 2, ..." selalu berurutan.
+     */
+    public function tirs(): HasMany
+    {
+        return $this->hasMany(OutboundShipmentTir::class, 'outbound_shipment_id')->orderBy('tir_ke');
+    }
+
+    /**
      * Total keseluruhan bag & kg yang keluar dalam DO ini, dijumlahkan
      * dari semua cell yang tercakup. Dipakai untuk tampilan ringkasan
      * (misal di halaman histori Outbound).

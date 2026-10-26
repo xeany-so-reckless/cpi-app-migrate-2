@@ -8,6 +8,8 @@
     @include('partials.favicon')
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    {{-- BARU - Library QR Code (client-side) untuk tanda tangan Warehouse di PDF Tally Loading --}}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0" />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -89,21 +91,50 @@
         .tir-summary { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
         .detail-actions { text-align: right; margin-top: 12px; }
 
-        /* ==================== AREA CETAK PDF (tersembunyi) ==================== */
-        #pdfPrintArea, #pdfPrintAreaFresh {
-            position: fixed; top: -99999px; left: -99999px;
-            width: 210mm; padding: 12mm; background: #fff; font-family: Arial, sans-serif; color: #000;
+        /* ============================================================
+           AREA CETAK PDF - FORM TALLY LOADING (FM-WH-002), A4 PORTRAIT
+           Dipakai bersama oleh Frozen & Fresh. Semua selector di-scope
+           ke .tl-root supaya tidak bentrok dengan style halaman di atas.
+           ============================================================ */
+        #pdfHost { position: fixed; top: -99999px; left: -99999px; pointer-events: none; }
+        #pdfMeasure { width: 194mm; }
+        #pdfPrintArea { width: 210mm; }
+
+        .tl-root, .tl-root * { font-family: Arial, Helvetica, sans-serif; }
+        .tl-root { color: #000; background: #fff; }
+
+        .tl-page {
+            width: 210mm; height: 296mm; padding: 8mm 8mm 12mm; box-sizing: border-box;
+            position: relative; overflow: hidden; background: #fff; page-break-after: always;
         }
-        #pdfPrintArea .pdf-header, #pdfPrintAreaFresh .pdf-header { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 14px; }
-        #pdfPrintArea .pdf-header img, #pdfPrintAreaFresh .pdf-header img { height: 50px; }
-        #pdfPrintArea .pdf-title, #pdfPrintAreaFresh .pdf-title { font-size: 16pt; font-weight: bold; }
-        #pdfPrintArea .pdf-subtitle, #pdfPrintAreaFresh .pdf-subtitle { font-size: 9pt; color: #444; }
-        #pdfPrintArea .pdf-info-grid, #pdfPrintAreaFresh .pdf-info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 20px; font-size: 9pt; margin-bottom: 14px; }
-        #pdfPrintArea .pdf-info-grid b, #pdfPrintAreaFresh .pdf-info-grid b { display: inline-block; width: 90px; }
-        #pdfPrintArea table, #pdfPrintAreaFresh table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 12px; }
-        #pdfPrintArea th, #pdfPrintArea td, #pdfPrintAreaFresh th, #pdfPrintAreaFresh td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
-        #pdfPrintArea th, #pdfPrintAreaFresh th { background: #eee; font-weight: bold; }
-        #pdfPrintArea .pdf-section-title, #pdfPrintAreaFresh .pdf-section-title { font-size: 10pt; font-weight: bold; margin: 10px 0 6px; }
+        .tl-page.tl-last { page-break-after: auto; }
+        .tl-pageno { position: absolute; right: 8mm; bottom: 5mm; font-size: 7pt; color: #444; }
+
+        .tl-item { padding-bottom: 3mm; }
+        .tl-mini { font-size: 7.5pt; color: #333; border-bottom: 0.3mm solid #000; padding-bottom: 1mm; }
+
+        .tl-root table.tl-t { width: 194mm; border-collapse: collapse; table-layout: fixed; font-size: 8pt; }
+        .tl-root table.tl-t td {
+            border: 0.25mm solid #000; padding: 0 0.8mm; height: 5mm; line-height: 1.1;
+            text-align: center; vertical-align: middle; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        }
+        .tl-root table.tl-t td.l { text-align: left; }
+        .tl-root table.tl-t td.r { text-align: right; padding-right: 1.5mm; }
+        .tl-root table.tl-t tr.h6 td { height: 6mm; }
+        .tl-root table.tl-t tr.h55 td { height: 5.5mm; }
+        .tl-root table.tl-t td.sm { font-size: 7pt; }
+        .tl-root .tl-lbl { display: inline-block; width: 23mm; font-weight: bold; }
+
+        .tl-root .tl-note { font-size: 8pt; line-height: 1.3; word-break: break-word; }
+
+        .tl-root table.tl-sign { width: 194mm; border-collapse: collapse; table-layout: fixed; font-size: 8.5pt; }
+        .tl-root table.tl-sign td { border: 0; padding: 0; text-align: center; vertical-align: middle; }
+        .tl-root table.tl-sign td.ttl { height: 5mm; }
+        .tl-root table.tl-sign td.sp { height: 25mm; }
+        .tl-root table.tl-sign td.sp img { width: 22mm; height: 22mm; image-rendering: pixelated; }
+        .tl-root table.tl-sign td.nm { height: 5mm; }
+        .tl-root table.tl-sign td.rl { height: 5mm; font-weight: bold; }
+        .tl-root .tl-foot { font-size: 7.5pt; margin-top: 3mm; }
     </style>
 </head>
 <body>
@@ -217,38 +248,20 @@
 
 </div>
 
-{{-- ==================== AREA CETAK PDF - FROZEN (diisi dinamis via JS) ==================== --}}
-<div id="pdfPrintArea">
-    <div class="pdf-header">
-        <img src="{{ asset('images/logo.png') }}" alt="Logo">
-        <div>
-            <div class="pdf-title">BUKTI PENGELUARAN BARANG (OUTBOUND)</div>
-            <div class="pdf-subtitle">CPI Jombang Plant - Warehouse Department</div>
-        </div>
-    </div>
-    <div class="pdf-info-grid" id="pdfInfoGrid"></div>
-    <div class="pdf-section-title">Rincian Cell &amp; Bag</div>
-    <div id="pdfCellTables"></div>
-    <div id="pdfTirSection"></div>
-</div>
-
-{{-- BARU - AREA CETAK PDF - FRESH (diisi dinamis via JS) - lebih sederhana,
-     cuma 1 tabel item (tidak ada Cell/Bag/Tir sama sekali) --}}
-<div id="pdfPrintAreaFresh">
-    <div class="pdf-header">
-        <img src="{{ asset('images/logo.png') }}" alt="Logo">
-        <div>
-            <div class="pdf-title">BUKTI PENGELUARAN BARANG FRESH (OUTBOUND)</div>
-            <div class="pdf-subtitle">CPI Jombang Plant - Warehouse Department</div>
-        </div>
-    </div>
-    <div class="pdf-info-grid" id="pdfInfoGridFresh"></div>
-    <div class="pdf-section-title">Rincian Item</div>
-    <div id="pdfFreshItemTable"></div>
+{{-- ==================== AREA CETAK PDF TALLY LOADING (diisi dinamis via JS) ====================
+     Dipakai bersama Frozen & Fresh. #pdfHost disembunyikan di luar layar;
+     #pdfPrintArea (anak di dalamnya) yang dikirim ke html2pdf, sengaja
+     TANPA position fixed supaya hasil clone html2pdf tidak ikut keluar layar.
+     #pdfMeasure dipakai untuk mengukur tinggi asli tiap bagian sebelum
+     dibagi ke halaman (paginasi). --}}
+<div id="pdfHost">
+    <div id="pdfMeasure" class="tl-root"></div>
+    <div id="pdfPrintArea" class="tl-root"></div>
 </div>
 
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    const PDF_LOGO_URL = "{{ asset('images/logo.png') }}";
 
     // BARU - Tab aktif saat ini: 'frozen' atau 'fresh'.
     let activeTab = 'frozen';
@@ -412,70 +425,6 @@
         `;
     }
 
-    // ==================== DOWNLOAD PDF - FROZEN (client-side, html2pdf.js) ====================
-    async function downloadPdf(id) {
-        try {
-            const detail = await getDetail(id);
-            populatePrintArea(detail);
-
-            const opt = {
-                margin: 0,
-                filename: `Outbound_${detail.noDo}_${detail.tanggal}.pdf`,
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            };
-
-            await html2pdf().set(opt).from(document.getElementById('pdfPrintArea')).save();
-        } catch (err) {
-            Swal.fire({ title: 'Gagal Membuat PDF', text: err.message, icon: 'error' });
-        }
-    }
-
-    function populatePrintArea(detail) {
-        document.getElementById('pdfInfoGrid').innerHTML = `
-            <div><b>No DO</b>: ${detail.noDo}</div>
-            <div><b>Tanggal</b>: ${detail.tanggal}</div>
-            <div><b>Jam Muat</b>: ${detail.jamMuat}</div>
-            <div><b>Customer</b>: ${detail.namaCustomer}</div>
-            <div><b>No Polisi</b>: ${detail.noPol}</div>
-            <div><b>Driver</b>: ${detail.namaDriver}</div>
-            <div><b>Checker</b>: ${detail.checkerNama}</div>
-        `;
-
-        document.getElementById('pdfCellTables').innerHTML = detail.cells.map(c => `
-            <table>
-                <thead>
-                    <tr><th colspan="3">Cell ${c.kodeCell} &mdash; ${c.totalBag} Bag / ${Number(c.totalKg).toLocaleString('id-ID', {maximumFractionDigits:1})} Kg</th></tr>
-                    <tr><th>Bag / Keterangan</th><th>Kode Produksi</th><th>Kg</th></tr>
-                </thead>
-                <tbody>
-                    ${c.bags.map(b => `
-                        <tr>
-                            <td>${b.nomorBag ? 'Bag #' + b.nomorBag : (b.keterangan || 'Stock Adjustment')}</td>
-                            <td>${b.kodeProduksi ?? '-'}</td>
-                            <td>${Number(b.kg).toLocaleString('id-ID', {maximumFractionDigits:1})}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `).join('');
-
-        const tirSection = document.getElementById('pdfTirSection');
-        if (detail.tirs.length > 0) {
-            tirSection.innerHTML = `
-                <div class="pdf-section-title">Data Tir</div>
-                <table>
-                    <thead><tr><th>Tir</th><th>Jumlah Bag</th></tr></thead>
-                    <tbody>
-                        ${detail.tirs.map(t => `<tr><td>Tir ${t.tirKe}</td><td>${t.jumlahBag}</td></tr>`).join('')}
-                    </tbody>
-                </table>
-            `;
-        } else {
-            tirSection.innerHTML = '';
-        }
-    }
-
     function resetFilters() {
         document.getElementById('filterTanggal').value = '';
         document.getElementById('filterChecker').value = '';
@@ -614,56 +563,6 @@
         `;
     }
 
-    // ==================== DOWNLOAD PDF - FRESH (client-side, html2pdf.js) ====================
-    async function downloadFreshPdf(id) {
-        try {
-            const detail = await getFreshDetail(id);
-            populateFreshPrintArea(detail);
-
-            const opt = {
-                margin: 0,
-                filename: `Outbound_Fresh_${detail.noPo}_${detail.tanggal}.pdf`,
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            };
-
-            await html2pdf().set(opt).from(document.getElementById('pdfPrintAreaFresh')).save();
-        } catch (err) {
-            Swal.fire({ title: 'Gagal Membuat PDF', text: err.message, icon: 'error' });
-        }
-    }
-
-    function populateFreshPrintArea(detail) {
-        document.getElementById('pdfInfoGridFresh').innerHTML = `
-            <div><b>No PO</b>: ${detail.noPo}</div>
-            <div><b>Tanggal</b>: ${detail.tanggal}</div>
-            <div><b>Jam Muat</b>: ${detail.jamMuat}</div>
-            <div><b>Customer</b>: ${detail.namaCustomer}</div>
-            <div><b>No Polisi</b>: ${detail.noPol}</div>
-            <div><b>Driver</b>: ${detail.namaDriver}</div>
-            <div><b>Checker</b>: ${detail.checkerNama}</div>
-        `;
-
-        document.getElementById('pdfFreshItemTable').innerHTML = `
-    <table>
-        <thead>
-            <tr><th>Kode Produksi</th><th>Kode Produk</th><th>Nama Produk</th><th>Qty</th><th>Keterangan</th></tr>
-        </thead>
-        <tbody>
-            ${detail.items.map(item => `
-                <tr>
-                    <td>${item.kodeProduksi}</td>
-                    <td>${item.kodeProduk ?? '-'}</td>
-                    <td>${item.namaProduk ?? '-'}</td>
-                    <td>${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})}</td>
-                    <td>${item.keterangan ?? '-'}</td>
-                </tr>
-            `).join('')}
-        </tbody>
-    </table>
-`;
-    }
-
     function resetFreshFilters() {
         document.getElementById('filterTanggalFresh').value = '';
         document.getElementById('filterCheckerFresh').value = '';
@@ -674,6 +573,415 @@
     document.getElementById('filterTanggalFresh').addEventListener('change', loadFreshHistoryData);
     document.getElementById('filterCheckerFresh').addEventListener('change', loadFreshHistoryData);
     document.getElementById('filterSearchFresh').addEventListener('input', debounce(loadFreshHistoryData, 400));
+
+    // ============================================================
+    // ==========  PDF FORM TALLY LOADING (FM-WH-002) - BARU  ======
+    // ============================================================
+    // Format A4 portrait, dipakai bersama Frozen & Fresh.
+    //  - 1 blok per produk, grid 10 kolom x 10 baris = maks 100 bag per
+    //    blok (kalau lebih, blok baru dengan nama produk yang sama).
+    //  - Bag Stock Adjustment (Frozen) jadi blok sendiri.
+    //  - Pengisian grid urut ke bawah per kolom, sesuai urutan saat muat.
+    //  - Tinggi tiap bagian DIUKUR dulu (#pdfMeasure), baru dibagi ke
+    //    halaman - jadi blok tidak pernah terpotong di tengah.
+    // ============================================================
+    const PDF_MM_PX = 96 / 25.4;
+    const PDF_CONTENT_LIMIT_MM = 276;  // 296 (tinggi halaman) - 8 (atas) - 12 (bawah)
+    const PDF_BAG_PER_BLOCK = 100;     // 10 kolom x 10 baris
+
+    let pdfBusy = false;
+
+    function pdfEsc(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function pdfNum(n) {
+        return Number(n).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+    }
+
+    function pdfHariTanggal(ymd) {
+        const d = new Date(ymd + 'T00:00:00');
+        if (isNaN(d)) return ymd;
+        return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function pdfJam(j) {
+        return String(j ?? '').substring(0, 5);
+    }
+
+    function pdfFileSafe(s) {
+        return String(s ?? '').replace(/[\\/:*?"<>|]/g, '-');
+    }
+
+    function pdfMakeQr(text) {
+        try {
+            // QR hanya mendukung teks ASCII dengan aman - buang aksen/karakter khusus.
+            const clean = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '');
+            const qr = qrcode(0, 'M');
+            qr.addData(clean);
+            qr.make();
+            return qr.createDataURL(6, 0);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    // ---------- Header form (logo, judul, kotak dokumen, info pengiriman) ----------
+    function pdfHeadHtml(doc) {
+        const colInfo = '<col style="width:64.67mm"><col style="width:64.67mm"><col style="width:64.66mm">';
+
+        return `
+            <table class="tl-t">
+                <colgroup><col style="width:55mm"><col style="width:80mm"><col style="width:59mm"></colgroup>
+                <tr class="h6">
+                    <td rowspan="3">
+                        <img src="${PDF_LOGO_URL}" alt="" style="height:10mm; display:block; margin:0 auto 1mm;">
+                        <div style="font-weight:bold; font-size:8pt;">JOMBANG - INDONESIA</div>
+                    </td>
+                    <td rowspan="3">
+                        <div style="font-weight:bold; font-size:14pt;">FORM TALLY LOADING</div>
+                        <div style="font-size:8pt; margin-top:1.5mm;">${pdfEsc(doc.refLabel)} : <b>${pdfEsc(doc.refValue)}</b></div>
+                    </td>
+                    <td class="l sm">No Dokumen &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: FM-WH-002</td>
+                </tr>
+                <tr class="h6"><td class="l sm">Tanggal Efektif : 15 November 2023</td></tr>
+                <tr class="h6"><td class="l sm">Revisi/ Tgl &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 01/01 Agustus 2024</td></tr>
+            </table>
+            <div style="height:2mm;"></div>
+            <table class="tl-t">
+                <colgroup>${colInfo}</colgroup>
+                <tr class="h6">
+                    <td class="l"><span class="tl-lbl">Hari / Tanggal</span>: ${pdfEsc(pdfHariTanggal(doc.tanggal))}</td>
+                    <td class="l"><span class="tl-lbl">Tujuan</span>: ${pdfEsc(doc.tujuan)}</td>
+                    <td class="l"><span class="tl-lbl">No Mobil</span>: ${pdfEsc(doc.noPol)}</td>
+                </tr>
+                <tr class="h6">
+                    <td class="l"><span class="tl-lbl">Shift</span>: ${pdfEsc(pdfJam(doc.jamMuat))}</td>
+                    <td class="l"><span class="tl-lbl">No Seal</span>:</td>
+                    <td class="l"><span class="tl-lbl">Driver</span>: ${pdfEsc(doc.driver)}</td>
+                </tr>
+            </table>
+        `;
+    }
+
+    // ---------- 1 blok produk (maks 100 bag) ----------
+    function pdfBlockHtml(nama, entries, L) {
+        const grid = Array.from({ length: 10 }, () => Array(10).fill(null)); // [baris][kolom]
+        const colTotal = Array(10).fill(0);
+        const colUsed = Array(10).fill(false);
+        let count = 0;
+        let kg = 0;
+
+        entries.forEach((e, i) => {
+            const c = Math.floor(i / 10);
+            const r = i % 10;
+            grid[r][c] = e.kg;
+            colTotal[c] += e.kg;
+            colUsed[c] = true;
+            count += e.count;
+            kg += e.kg;
+        });
+
+        const colgroup = `<colgroup><col style="width:12mm">${'<col style="width:18.2mm">'.repeat(10)}</colgroup>`;
+        const headCells = Array(10).fill(`<td>${pdfEsc(L.kolom)}</td>`).join('');
+
+        const rows = grid.map((row, r) => `
+            <tr>
+                <td>${r + 1}</td>
+                ${row.map(v => `<td class="r">${v === null ? '' : pdfNum(v)}</td>`).join('')}
+            </tr>
+        `).join('');
+
+        const totalCells = colTotal.map((t, c) => `<td class="r"><b>${colUsed[c] ? pdfNum(t) : ''}</b></td>`).join('');
+
+        const html = `
+            <table class="tl-t">
+                ${colgroup}
+                <tr class="h6">
+                    <td colspan="9" class="l"><b>Nama Produk</b> : ${pdfEsc(nama)}</td>
+                    <td colspan="2" class="l"><b>Pack</b> :</td>
+                </tr>
+                <tr><td>No</td>${headCells}</tr>
+                ${rows}
+                <tr class="h55"><td><b>Total</b></td>${totalCells}</tr>
+                <tr class="h55">
+                    <td class="l"><b>Jumlah</b></td>
+                    <td colspan="3"></td>
+                    <td class="r"><b>${pdfNum(count)}</b></td>
+                    <td class="l">${pdfEsc(L.karung)}</td>
+                    <td class="l"><b>Jumlah</b></td>
+                    <td colspan="2"></td>
+                    <td class="r"><b>${pdfNum(kg)}</b></td>
+                    <td class="l">${pdfEsc(L.total)}</td>
+                </tr>
+            </table>
+        `;
+
+        return { html, count, kg };
+    }
+
+    // ---------- Grand Total + tanda tangan + catatan warna kertas ----------
+    function pdfFooterHtml(doc, grandCount, grandKg, qrUrl) {
+        const L = doc.labels;
+        const colgroup = `<colgroup><col style="width:12mm">${'<col style="width:18.2mm">'.repeat(10)}</colgroup>`;
+        const blank = '(' + '&nbsp;'.repeat(26) + ')';
+
+        return `
+            <table class="tl-t">
+                ${colgroup}
+                <tr class="h6">
+                    <td colspan="8" class="l"><b>GRAND TOTAL</b></td>
+                    <td colspan="2" class="r"><b>${pdfNum(grandCount)}</b></td>
+                    <td class="l">${pdfEsc(L.karung)}</td>
+                </tr>
+                <tr class="h6">
+                    <td colspan="8" class="l"><b>GRAND TOTAL</b></td>
+                    <td colspan="2" class="r"><b>${pdfNum(grandKg)}</b></td>
+                    <td class="l">${pdfEsc(L.total)}</td>
+                </tr>
+            </table>
+            <div style="height:5mm;"></div>
+            <table class="tl-sign">
+                <colgroup><col style="width:64.67mm"><col style="width:64.67mm"><col style="width:64.66mm"></colgroup>
+                <tr>
+                    <td class="ttl">Dibuat oleh,</td>
+                    <td class="ttl">Dicheck oleh,</td>
+                    <td class="ttl">Diterima oleh,</td>
+                </tr>
+                <tr>
+                    <td class="sp">${qrUrl ? `<img src="${qrUrl}" alt="">` : ''}</td>
+                    <td class="sp"></td>
+                    <td class="sp"></td>
+                </tr>
+                <tr>
+                    <td class="nm">( ${pdfEsc(doc.checkerNama)} )</td>
+                    <td class="nm">${blank}</td>
+                    <td class="nm">( ${pdfEsc(doc.driver)} )</td>
+                </tr>
+                <tr>
+                    <td class="rl">WAREHOUSE</td>
+                    <td class="rl">LOGISTIK</td>
+                    <td class="rl">DRIVER</td>
+                </tr>
+            </table>
+            <div class="tl-foot">1. Putih : Customer; &nbsp;2. Merah : Warehouse; &nbsp;3. Kuning : Logistik</div>
+        `;
+    }
+
+    // ---------- Ukur tinggi tiap bagian (mm) di DOM tersembunyi ----------
+    function pdfMeasure(htmls) {
+        const m = document.getElementById('pdfMeasure');
+        m.innerHTML = htmls.join('');
+        const heights = Array.from(m.children).map(el => el.getBoundingClientRect().height / PDF_MM_PX);
+        m.innerHTML = '';
+        return heights;
+    }
+
+    // ---------- Susun semua bagian jadi halaman-halaman A4 ----------
+    function pdfBuildPagesHtml(doc) {
+        const L = doc.labels;
+        const item = (html) => `<div class="tl-item">${html}</div>`;
+
+        const qrText = `Dibuat oleh: ${doc.checkerNama} (${doc.checkerKode}) | ${doc.refLabel}: ${doc.refValue} | ${doc.tanggal} ${pdfJam(doc.jamMuat)}`;
+        const qrUrl = pdfMakeQr(qrText);
+
+        const items = [item(pdfHeadHtml(doc))];
+        let grandCount = 0;
+        let grandKg = 0;
+
+        doc.groups.forEach(g => {
+            for (let i = 0; i < g.entries.length; i += PDF_BAG_PER_BLOCK) {
+                const r = pdfBlockHtml(g.nama, g.entries.slice(i, i + PDF_BAG_PER_BLOCK), L);
+                grandCount += r.count;
+                grandKg += r.kg;
+                items.push(item(r.html));
+            }
+        });
+
+        // Catatan (keterangan item) - tiap catatan 1 bagian sendiri supaya
+        // kalau panjang bisa pindah halaman dengan rapi.
+        doc.notes.forEach((n, idx) => {
+            const title = idx === 0 ? '<div style="font-weight:bold; font-size:8.5pt; margin-bottom:1mm;">Catatan :</div>' : '';
+            items.push(item(`${title}<div class="tl-note">${pdfEsc(n)}</div>`));
+        });
+
+        items.push(item(pdfFooterHtml(doc, grandCount, grandKg, qrUrl)));
+
+        const mini = item(`<div class="tl-mini">FORM TALLY LOADING &nbsp;|&nbsp; FM-WH-002 &nbsp;|&nbsp; ${pdfEsc(doc.refLabel)}: ${pdfEsc(doc.refValue)}</div>`);
+
+        const heights = pdfMeasure([...items, mini]);
+        const miniH = heights.pop();
+
+        const pages = [];
+        let cur = [];
+        let used = 0;
+        let hasContent = false;
+
+        items.forEach((html, i) => {
+            const h = heights[i];
+            if (hasContent && used + h > PDF_CONTENT_LIMIT_MM) {
+                pages.push(cur);
+                cur = [mini];
+                used = miniH;
+                hasContent = false;
+            }
+            cur.push(html);
+            used += h;
+            hasContent = true;
+        });
+        pages.push(cur);
+
+        return pages.map((p, idx) => `
+            <div class="tl-page ${idx === pages.length - 1 ? 'tl-last' : ''}">
+                ${p.join('')}
+                <div class="tl-pageno">Halaman ${idx + 1} dari ${pages.length}</div>
+            </div>
+        `).join('');
+    }
+
+    function pdfWaitImages(container) {
+        const imgs = Array.from(container.querySelectorAll('img'));
+        return Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => {
+            img.onload = res;
+            img.onerror = res;
+        })));
+    }
+
+    async function pdfRender(doc, filename) {
+        const area = document.getElementById('pdfPrintArea');
+        area.innerHTML = pdfBuildPagesHtml(doc);
+
+        try {
+            await pdfWaitImages(area);
+
+            const opt = {
+                margin: 0,
+                filename: filename,
+                image: { type: 'png' },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['css'] },
+            };
+
+            await html2pdf().set(opt).from(area).save();
+        } finally {
+            area.innerHTML = '';
+        }
+    }
+
+    // ---------- Susun data DO Frozen -> struktur dokumen Tally Loading ----------
+    function pdfBuildFrozenDoc(detail) {
+        const groups = new Map(); // urutan kemunculan = urutan saat muat
+
+        detail.cells.forEach(c => {
+            const batchBagCount = c.bags.filter(b => b.nomorBag !== null && b.nomorBag !== undefined).length;
+            const genericCount = Math.max(0, Number(c.totalBag) - batchBagCount);
+
+            c.bags.forEach(b => {
+                const isGeneric = b.nomorBag === null || b.nomorBag === undefined;
+                const nama = isGeneric ? 'Stock Adjustment' : (b.namaProduk || '-');
+                const key = isGeneric ? '__generic__' : 'p:' + nama;
+
+                if (!groups.has(key)) groups.set(key, { nama, entries: [] });
+                groups.get(key).entries.push({
+                    kg: Number(b.kg),
+                    count: isGeneric ? (genericCount > 0 ? genericCount : 1) : 1,
+                });
+            });
+        });
+
+        return {
+            refLabel: 'No DO',
+            refValue: detail.noDo,
+            tanggal: detail.tanggal,
+            jamMuat: detail.jamMuat,
+            tujuan: detail.namaCustomer,
+            noPol: detail.noPol,
+            driver: detail.namaDriver,
+            checkerNama: detail.checkerNama,
+            checkerKode: detail.checkerKode,
+            labels: { kolom: 'Kg', karung: 'Karung', total: 'Kg' },
+            groups: Array.from(groups.values()),
+            notes: [],
+        };
+    }
+
+    // ---------- Susun data PO Fresh -> struktur dokumen Tally Loading ----------
+    function pdfBuildFreshDoc(detail) {
+        const groups = new Map();
+        const notes = [];
+
+        detail.items.forEach(item => {
+            const nama = item.namaProduk || '-';
+            if (!groups.has(nama)) groups.set(nama, { nama, entries: [] });
+            groups.get(nama).entries.push({ kg: Number(item.qty), count: 1 });
+
+            if (item.keterangan) {
+                notes.push(`${item.kodeProduksi ?? '-'} – ${item.keterangan}`);
+            }
+        });
+
+        return {
+            refLabel: 'No PO',
+            refValue: detail.noPo,
+            tanggal: detail.tanggal,
+            jamMuat: detail.jamMuat,
+            tujuan: detail.namaCustomer,
+            noPol: detail.noPol,
+            driver: detail.namaDriver,
+            checkerNama: detail.checkerNama,
+            checkerKode: detail.checkerKode,
+            labels: { kolom: 'Qty', karung: 'Item', total: 'Qty' },
+            groups: Array.from(groups.values()),
+            notes,
+        };
+    }
+
+    async function pdfRunWithLoading(buildFn) {
+        if (pdfBusy) return;
+        pdfBusy = true;
+
+        Swal.fire({
+            title: 'Membuat PDF...',
+            text: 'Mohon tunggu sebentar.',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => Swal.showLoading(),
+        });
+
+        try {
+            await buildFn();
+            Swal.close();
+        } catch (err) {
+            Swal.fire({ title: 'Gagal Membuat PDF', text: err.message, icon: 'error' });
+        } finally {
+            pdfBusy = false;
+        }
+    }
+
+    // ==================== DOWNLOAD PDF - FROZEN ====================
+    function downloadPdf(id) {
+        return pdfRunWithLoading(async () => {
+            const detail = await getDetail(id);
+            await pdfRender(
+                pdfBuildFrozenDoc(detail),
+                `Tally_Loading_${pdfFileSafe(detail.noDo)}_${detail.tanggal}.pdf`
+            );
+        });
+    }
+
+    // ==================== DOWNLOAD PDF - FRESH ====================
+    function downloadFreshPdf(id) {
+        return pdfRunWithLoading(async () => {
+            const detail = await getFreshDetail(id);
+            await pdfRender(
+                pdfBuildFreshDoc(detail),
+                `Tally_Loading_Fresh_${pdfFileSafe(detail.noPo)}_${detail.tanggal}.pdf`
+            );
+        });
+    }
 
     // Tab Frozen dimuat langsung saat halaman terbuka (default tab).
     // Tab Fresh baru dimuat sekali saat pertama kali di-klik (lihat setActiveTab()).

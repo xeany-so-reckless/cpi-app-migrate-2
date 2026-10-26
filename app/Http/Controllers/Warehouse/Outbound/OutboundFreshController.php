@@ -218,11 +218,18 @@ class OutboundFreshController extends Controller
 
     /**
      * BARU - Detail 1 dokumen Outbound Fresh (dipanggil saat baris
-     * di-expand di tabel Riwayat).
+     * di-expand di tabel Riwayat, dan jadi sumber data PDF Tally Loading).
+     *
+     * REVISI (PDF Tally Loading): tambah 'checkerKode' (employee_code
+     * checker) untuk teks QR tanda tangan Warehouse, dan item diurutkan
+     * by id supaya urutan di PDF konsisten.
      */
     public function historyDetail(OutboundFreshShipment $outboundFreshShipment): JsonResponse
     {
-        $outboundFreshShipment->load('checker', 'items');
+        $outboundFreshShipment->load([
+            'checker',
+            'items' => fn ($q) => $q->orderBy('id'),
+        ]);
 
         return response()->json([
             'id'           => $outboundFreshShipment->id,
@@ -233,6 +240,7 @@ class OutboundFreshController extends Controller
             'noPol'        => $outboundFreshShipment->no_pol,
             'namaDriver'   => $outboundFreshShipment->nama_driver,
             'checkerNama'  => $outboundFreshShipment->checker->name ?? '-',
+            'checkerKode'  => $outboundFreshShipment->checker->employee_code ?? '-',
             'items'        => $outboundFreshShipment->items->map(fn (OutboundFreshShipmentItem $item) => [
                 'kodeProduk'   => $item->kode_produk,
                 'namaProduk'   => $item->nama_produk,

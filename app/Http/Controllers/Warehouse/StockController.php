@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Cell;
 use App\Models\CellReservation;
 use App\Models\CellStockAdjustment;
+use App\Models\OutboundShipmentCellBag;
 use App\Models\Product;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -258,26 +259,62 @@ class StockController extends Controller
      * Dipanggil on-demand (bukan sekaligus di data()) - baru diambil pas
      * user klik expand cell tertentu, biar tidak berat kalau 636 cell
      * sekaligus dimuat semua.
+     *
+     * REVISI (Outbound): bag yang SUDAH KELUAR lewat Outbound
+     * (tercatat di outbound_shipment_cell_bags) tidak ditampilkan lagi.
+     * - Bag dicek satu per satu (batch_id + nomor_bag), sama seperti
+     *   Cell::availableBags().
+     * - jumlahBag / kgBags / totalKg yang tampil = SISA yang masih ada.
+     * - Batch yang semua bag-nya sudah keluar disembunyikan sepenuhnya.
+     * - Bag berstatus reject TIDAK dikecualikan di sini, supaya
+     *   konsisten dengan angka "Terpakai" di tabel utama (yang juga
+     *   menghitung jumlah_bag penuh).
      */
     public function batches(Cell $cell): JsonResponse
     {
-        $batches = $cell->reservations()
+        $reservations = $cell->reservations()
             ->where('status', 'USED')
             ->with('batch')
             ->get()
-            ->filter(fn (CellReservation $r) => $r->batch !== null)
-            ->map(function (CellReservation $r) {
+            ->filter(fn (CellReservation $r) => $r->batch !== null);
+
+        $batchIds = $reservations->map(fn (CellReservation $r) => $r->batch->id)->all();
+
+        // Bag yang sudah pernah keluar via Outbound, hanya untuk batch
+        // yang ada di cell ini (key: "batch_id-nomor_bag").
+        $sudahKeluar = OutboundShipmentCellBag::whereIn('batch_id', $batchIds)
+            ->whereNotNull('nomor_bag')
+            ->get(['batch_id', 'nomor_bag'])
+            ->map(fn ($row) => $row->batch_id.'-'.$row->nomor_bag)
+            ->flip();
+
+        $batches = $reservations
+            ->map(function (CellReservation $r) use ($sudahKeluar) {
                 $batch = $r->batch;
+
+                $kgBags = [];
+                for ($i = 1; $i <= $batch->jumlah_bag; $i++) {
+                    if (isset($sudahKeluar[$batch->id.'-'.$i])) {
+                        continue; // bag ini sudah keluar via Outbound
+                    }
+
+                    $kgBags[] = (float) $batch->{"kg_bag_{$i}"};
+                }
+
+                if (count($kgBags) === 0) {
+                    return null; // semua bag batch ini sudah keluar
+                }
 
                 return [
                     'kodeProduksi'    => $batch->kode_produksi,
                     'noTrolly'        => $batch->no_trolly,
                     'tanggalProduksi' => optional($batch->tanggal_produksi)->format('d/m/Y'),
-                    'jumlahBag'       => $batch->jumlah_bag,
-                    'kgBags'          => array_slice($batch->kg_bags_array, 0, $batch->jumlah_bag),
-                    'totalKg'         => $batch->total_kg,
+                    'jumlahBag'       => count($kgBags),
+                    'kgBags'          => $kgBags,
+                    'totalKg'         => round(array_sum($kgBags), 2),
                 ];
             })
+            ->filter()
             ->values();
 
         return response()->json($batches);
