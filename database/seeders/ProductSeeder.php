@@ -97,9 +97,9 @@ class ProductSeeder extends Seeder
             ['67', 'JANTUNG BERSIH 1 KG FZ', 25, 'by_product', 9],
             ['68', 'AMPELA BERSIH 1 KG FZ', 25, 'by_product', 10],
             ['70', 'HJA KOTOR 1 KG FZ', 25, 'by_product', 11],
-            ['79', 'AMPELA 1 KG FZ CP', 25, 'by_product', 12],
-            ['80', 'HATI 1 KG FZ CP', 25, 'by_product', 13],
-            ['81', 'JANTUNG 1 KG FZ CP', 25, 'by_product', 14],
+            ['79', 'AMPELA 1 KG FZ CP', 20, 'by_product', 12],
+            ['80', 'HATI 1 KG FZ CP', 20, 'by_product', 13],
+            ['81', 'JANTUNG 1 KG FZ CP', 20, 'by_product', 14],
             ['82', 'HATI 5 KG FZ CP', 4, 'by_product', 15],
         ];
 
