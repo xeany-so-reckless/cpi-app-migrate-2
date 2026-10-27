@@ -364,6 +364,13 @@
         <select id="filterColdStorage"><option value="">Semua Cold Storage</option></select>
         <select id="filterLantai"><option value="">Semua Lantai</option></select>
         <select id="filterKategori"><option value="">Semua Kategori</option></select>
+        <select id="filterWarna">
+            <option value="">Semua Warna</option>
+            <option value="merah">Merah (Jan-Mar)</option>
+            <option value="biru">Biru (Apr-Jun)</option>
+            <option value="hijau">Hijau (Jul-Sep)</option>
+            <option value="kuning">Kuning (Okt-Des)</option>
+        </select>
         <button class="btn-reset" onclick="resetFilters()">Reset Filter</button>
         <button class="btn-upload" onclick="document.getElementById('excelUploadInput').click()">
             <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">upload_file</span> Upload Excel
@@ -419,6 +426,21 @@
             });
         }
 
+        // Filter warna dilakukan di sisi klien dari data yang sudah dimuat.
+        // Cell lolos kalau bag warna terpilih > 0 (tidak tergantung mode BAG/KG).
+        function getFilteredData() {
+            const warna = document.getElementById('filterWarna').value;
+            if (!warna) return allStockData;
+
+            return allStockData.filter(d => Number(d.breakdownWarna?.[warna]?.bag || 0) > 0);
+        }
+
+        function renderAll() {
+            const data = getFilteredData();
+            renderTable(data);
+            renderStats(data);
+        }
+
         function setViewMode(mode) {
             viewMode = mode;
             document.getElementById('btnViewBag').classList.toggle('active', mode === 'bag');
@@ -429,8 +451,7 @@
                 document.getElementById(id).innerText = unitText;
             });
 
-            renderStats(allStockData);
-            renderTable(allStockData);
+            renderAll();
         }
 
         async function handleExcelUpload(input) {
@@ -496,24 +517,26 @@
                     lantaiSelect.innerHTML += `<option value="${v}">${v}</option>`;
                 });
 
-const kategoriLabels = {
-    'kw1': 'Premium',
-    'kw2': 'Super',
-};
-const kategoriDihapus = ['bahan_baku'];
+                const kategoriLabels = {
+                    'kw1': 'Premium',
+                    'kw2': 'Super',
+                };
+                const kategoriDihapus = ['bahan_baku'];
 
-const kategoriSelect = document.getElementById('filterKategori');
-opts.kategori
-    .filter(v => !kategoriDihapus.includes(v))
-    .forEach(v => {
-        const label = kategoriLabels[v] || v;
-        kategoriSelect.innerHTML += `<option value="${v}">${label}</option>`;
-    });
+                const kategoriSelect = document.getElementById('filterKategori');
+                opts.kategori
+                    .filter(v => !kategoriDihapus.includes(v))
+                    .forEach(v => {
+                        const label = kategoriLabels[v] || v;
+                        kategoriSelect.innerHTML += `<option value="${v}">${label}</option>`;
+                    });
             } catch (err) {
                 console.error('Gagal memuat filter options:', err);
             }
         }
 
+        // Catatan: filter warna sengaja TIDAK ikut dikirim ke server,
+        // karena difilter di klien lewat getFilteredData().
         function buildQueryParams() {
             const params = new URLSearchParams();
             const search = document.getElementById('filterSearch').value.trim();
@@ -538,8 +561,8 @@ opts.kategori
                 const res = await fetch(`{{ route('warehouse.stock.data') }}?${qs}`);
                 const data = await res.json();
                 allStockData = data;
-                renderTable(data);
-                renderStats(data);
+                batchCache = {}; // data baru dimuat, cache batch lama tidak dipakai lagi
+                renderAll();
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="9" class="empty-state">Gagal memuat data: ${err.message}</td></tr>`;
             }
@@ -646,70 +669,70 @@ opts.kategori
         }
 
         function toggleExpand(cellId) {
-    if (expandedCells.has(cellId)) {
-        expandedCells.delete(cellId);
-        renderTable(allStockData);
-        return;
-    }
-    expandedCells.add(cellId);
-    renderTable(allStockData);
-    loadBatchesForCell(cellId);
-}
+            if (expandedCells.has(cellId)) {
+                expandedCells.delete(cellId);
+                renderTable(getFilteredData());
+                return;
+            }
+            expandedCells.add(cellId);
+            renderTable(getFilteredData());
+            loadBatchesForCell(cellId);
+        }
 
-async function loadBatchesForCell(cellId) {
-    if (batchCache[cellId]) {
-        renderBatchListInto(cellId, batchCache[cellId]);
-        return;
-    }
-    try {
-        const res = await fetch(`{{ url('warehouse/stock') }}/${cellId}/batches`);
-        const data = await res.json();
-        batchCache[cellId] = data;
-        renderBatchListInto(cellId, data);
-    } catch (err) {
-        const container = document.getElementById(`batchList-${cellId}`);
-        if (container) container.innerHTML = `<div class="warna-empty">Gagal memuat data batch: ${err.message}</div>`;
-    }
-}
+        async function loadBatchesForCell(cellId) {
+            if (batchCache[cellId]) {
+                renderBatchListInto(cellId, batchCache[cellId]);
+                return;
+            }
+            try {
+                const res = await fetch(`{{ url('warehouse/stock') }}/${cellId}/batches`);
+                const data = await res.json();
+                batchCache[cellId] = data;
+                renderBatchListInto(cellId, data);
+            } catch (err) {
+                const container = document.getElementById(`batchList-${cellId}`);
+                if (container) container.innerHTML = `<div class="warna-empty">Gagal memuat data batch: ${err.message}</div>`;
+            }
+        }
 
-function renderBatchListInto(cellId, batches) {
-    const container = document.getElementById(`batchList-${cellId}`);
-    if (!container) return;
-    container.innerHTML = renderBatchTable(batches);
-}
+        function renderBatchListInto(cellId, batches) {
+            const container = document.getElementById(`batchList-${cellId}`);
+            if (!container) return;
+            container.innerHTML = renderBatchTable(batches);
+        }
 
-function renderBatchTable(batches) {
-    if (!batches || batches.length === 0) {
-        return `<div class="warna-empty">Belum ada batch asli (Inbound) yang tercatat untuk cell ini.</div>`;
-    }
+        function renderBatchTable(batches) {
+            if (!batches || batches.length === 0) {
+                return `<div class="warna-empty">Belum ada batch asli (Inbound) yang tercatat untuk cell ini.</div>`;
+            }
 
-    const rows = batches.map(b => `
-        <tr>
-            <td class="mono" style="font-size:0.75rem;">${b.kodeProduksi}</td>
-            <td style="font-size:0.75rem;">${b.noTrolly}</td>
-            <td style="font-size:0.75rem;">${b.tanggalProduksi ?? '-'}</td>
-            <td class="num" style="font-size:0.75rem;">${b.jumlahBag}</td>
-            <td style="font-size:0.68rem; color:var(--muted);">${b.kgBags.map(k => Number(k).toLocaleString('id-ID', {maximumFractionDigits:1})).join(', ')}</td>
-            <td class="num" style="font-size:0.75rem; font-weight:700;">${Number(b.totalKg).toLocaleString('id-ID', {maximumFractionDigits:1})}</td>
-        </tr>
-    `).join('');
-
-    return `
-        <table style="width:100%; border-collapse:collapse;">
-            <thead>
+            const rows = batches.map(b => `
                 <tr>
-                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kode Produksi</th>
-                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">No Trolly</th>
-                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Tanggal</th>
-                    <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Jumlah Bag</th>
-                    <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kg per Bag</th>
-                    <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Total Kg</th>
+                    <td class="mono" style="font-size:0.75rem;">${b.kodeProduksi}</td>
+                    <td style="font-size:0.75rem;">${b.noTrolly}</td>
+                    <td style="font-size:0.75rem;">${b.tanggalProduksi ?? '-'}</td>
+                    <td class="num" style="font-size:0.75rem;">${b.jumlahBag}</td>
+                    <td style="font-size:0.68rem; color:var(--muted);">${b.kgBags.map(k => Number(k).toLocaleString('id-ID', {maximumFractionDigits:1})).join(', ')}</td>
+                    <td class="num" style="font-size:0.75rem; font-weight:700;">${Number(b.totalKg).toLocaleString('id-ID', {maximumFractionDigits:1})}</td>
                 </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
-    `;
-}
+            `).join('');
+
+            return `
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kode Produksi</th>
+                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">No Trolly</th>
+                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Tanggal</th>
+                            <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Jumlah Bag</th>
+                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kg per Bag</th>
+                            <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Total Kg</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
 
         function renderWarnaBreakdown(w) {
             if (!w) return `<div class="warna-empty">Belum ada data breakdown warna untuk cell ini.</div>`;
@@ -742,6 +765,7 @@ function renderBatchTable(batches) {
             document.getElementById('filterColdStorage').value = '';
             document.getElementById('filterLantai').value = '';
             document.getElementById('filterKategori').value = '';
+            document.getElementById('filterWarna').value = '';
             loadStockData();
         }
 
@@ -749,6 +773,8 @@ function renderBatchTable(batches) {
         document.getElementById('filterColdStorage').addEventListener('change', loadStockData);
         document.getElementById('filterLantai').addEventListener('change', loadStockData);
         document.getElementById('filterKategori').addEventListener('change', loadStockData);
+        // Filter warna: tanpa request ke server, cukup render ulang.
+        document.getElementById('filterWarna').addEventListener('change', renderAll);
 
         function debounce(fn, delay) {
             let timer;
