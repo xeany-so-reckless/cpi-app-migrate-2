@@ -210,7 +210,8 @@
 
 @push('scripts')
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bwip-js/dist/bwip-js-min.js"></script>
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
@@ -313,7 +314,7 @@
         const wrapper = document.createElement('div');
         wrapper.style.cssText =
             `position:fixed; left:0; top:0; width:${REPORT_WIDTH_MM}mm; z-index:-1; ` +
-            `opacity:0; pointer-events:none; background:#fff;`;
+            `pointer-events:none; background:#fff;`;
 
         const clone = source.cloneNode(true);
 
@@ -345,26 +346,33 @@
             await waitForAssets(clone);
             autoFitRekap(clone);
 
-            const opt = {
-                margin: 0,
-                filename: 'rekap.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: CANVAS_SCALE,
-                    useCORS: true,
-                    logging: false,
-                    scrollX: 0,
-                    scrollY: 0,
-                    x: 0,
-                    y: 0,
-                    windowWidth: 1280,
-                    windowHeight: 900,
-                    backgroundColor: '#ffffff'
-                },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-            };
+            const w = clone.offsetWidth;
+            const h = clone.offsetHeight;
 
-            return await html2pdf().set(opt).from(clone).outputPdf('blob');
+            const canvas = await html2canvas(clone, {
+                scale: CANVAS_SCALE,
+                useCORS: true,
+                logging: false,
+                scrollX: 0,
+                scrollY: 0,
+                width: w,
+                height: h,
+                windowWidth: Math.max(w + 100, 1400),
+                windowHeight: Math.max(h + 100, 1000),
+                backgroundColor: '#ffffff'
+            });
+
+            // Tempel ke A4 landscape (297 x 210 mm) dengan skala yang dihitung
+            // sendiri supaya pasti muat, kiri-kanan maupun atas-bawah.
+            const PAGE_W = 297, PAGE_H = 210;
+            const ratio  = Math.min(PAGE_W / canvas.width, PAGE_H / canvas.height);
+            const drawW  = canvas.width * ratio;
+            const drawH  = canvas.height * ratio;
+            const posX   = (PAGE_W - drawW) / 2;
+
+            const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.98), 'JPEG', posX, 0, drawW, drawH);
+            return pdf.output('blob');
         } finally {
             wrapper.remove();
         }
