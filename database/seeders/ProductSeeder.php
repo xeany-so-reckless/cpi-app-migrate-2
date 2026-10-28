@@ -14,6 +14,11 @@ class ProductSeeder extends Seeder
      *   di Rekap Hasil Produksi v.4
      *
      * [code, name, default_ekor, category, display_order]
+     *
+     * DIUBAH: baris boleh punya 2 elemen OPSIONAL di belakang:
+     * [..., type, category_code] - khusus produk modul Produksi Fresh.
+     * Kalau tidak diisi, kolom `type` dan `category_code` TIDAK disentuh
+     * (nilai produk lama di database tetap aman, tidak tertimpa).
      */
     public function run(): void
     {
@@ -84,6 +89,9 @@ class ProductSeeder extends Seeder
             ['57', 'YM PART 10 @0.9 KG FZ M3 FC', 20, 'parting', 11],
             ['58', 'YM PART 15 @1.3 KG FZ MBG', 30, 'parting', 12],
             ['69', 'YM PART 4 @0.7 KG FZ', 30, 'parting', 13],
+            // BARU - Produk Fresh (modul Produksi Fresh, tipe Main Product).
+            // type & category_code disamakan dengan produk 47-49.
+            ['83', 'YAMIKU PARTING 10 @1.0 KG FRESH', 0, 'parting', 14, 'main', '02'],
 
             // === BY PRODUCT EVIS & OTHERS ===
             ['59', 'YM TUNGGIR 1 KG FZ', 25, 'by_product', 1],
@@ -103,17 +111,28 @@ class ProductSeeder extends Seeder
             ['82', 'HATI 5 KG FZ CP', 4, 'by_product', 15],
         ];
 
-        foreach ($products as [$code, $name, $ekor, $category, $order]) {
-            Product::updateOrCreate(
-                ['code' => $code],
-                [
-                    'name' => $name,
-                    'default_ekor' => $ekor,
-                    'category' => $category,
-                    'display_order' => $order,
-                    'is_active' => true,
-                ]
-            );
+        foreach ($products as $row) {
+            [$code, $name, $ekor, $category, $order] = $row;
+
+            $attributes = [
+                'name' => $name,
+                'default_ekor' => $ekor,
+                'category' => $category,
+                'display_order' => $order,
+                'is_active' => true,
+            ];
+
+            // type & category_code hanya ditulis kalau baris memang
+            // mengisinya (saat ini cuma produk 83). Produk lain tidak
+            // disentuh, jadi nilai di database tidak tertimpa.
+            if (isset($row[5])) {
+                $attributes['type'] = $row[5];
+            }
+            if (isset($row[6])) {
+                $attributes['category_code'] = $row[6];
+            }
+
+            Product::updateOrCreate(['code' => $code], $attributes);
         }
     }
 }
