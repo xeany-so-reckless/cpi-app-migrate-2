@@ -173,6 +173,44 @@
 
     let temporaryData = [];
 
+    // ------------------------------------------------------------------
+    // DRAFT OTOMATIS (localStorage)
+    // Disimpan per pegawai supaya tidak tercampur kalau tablet dipakai
+    // bergantian. Data dihapus otomatis setelah export berhasil.
+    // ------------------------------------------------------------------
+    const DRAFT_KEY = 'tally_draft_' + kodeBarcodePegawai;
+
+    function saveDraft() {
+        try {
+            if (temporaryData.length === 0) {
+                localStorage.removeItem(DRAFT_KEY);
+            } else {
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(temporaryData));
+            }
+        } catch (err) {
+            console.warn("Gagal menyimpan draft:", err);
+        }
+    }
+
+    function loadDraft() {
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return;
+
+            temporaryData = parsed.map(d => ({
+                tanggal: String(d.tanggal || ''),
+                kode: String(d.kode || ''),
+                nama: String(d.nama || ''),
+                ekor: parseFloat(d.ekor) || 0,
+                berat: parseFloat(d.berat) || 0
+            }));
+        } catch (err) {
+            console.warn("Gagal membaca draft:", err);
+        }
+    }
+
     const tglInput = document.getElementById('tgl');
     const kodeInput = document.getElementById('kodeInput');
     const ekorInput = document.getElementById('ekor');
@@ -182,6 +220,10 @@
 
 
     tglInput.value = new Date().toISOString().split('T')[0];
+
+    // Pulihkan draft (kalau ada) saat halaman dibuka / ter-refresh
+    loadDraft();
+    renderTableTally();
 
     function checkProductCode(val) {
         const found = productDatabase.find(p => p[0].toString() === val);
@@ -255,6 +297,9 @@
             `;
         }
         tbody.innerHTML = htmlContent;
+
+        // Setiap kali tabel berubah (simpan / edit / hapus / reset), draft ikut disimpan
+        saveDraft();
     }
 
     function editDataTally(index) {
@@ -400,11 +445,40 @@
     async function exportDataTally(type) {
         if (temporaryData.length === 0) return alert("Belum ada data untuk diekspor!");
 
-        if (type === 'raw') {
-            exportRawXlsx();
-        } else if (type === 'rekap') {
-            await exportRekapXlsxWithBarcode();
+        try {
+            if (type === 'raw') {
+                exportRawXlsx();
+            } else if (type === 'rekap') {
+                await exportRekapXlsxWithBarcode();
+            }
+        } catch (err) {
+            // Export gagal: data & draft JANGAN dihapus
+            console.error("Export gagal:", err);
+            alert("Export gagal, data tetap tersimpan. Silakan coba lagi.");
+            return;
         }
+
+        // Export berhasil: kosongkan tabel & draft, kembali ke kondisi awal
+        resetAfterExport();
+    }
+
+    function resetAfterExport() {
+        temporaryData = [];
+        renderTableTally(); // sekaligus menghapus draft di localStorage
+
+        const currentTgl = tglInput.value;
+        document.getElementById('prodForm').reset();
+        tglInput.value = currentTgl;
+        namaLabel.textContent = "";
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Export berhasil',
+            text: 'Tabel sudah dikosongkan, siap untuk input baru.',
+            width: 380,
+            timer: 2200,
+            showConfirmButton: false
+        });
     }
 
     // Export Raw tetap pakai SheetJS (ringan, tidak butuh gambar)
