@@ -41,6 +41,7 @@
 }
     .btn-export-raw { background: #3498db; color: white; font-size: 0.85rem; }
     .btn-export-rekap { background: var(--warning-color); color: white; font-size: 0.85rem; }
+    .btn-import { background: #8e44ad; color: white; font-size: 0.85rem; }
     .btn:disabled { background: #ccc; cursor: not-allowed; }
 
     .btn-action { padding: 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 4px; border: none; cursor: pointer; color: white; transition: 0.2s; }
@@ -130,6 +131,8 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
         <h3>Laporan Produksi</h3>
         <div class="btn-group">
+            <button onclick="document.getElementById('importRawFile').click()" class="btn btn-import" type="button">📂 Import Raw Data (xlsx)</button>
+            <input type="file" id="importRawFile" accept=".xlsx,.xls" style="display:none;">
             <button onclick="exportDataTally('raw')" class="btn btn-export-raw" type="button">📥 Export Raw Data (xlsx)</button>
             <button onclick="exportDataTally('rekap')" class="btn btn-export-rekap" type="button">📊 Export Konsolidasi (Rekap)</button>
         </div>
@@ -520,6 +523,192 @@
         });
     }
 
+    // ------------------------------------------------------------------
+    // IMPORT RAW DATA (xlsx)
+    // Membaca file hasil "Export Raw Data" (kolom: Tanggal, Kode, Nama Produk,
+    // Ekor, Berat (kg)) lalu memasukkannya ke tabel. Nama produk selalu
+    // diambil dari master produk (database), bukan dari file.
+    // ------------------------------------------------------------------
+    document.getElementById('importRawFile').addEventListener('change', handleImportRaw);
+
+    function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function isEmptyCell(v) {
+        return v === '' || v === null || v === undefined || String(v).trim() === '';
+    }
+
+    // Mengembalikan 'YYYY-MM-DD', atau null kalau formatnya tidak dikenali.
+    // Sel kosong -> pakai tanggal yang sedang dipilih di form.
+    function parseTanggalImport(v) {
+        if (isEmptyCell(v)) return tglInput.value;
+        if (typeof v === 'number') {
+            const p = XLSX.SSF.parse_date_code(v);
+            if (!p) return null;
+            return `${p.y}-${pad2(p.m)}-${pad2(p.d)}`;
+        }
+        const s = String(v).trim();
+        let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+        m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+        return null;
+    }
+
+    // Menerima angka biasa (18.5) maupun koma desimal (18,5). Selain itu NaN.
+    function parseAngkaImport(v) {
+        if (typeof v === 'number') return isFinite(v) ? v : NaN;
+        const s = String(v).trim().replace(',', '.');
+        return /^\d+(\.\d+)?$/.test(s) ? parseFloat(s) : NaN;
+    }
+
+    function parseRawRows(rows) {
+        const norm = c => String(c).trim().toLowerCase();
+        let headerIdx = -1;
+        let col = {};
+
+        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+            const cells = rows[i].map(norm);
+            const kode = cells.findIndex(c => c.startsWith('kode'));
+            const ekor = cells.findIndex(c => c.startsWith('ekor') || c.startsWith('jumlah'));
+            const berat = cells.findIndex(c => c.startsWith('berat'));
+            if (kode !== -1 && ekor !== -1 && berat !== -1) {
+                headerIdx = i;
+                col = { kode, ekor, berat, tanggal: cells.findIndex(c => c.startsWith('tanggal')) };
+                break;
+            }
+        }
+        if (headerIdx === -1) return null;
+
+        const valid = [];
+        const skipped = [];
+
+        for (let i = headerIdx + 1; i < rows.length; i++) {
+            const r = rows[i];
+            const rowNo = i + 1; // nomor baris di Excel
+
+            if (isEmptyCell(r[col.kode]) && isEmptyCell(r[col.ekor]) && isEmptyCell(r[col.berat])) continue;
+
+            const kode = String(r[col.kode]).trim();
+            const found = productDatabase.find(p => p[0].toString() === kode);
+            if (!found) { skipped.push({ row: rowNo, reason: `kode "${kode}" tidak ada di master produk` }); continue; }
+
+            const ekor = parseAngkaImport(r[col.ekor]);
+            if (isNaN(ekor) || ekor <= 0) { skipped.push({ row: rowNo, reason: 'jumlah ekor tidak valid' }); continue; }
+
+            const berat = parseAngkaImport(r[col.berat]);
+            if (isNaN(berat)) { skipped.push({ row: rowNo, reason: 'berat tidak valid' }); continue; }
+
+            const tanggal = parseTanggalImport(col.tanggal === -1 ? '' : r[col.tanggal]);
+            if (!tanggal) { skipped.push({ row: rowNo, reason: 'format tanggal tidak dikenali' }); continue; }
+
+            valid.push({ tanggal, kode, nama: found[1], ekor, berat });
+        }
+
+        return { valid, skipped };
+    }
+
+    function buildSkippedHtml(skipped) {
+        if (!skipped.length) return '';
+        const items = skipped.slice(0, 50).map(s => `<li>Baris ${s.row}: ${escapeHtml(s.reason)}</li>`).join('');
+        const more = skipped.length > 50 ? `<li>...dan ${skipped.length - 50} baris lain</li>` : '';
+        return `<div style="margin-top:12px;text-align:left;font-size:13px;color:#b45309;">
+                    <b>${skipped.length} baris dilewati:</b>
+                    <ul style="max-height:160px;overflow:auto;padding-left:18px;margin-top:6px;">${items}${more}</ul>
+                </div>`;
+    }
+
+    function handleImportRaw(e) {
+        const file = e.target.files[0];
+        e.target.value = ''; // supaya file yang sama bisa dipilih lagi
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onerror = () => {
+            Swal.fire({ icon: 'error', title: 'Gagal membaca file', text: 'Coba pilih file lagi.' });
+        };
+        reader.onload = (ev) => {
+            let result;
+            try {
+                const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+                result = parseRawRows(rows);
+            } catch (err) {
+                console.error("Import gagal:", err);
+                Swal.fire({ icon: 'error', title: 'File tidak bisa dibaca', text: 'Pastikan file berformat .xlsx hasil Export Raw Data. (' + err.message + ')' });
+                return;
+            }
+
+            if (!result) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Format file tidak dikenali',
+                    text: 'Kolom yang dibutuhkan: Tanggal, Kode, Nama Produk, Ekor, Berat (kg).'
+                });
+                return;
+            }
+
+            if (result.valid.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Tidak ada data yang bisa diimport',
+                    html: result.skipped.length ? buildSkippedHtml(result.skipped) : 'File tidak berisi baris data.'
+                });
+                return;
+            }
+
+            if (temporaryData.length > 0) {
+                Swal.fire({
+                    icon: 'question',
+                    title: 'Tabel sudah berisi data',
+                    html: `Tabel saat ini berisi <b>${temporaryData.length}</b> baris.<br>
+                           Tambahkan <b>${result.valid.length}</b> baris dari file ke tabel?`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, tambahkan',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                    focusCancel: true,
+                    allowOutsideClick: false
+                }).then(r => {
+                    if (r.isConfirmed) applyImport(result.valid, result.skipped);
+                });
+            } else {
+                applyImport(result.valid, result.skipped);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function applyImport(valid, skipped) {
+        temporaryData = temporaryData.concat(valid);
+
+        // Tanggal di header Excel Konsolidasi mengikuti tanggal data hasil import
+        const tanggalList = [...new Set(valid.map(d => d.tanggal))];
+        tglInput.value = valid[0].tanggal;
+
+        renderTableTally(); // sekaligus menyimpan draft
+
+        let catatan = '';
+        if (tanggalList.length > 1) {
+            catatan = `<div style="margin-top:10px;font-size:13px;color:#6b7280;">
+                           File berisi ${tanggalList.length} tanggal berbeda. Header Konsolidasi memakai tanggal
+                           <b>${valid[0].tanggal}</b>.
+                       </div>`;
+        }
+
+        Swal.fire({
+            icon: skipped.length ? 'warning' : 'success',
+            title: 'Import selesai',
+            html: `<b>${valid.length}</b> baris masuk ke tabel.${catatan}${buildSkippedHtml(skipped)}`,
+            timer: skipped.length || tanggalList.length > 1 ? undefined : 2200,
+            showConfirmButton: !!(skipped.length || tanggalList.length > 1)
+        });
+    }
+
     // Export Raw tetap pakai SheetJS (ringan, tidak butuh gambar)
     function exportRawXlsx() {
         const dataToExport = temporaryData.map(d => ({
@@ -556,7 +745,7 @@
                 nama: item["Nama Produk"],
                 totalEkor: item["Total Ekor"],
                 totalBerat: parseFloat(item["Total Berat"].toFixed(2)),
-                rataRata: parseFloat((item["Total Berat"] / item["Total Ekor"]).toFixed(2))
+                rataRata: item["Total Ekor"] > 0 ? parseFloat((item["Total Berat"] / item["Total Ekor"]).toFixed(2)) : 0
             });
         }
 
