@@ -458,8 +458,47 @@
             return;
         }
 
-        // Export berhasil: kosongkan tabel & draft, kembali ke kondisi awal
-        resetAfterExport();
+        // Export berhasil: tanya dulu sebelum tabel dikosongkan, karena user
+        // bisa saja masih mau export jenis lain (Raw lalu Konsolidasi).
+        askResetAfterExport();
+    }
+
+    function askResetAfterExport() {
+        Swal.fire({
+            title: '<span style="font-size:24px;font-weight:700;">Export berhasil</span>',
+            html: `
+                <div style="font-size:15px;color:#6b7280;margin-top:8px;">
+                    Kosongkan tabel sekarang?<br>
+                    <small>Pilih <b>Belum</b> jika masih mau export jenis lain.</small>
+                </div>
+            `,
+            icon: 'question',
+            background: '#ffffff',
+            color: '#1f2937',
+            width: 420,
+            padding: '2em',
+
+            showCancelButton: true,
+            confirmButtonText: 'Ya, kosongkan',
+            cancelButtonText: 'Belum',
+
+            reverseButtons: true,
+            focusCancel: true,
+            allowOutsideClick: false,
+
+            confirmButtonColor: '#e74c3c',
+            cancelButtonColor: '#64748b',
+
+            customClass: {
+                popup: 'modern-popup',
+                confirmButton: 'modern-confirm-btn',
+                cancelButton: 'modern-cancel-btn'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                resetAfterExport();
+            }
+        });
     }
 
     function resetAfterExport() {
@@ -473,10 +512,10 @@
 
         Swal.fire({
             icon: 'success',
-            title: 'Export berhasil',
-            text: 'Tabel sudah dikosongkan, siap untuk input baru.',
+            title: 'Tabel dikosongkan',
+            text: 'Siap untuk input baru.',
             width: 380,
-            timer: 2200,
+            timer: 1700,
             showConfirmButton: false
         });
     }
