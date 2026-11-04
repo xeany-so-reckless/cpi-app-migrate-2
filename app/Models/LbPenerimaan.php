@@ -43,6 +43,27 @@ class LbPenerimaan extends Model
     }
 
     /**
+     * BARU - Setiap rit LB dibuat/diubah/dihapus, hitung ulang angka
+     * LB di produksi_harian untuk PO terkait (Sebelum Bongkar maupun
+     * Setelah Bongkar). Kalau no_po sebuah rit diganti, PO lama ikut
+     * dihitung ulang.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (LbPenerimaan $rit) {
+            ProduksiHarian::recalculateDariLb($rit->no_po);
+
+            if ($rit->wasChanged('no_po')) {
+                ProduksiHarian::recalculateDariLb($rit->getOriginal('no_po'));
+            }
+        });
+
+        static::deleted(function (LbPenerimaan $rit) {
+            ProduksiHarian::recalculateDariLb($rit->no_po);
+        });
+    }
+
+    /**
      * Cari data hanging yang cocok (dicocokkan lewat tanggal + no_rit,
      * sama seperti getEkorNettoDariHanging() / ambilDetailTerintegrasi()
      * di code.gs lama).

@@ -46,6 +46,61 @@ class ProduksiHarian extends Model
     }
 
     /**
+     * BARU - Hitung ulang 4 field yang bersumber dari Report Harian
+     * Bahan Baku LB untuk 1 PO, lalu update baris produksi_harian
+     * dengan no_po tersebut (kalau ada).
+     *
+     * Logic SAMA dengan ProduksiDashboardController::poSummary():
+     * - kg_dta & ekor_dta  : SUM semua rit PO ini.
+     * - kg_netto & ayam_mati: SUM hanya rit yang statusnya sudah lewat
+     *   "Setelah Bongkar" (status != 'Proses Bongkar').
+     *
+     * Selalu hitung ULANG PENUH (bukan incremental), sama seperti
+     * PpicPlan::recalculateAktual().
+     *
+     * Kalau PO belum diinput di dashboard produksi -> tidak ada yang
+     * di-update. Kalau semua rit PO sudah terhapus (total 0) -> angka
+     * dibiarkan seperti terakhir supaya data tidak hilang karena salah
+     * hapus.
+     *
+     * Pakai updateQuietly supaya tidak memicu event berantai.
+     */
+    public static function recalculateDariLb(?string $noPo): void
+    {
+        $noPo = strtoupper(trim((string) $noPo));
+
+        if ($noPo === '') {
+            return;
+        }
+
+        $row = static::where('no_po', $noPo)->first();
+
+        if (! $row) {
+            return;
+        }
+
+        if (LbPenerimaan::where('no_po', $noPo)->count() === 0) {
+            return;
+        }
+
+        $sebelum = LbPenerimaan::where('no_po', $noPo)
+            ->selectRaw('SUM(kg_dta) as total_kg_dta, SUM(ekor_dta) as total_ekor_dta')
+            ->first();
+
+        $setelah = LbPenerimaan::where('no_po', $noPo)
+            ->where('status', '!=', 'Proses Bongkar')
+            ->selectRaw('SUM(kg_netto) as total_kg_netto, SUM(ayam_mati) as total_ayam_mati')
+            ->first();
+
+        $row->updateQuietly([
+            'kg_dta'    => (float) ($sebelum->total_kg_dta ?? 0),
+            'ekor_dta'  => (int) ($sebelum->total_ekor_dta ?? 0),
+            'kg_netto'  => (float) ($setelah->total_kg_netto ?? 0),
+            'ayam_mati' => (int) ($setelah->total_ayam_mati ?? 0),
+        ]);
+    }
+
+    /**
      * Menggantikan semua kalkulasi di getProductionData() (code.gs lama).
      * Dipanggil dari Controller untuk dikirim sebagai JSON ke frontend,
      * bentuknya persis meniru object yang dulu dikembalikan Apps Script,
