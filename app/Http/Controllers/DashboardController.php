@@ -74,30 +74,37 @@ class DashboardController extends Controller
                 "url"  => route('uniformity.index'),
             ],
                         [
-    "name" => "PPIC",
-    "icon" => "precision_manufacturing",
-    "info" => "Sistem perencanaan, pengendalian, dan pelaporan produksi",
-    "url"  => route('ppic.login'),
-],
-            [
-    "name" => "Produk Fresh",
-    "icon" => "restaurant",
-    "info" => "Sistem pengelolaan dan produksi produk fresh",
-    "url"  => route('produksifresh.login'),
-],
+                "name" => "PPIC",
+                "icon" => "precision_manufacturing",
+                "info" => "Sistem perencanaan, pengendalian, dan pelaporan produksi",
+                "url"  => route('ppic.login'),
+            ],
+                        [
+                "name" => "Produk Fresh",
+                "icon" => "restaurant",
+                "info" => "Sistem pengelolaan dan produksi produk fresh",
+                "url"  => route('produksifresh.login'),
+            ],
+
+                        [
+                "name" => "Warehouse",
+                "icon" => "inventory_2",
+                "info" => "Sistem pengelolaan stok dan aktivitas keluar masuk barang",
+                "url"  => "http://10.60.22.31/warehouse",
+            ],
+                        [
+                "name" => "WEB BACKUP",
+                "icon" => "history",
+                "info" => "Akses ke sistem web versi sebelumnya untuk kebutuhan backup dan referensi",
+                "url"  => "http://10.60.22.31/web/",
+            ],
 
             [
-    "name" => "Warehouse",
-    "icon" => "inventory_2",
-    "info" => "Sistem pengelolaan stok dan aktivitas keluar masuk barang",
-    "url"  => "http://10.60.22.31/warehouse",
-],
-            [
-    "name" => "WEB BACKUP",
-    "icon" => "history",
-    "info" => "Akses ke sistem web versi sebelumnya untuk kebutuhan backup dan referensi",
-    "url"  => "http://10.60.22.31/web/",
-],
+                "name" => "BPJ Online",
+                "icon" => "assignment_turned_in",
+                "info" => "Akses sistem BPJ Online",
+                "url"  => "https://script.google.com/macros/s/AKfycbwGE3fQGuxMqvUP9jAmwuZTGR_iPyz6tgoj6cYAmd_AlrlA9bOAe7NCFKhF79xphwk-/exec",
+            ],
 
         ];
 
