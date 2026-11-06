@@ -1066,7 +1066,7 @@ selectedReservationProdukCode = reservationData ? reservationData.produk_code : 
                             style="height: 40px; max-width: 110px; object-fit: contain;">
                         <div>
                             <div class="manifest-title">FORM SERAH TERIMA HASIL PRODUKSI</div>
-                            <div class="manifest-sub">CPI Jombang Plant &middot; Traceability Manifest</div>
+                            <div class="manifest-sub d-print-none">CPI Jombang Plant &middot; Traceability Manifest</div>
                         </div>
 
                         <div class="doc-info d-none d-print-block">
