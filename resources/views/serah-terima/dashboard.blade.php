@@ -177,7 +177,17 @@
                 <!-- ================= BREAKDOWN PRODUK ================= -->
                 <div class="col-lg-6">
                     <div class="card p-3 shadow-sm h-100">
-                        <h6 class="fw-bold mb-3">Breakdown per Produk</h6>
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h6 class="fw-bold m-0">Breakdown per Produk</h6>
+    <div class="d-flex align-items-center flex-wrap gap-1">
+        <input type="date" id="export_dari" class="form-control form-control-sm w-auto">
+        <span class="text-muted small">s/d</span>
+        <input type="date" id="export_sampai" class="form-control form-control-sm w-auto">
+        <button class="btn btn-success btn-sm fw-bold" onclick="exportProdukExcel()">
+            <i class="fa-solid fa-file-excel me-1"></i> Export Excel
+        </button>
+    </div>
+</div>
                         <div class="table-responsive">
                             <table class="table table-sm table-bordered table-rekap m-0">
                                 <thead>
@@ -252,6 +262,10 @@
         async function loadDashboard() {
             const dari = document.getElementById('filter_dari').value;
             const sampai = document.getElementById('filter_sampai').value;
+
+            // Tanggal export ikut filter dashboard, tapi masih bisa diubah manual
+            document.getElementById('export_dari').value = dari;
+            document.getElementById('export_sampai').value = sampai;
 
             document.getElementById('dashboardLoading').classList.remove('d-none');
             document.getElementById('dashboardContent').classList.add('d-none');
@@ -356,6 +370,78 @@
                     <td class="text-end">${c.total_kg.toFixed(1)}</td>
                 </tr>
             `).join('') || `<tr><td colspan="5" class="text-center text-muted">Tidak ada data</td></tr>`;
+        }
+
+        async function exportProdukExcel() {
+            const dari = document.getElementById('export_dari').value;
+            const sampai = document.getElementById('export_sampai').value;
+
+            if (!dari || !sampai) { alert('Isi tanggal dari dan sampai terlebih dahulu!'); return; }
+            if (dari > sampai) { alert('Tanggal "dari" tidak boleh lebih besar dari "sampai"!'); return; }
+
+            document.body.style.cursor = 'wait';
+            try {
+                const res = await fetch(`/serah-terima/dashboard-data?dari=${encodeURIComponent(dari)}&sampai=${encodeURIComponent(sampai)}`, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error('Gagal mengambil data.');
+                const json = await res.json();
+                const list = json.per_produk;
+
+                if (!list || list.length === 0) {
+                    alert('Tidak ada data produksi pada rentang tanggal ini.');
+                    return;
+                }
+
+                let totalBag = 0;
+                let totalKg = 0;
+
+                let html = `<html><head><meta charset="UTF-8"></head><body>
+                    <table border="1">
+                        <thead>
+                            <tr><th colspan="5" style="font-size:14pt;">Rekap Produksi per Produk (${dari} s/d ${sampai})</th></tr>
+                            <tr>
+                                <th style="background-color:#2c3e50; color:white;">No</th>
+                                <th style="background-color:#2c3e50; color:white;">Kode Produk</th>
+                                <th style="background-color:#2c3e50; color:white;">Nama Produk</th>
+                                <th style="background-color:#2c3e50; color:white;">Total Bag</th>
+                                <th style="background-color:#2c3e50; color:white;">Total Kg</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                list.forEach((p, i) => {
+                    totalBag += p.total_bag;
+                    totalKg += p.total_kg;
+                    html += `<tr>
+                        <td>${i + 1}</td>
+                        <td style="mso-number-format:'\\@';">${p.kode_produk}</td>
+                        <td>${p.nama_produk}</td>
+                        <td>${p.total_bag}</td>
+                        <td>${p.total_kg.toFixed(1)}</td>
+                    </tr>`;
+                });
+
+                html += `<tr style="font-weight:bold; background-color:#e2e8f0;">
+                        <td colspan="3" align="right">TOTAL</td>
+                        <td>${totalBag}</td>
+                        <td>${totalKg.toFixed(1)}</td>
+                    </tr></tbody></table></body></html>`;
+
+                const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Rekap_Produk_${dari}_sd_${sampai}.xls`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Gagal export: ' + err.message);
+            } finally {
+                document.body.style.cursor = 'default';
+            }
         }
     </script>
 </body>
