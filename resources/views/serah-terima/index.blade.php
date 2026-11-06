@@ -146,6 +146,22 @@
         .manifest-title { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 12pt; color: var(--ink); }
         .manifest-sub { font-size: 8pt; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
 
+        /* Blok info dokumen - hanya tampil saat cetak/PDF, tanpa border */
+        .doc-info { margin-left: auto; }
+        .doc-info table {
+            border-collapse: collapse;
+            border: none;
+            font-size: 8pt;
+            color: var(--ink);
+        }
+        .doc-info td {
+            border: none;
+            padding: 1px 0;
+            white-space: nowrap;
+            text-align: left;
+        }
+        .doc-info td.sep { padding: 0 8px; }
+
         .kode-chip {
             display: inline-block;
             background: var(--ink);
@@ -1046,11 +1062,19 @@ selectedReservationProdukCode = reservationData ? reservationData.produk_code : 
                 const headerText = `
                     <div class="manifest-head">
                         <img src="{{ asset('images/logo.png') }}"
-                             alt="Logo CPI"
-                             style="height: 40px; max-width: 110px; object-fit: contain;">
+                            alt="Logo CPI"
+                            style="height: 40px; max-width: 110px; object-fit: contain;">
                         <div>
                             <div class="manifest-title">FORM SERAH TERIMA HASIL PRODUKSI</div>
                             <div class="manifest-sub">CPI Jombang Plant &middot; Traceability Manifest</div>
+                        </div>
+
+                        <div class="doc-info d-none d-print-block">
+                            <table>
+                                <tr><td>No Dokumen</td><td class="sep">:</td><td>FM/PROD-011</td></tr>
+                                <tr><td>Tanggal Efektif</td><td class="sep">:</td><td>17 Januari 2024</td></tr>
+                                <tr><td>Revisi/ Tgl</td><td class="sep">:</td><td>01/27 Agustus 2024</td></tr>
+                            </table>
                         </div>
                     </div>
                     <div class="table-responsive">
