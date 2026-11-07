@@ -92,6 +92,7 @@ class ProductSeeder extends Seeder
             // BARU - Produk Fresh (modul Produksi Fresh, tipe Main Product).
             // type & category_code disamakan dengan produk 47-49.
             ['83', 'YAMIKU PARTING 10 @1.0 KG FRESH', 0, 'parting', 14, 'main', '02'],
+            ['84', 'YM PART 10 @1.2 KG FROZEN MM NOOR', 25, 'parting', 15],
 
             // === BY PRODUCT EVIS & OTHERS ===
             ['59', 'YM TUNGGIR 1 KG FZ', 25, 'by_product', 1],

@@ -78,6 +78,7 @@ class PpicDashboardController extends Controller
      *   47 - 53 -> FEH2
      *   58 - 60 -> FEH2
      *   83      -> FEH2 (Yamiku Parting 10 @1.0 Kg Fresh)
+     *   84      -> FEH2 (YM PART 10 @1.2 KG FROZEN MM NOOR)
      *   54 - 57 -> FEHM
      *   61 - 68 -> FEH0
      *   79 - 82 -> FEH0 (produk CP: Ampela/Hati/Jantung 1 KG, Hati 5 KG)
@@ -100,6 +101,7 @@ class PpicDashboardController extends Controller
             $kode >= 47 && $kode <= 53 => 'FEH2',
             $kode >= 58 && $kode <= 60 => 'FEH2',
             $kode === 83 => 'FEH2',
+            $kode === 84 => 'FEH2',
             $kode >= 54 && $kode <= 57 => 'FEHM',
             $kode >= 61 && $kode <= 68 => 'FEH0',
             $kode >= 79 && $kode <= 82 => 'FEH0',
@@ -250,9 +252,9 @@ class PpicDashboardController extends Controller
      *
      * Endpoint: GET /ppic/dashboard/serah-terima-produk-list?jenis_po=FEH0
      * Kalau jenis_po tidak dikirim/kosong -> return SEMUA produk yang
-     * termasuk salah satu dari 4 jenis PO (kode 1-36, 47-68, 79-83),
+     * termasuk salah satu dari 4 jenis PO (kode 1-36, 47-68, 79-84),
      * diurutkan per kode. Produk di luar range mapping (37-46, 69-78,
-     * 84+) tidak pernah disertakan di sini karena memang tidak relevan
+     * 85+) tidak pernah disertakan di sini karena memang tidak relevan
      * untuk Serah Terima.
      *
      * CATATAN: kode 83 (Yamiku Parting 10 @1.0 Kg Fresh) ikut muncul di

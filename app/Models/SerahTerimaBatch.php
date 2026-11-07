@@ -23,9 +23,11 @@ class SerahTerimaBatch extends Model
         $kodeBulan = chr(65 + ($bulan - 1));
         $kodeTanggal = $tanggal < 10 ? '0'.$tanggal : (string) $tanggal;
 
+        // Kategori 02 = parting frozen: kode 50-58, 69, dan 84
+        // (YM PART 10 @1.2 KG FROZEN MM NOOR). Selain itu kategori 01.
         $itemNum = (int) $kodeItem;
         $kodeKategori = '01';
-        if (($itemNum >= 50 && $itemNum <= 58) || $itemNum === 69) {
+        if (($itemNum >= 50 && $itemNum <= 58) || $itemNum === 69 || $itemNum === 84) {
             $kodeKategori = '02';
         }
 
