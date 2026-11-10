@@ -126,12 +126,12 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        .btn-reset:hover { 
+        .btn-reset:hover {
             background: #bb2d3b;
             border-color: #bb2d3b;
             color: #fff;
-         }
-                .btn-upload {
+        }
+        .btn-upload {
             background: #16a34a;
             border: 1px solid #16a34a;
             color: #fff;
@@ -187,6 +187,21 @@
             padding: 3px 8px;
             border-radius: 5px;
             white-space: nowrap;
+        }
+        .badge-simpanan {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.58rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--hazard);
+            background: rgba(251,191,36,.1);
+            border: 1px solid rgba(251,191,36,.45);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
         }
         .produk-chip {
             display: inline-block;
@@ -271,9 +286,18 @@
             color: var(--muted-dim);
             transition: transform .15s ease;
         }
-        .expand-icon.open { transform: rotate(180deg); color: var(--ice-text); }
+        .expand-icon.open { transform: rotate(180deg); color: var(--ice); }
 
         .detail-row td { padding: 0 !important; border-bottom: 1px solid var(--line); background: #0e1620; }
+        .detail-row:hover { background: #0e1620; }
+        .section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
         .warna-breakdown { display: flex; gap: 10px; padding: 14px 16px; flex-wrap: wrap; }
         .warna-card {
             flex: 1;
@@ -306,12 +330,62 @@
             font-family: 'JetBrains Mono', monospace;
         }
         .warna-empty { padding: 14px 16px; font-size: 0.8rem; color: var(--muted); font-style: italic; }
+
+        /* ===== Pindah stock ke cell simpanan ===== */
+        .transfer-bar {
+            display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 10px;
+        }
+        .transfer-info { font-size: 0.8rem; color: var(--muted); }
+        .transfer-info b { color: var(--ice); font-family: 'JetBrains Mono', monospace; }
+        .transfer-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .btn-link {
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        .btn-link:hover { color: var(--ice); }
+        .btn-transfer {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: var(--hazard);
+            border: 1px solid var(--hazard);
+            color: #1a1300;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+        .btn-transfer:hover:not(:disabled) { background: #f59e0b; border-color: #f59e0b; }
+        .btn-transfer:disabled { opacity: .35; cursor: not-allowed; }
+
+        .batch-scroll { max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+        .batch-table { width: 100%; border-collapse: collapse; }
+        .batch-table thead th {
+            position: sticky; top: 0; z-index: 1;
+            font-size: 0.62rem; padding: 8px 10px;
+        }
+        .batch-table td { padding: 6px 10px; font-size: 0.75rem; border-bottom: 1px solid var(--line); }
+        .batch-head-row td { background: #121c27; font-weight: 600; padding-top: 9px; padding-bottom: 9px; }
+        .bag-row td { color: var(--muted); }
+        .batch-table tbody tr:hover { background: transparent; }
+        .batch-table input[type="checkbox"] { accent-color: var(--ice); width: 15px; height: 15px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     @php
         $currentUser = auth()->guard('tally')->user();
+        $canTransfer = $currentUser && $currentUser->hasAnyRole(['admin_gudang', 'supervisor_gudang']);
     @endphp
 
     <nav>
@@ -403,10 +477,29 @@
 
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        const canTransfer = @json($canTransfer);
+
         let allStockData = [];
         let expandedCells = new Set();
-        let batchCache = {}; // cellId -> array batch (hasil fetch on-demand)
-        let viewMode = 'bag'; // 'bag' atau 'kg'
+        let batchCache = {};        // cellId -> array batch (hasil fetch on-demand)
+        let batchLoading = new Set(); // cellId yang sedang di-fetch (cegah fetch ganda)
+        let selectedBags = {};      // cellId -> Set of "batchId-nomorBag" yang dicentang
+        let viewMode = 'bag';       // 'bag' atau 'kg'
+        let isTransferring = false;
+
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[ch]));
+        }
+
+        const fmtNum = (v) => (v === null || v === undefined || v === '-')
+            ? '-'
+            : Number(v).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+
+        function getCellData(cellId) {
+            return allStockData.find(d => d.id === cellId) || null;
+        }
 
         function confirmLogout() {
             Swal.fire({
@@ -484,7 +577,7 @@
                 if (result.dilewati.length > 0) {
                     dilewatiHtml = `<div style="text-align:left; max-height:200px; overflow-y:auto; margin-top:12px; font-size:12px;">
                         <b>Dilewati (${result.dilewati.length}):</b>
-                        <ul>${result.dilewati.map(d => `<li>Baris ${d.baris} (${d.kode_cell}): ${d.alasan}</li>`).join('')}</ul>
+                        <ul>${result.dilewati.map(d => `<li>Baris ${esc(d.baris)} (${esc(d.kode_cell)}): ${esc(d.alasan)}</li>`).join('')}</ul>
                     </div>`;
                 }
 
@@ -604,35 +697,34 @@
 
             tbody.innerHTML = data.map(d => {
                 const kodeChips = d.produk.length > 0
-                    ? d.produk.map(p => `<span class="produk-chip">${p.code}</span>`).join('')
+                    ? d.produk.map(p => `<span class="produk-chip">${esc(p.code)}</span>`).join('')
                     : `<span class="produk-chip" style="opacity:.6;">Kosong</span>`;
                 const namaChips = d.produk.length > 0
-                    ? d.produk.map(p => `<span class="produk-chip">${p.name}</span>`).join('')
+                    ? d.produk.map(p => `<span class="produk-chip">${esc(p.name)}</span>`).join('')
                     : `<span class="produk-chip" style="opacity:.6;">Kosong</span>`;
-
-                const fmt = (v) => (v === null || v === undefined || v === '-') ? '-' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: 1 });
 
                 let kapasitas, terpakai, sisa, persen;
                 if (viewMode === 'bag') {
-                    kapasitas = fmt(d.kapasitasMax);
-                    terpakai = fmt(d.terpakai);
-                    sisa = fmt(d.sisa);
+                    kapasitas = fmtNum(d.kapasitasMax);
+                    terpakai = fmtNum(d.terpakai);
+                    sisa = fmtNum(d.sisa);
                     persen = d.persenTerisi;
                 } else {
-                    kapasitas = fmt(d.kapasitasMaxKg);
-                    terpakai = fmt(d.terpakaiKg);
-                    sisa = fmt(d.sisaKg);
+                    kapasitas = fmtNum(d.kapasitasMaxKg);
+                    terpakai = fmtNum(d.terpakaiKg);
+                    sisa = fmtNum(d.sisaKg);
                     persen = d.persenTerisiKg ?? 0;
                 }
 
                 const pClass = progressClass(persen);
                 const isExpanded = expandedCells.has(d.id);
+                const badge = d.isSimpanan ? `<span class="badge-simpanan">Simpanan</span>` : '';
 
                 const mainRow = `
                     <tr class="cell-row" onclick="toggleExpand(${d.id})">
                         <td>
                             <span class="material-symbols-outlined expand-icon ${isExpanded ? 'open' : ''}">expand_more</span>
-                            <span class="cell-status-dot ${pClass}"></span><span class="cell-chip">${d.kodeCell}</span>
+                            <span class="cell-status-dot ${pClass}"></span><span class="cell-chip">${esc(d.kodeCell)}</span>${badge}
                         </td>
                         <td>${d.coldStorage ?? '-'}</td>
                         <td>${d.lantai ?? '-'}</td>
@@ -650,33 +742,40 @@
                     </tr>
                 `;
 
+                const sectionTitle = d.isSimpanan ? 'Isi Cell Simpanan (hasil pindahan)' : 'Batch Asli (Inbound)';
+
                 const detailRow = isExpanded ? `
-    <tr class="detail-row">
-        <td colspan="9">
-            ${renderWarnaBreakdown(d.breakdownWarna)}
-            <div style="padding: 4px 16px 16px;">
-                <div class="section-label" style="margin-bottom:8px;">Batch Asli (Inbound)</div>
-                <div id="batchList-${d.id}">
-                    <div class="warna-empty">Memuat data batch...</div>
-                </div>
-            </div>
-        </td>
-    </tr>
-` : '';
+                    <tr class="detail-row">
+                        <td colspan="9">
+                            ${renderWarnaBreakdown(d.breakdownWarna, d.isSimpanan)}
+                            <div style="padding: 4px 16px 16px;">
+                                <div class="section-label" style="margin-bottom:8px;">${sectionTitle}</div>
+                                <div id="batchList-${d.id}">
+                                    <div class="warna-empty">Memuat data batch...</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                ` : '';
 
                 return mainRow + detailRow;
             }).join('');
+
+            // Muat (atau render dari cache) isi tiap cell yang sedang terbuka.
+            // Dipanggil di sini supaya detail tetap terisi setelah tabel
+            // dirender ulang (ganti mode, filter warna, muat ulang data).
+            data.forEach(d => {
+                if (expandedCells.has(d.id)) loadBatchesForCell(d.id);
+            });
         }
 
         function toggleExpand(cellId) {
             if (expandedCells.has(cellId)) {
                 expandedCells.delete(cellId);
-                renderTable(getFilteredData());
-                return;
+            } else {
+                expandedCells.add(cellId);
             }
-            expandedCells.add(cellId);
             renderTable(getFilteredData());
-            loadBatchesForCell(cellId);
         }
 
         async function loadBatchesForCell(cellId) {
@@ -684,64 +783,227 @@
                 renderBatchListInto(cellId, batchCache[cellId]);
                 return;
             }
+            if (batchLoading.has(cellId)) return;
+
+            batchLoading.add(cellId);
             try {
-                const res = await fetch(`{{ url('warehouse/stock') }}/${cellId}/batches`);
+                const res = await fetch(`{{ url('warehouse/stock') }}/${cellId}/batches`, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
                 batchCache[cellId] = data;
                 renderBatchListInto(cellId, data);
             } catch (err) {
                 const container = document.getElementById(`batchList-${cellId}`);
-                if (container) container.innerHTML = `<div class="warna-empty">Gagal memuat data batch: ${err.message}</div>`;
+                if (container) container.innerHTML = `<div class="warna-empty">Gagal memuat data batch: ${esc(err.message)}</div>`;
+            } finally {
+                batchLoading.delete(cellId);
             }
         }
+
+        // ---------- Seleksi bag (checkbox) ----------
+
+        const bagKey = (batchId, nomorBag) => `${batchId}-${nomorBag}`;
+
+        function getSelectionSet(cellId) {
+            if (!selectedBags[cellId]) selectedBags[cellId] = new Set();
+            return selectedBags[cellId];
+        }
+
+        // Hanya menghitung bag yang BENAR-BENAR ada di daftar saat ini,
+        // jadi centang basi (bag yang sudah pindah/keluar) tidak ikut.
+        function getSelectionSummary(cellId) {
+            const sel = getSelectionSet(cellId);
+            const bags = [];
+            const produkIds = new Set();
+            let kg = 0;
+
+            (batchCache[cellId] || []).forEach(b => {
+                b.bags.forEach(bg => {
+                    if (sel.has(bagKey(b.batchId, bg.nomorBag))) {
+                        bags.push({ batch_id: b.batchId, nomor_bag: bg.nomorBag });
+                        produkIds.add(b.produkId);
+                        kg += Number(bg.kg || 0);
+                    }
+                });
+            });
+
+            return {
+                count: bags.length,
+                kg: Math.round(kg * 100) / 100,
+                bags,
+                produkIds: [...produkIds],
+            };
+        }
+
+        function rerenderBatchList(cellId) {
+            if (batchCache[cellId]) renderBatchListInto(cellId, batchCache[cellId]);
+        }
+
+        function toggleBag(cellId, batchId, nomorBag, checked) {
+            const sel = getSelectionSet(cellId);
+            const key = bagKey(batchId, nomorBag);
+            if (checked) sel.add(key); else sel.delete(key);
+            rerenderBatchList(cellId);
+        }
+
+        function toggleBatchAll(cellId, batchId, checked) {
+            const sel = getSelectionSet(cellId);
+            const batch = (batchCache[cellId] || []).find(b => b.batchId === batchId);
+            if (!batch) return;
+
+            batch.bags.forEach(bg => {
+                const key = bagKey(batchId, bg.nomorBag);
+                if (checked) sel.add(key); else sel.delete(key);
+            });
+            rerenderBatchList(cellId);
+        }
+
+        function selectAllCell(cellId, checked) {
+            const sel = getSelectionSet(cellId);
+            (batchCache[cellId] || []).forEach(b => {
+                b.bags.forEach(bg => {
+                    const key = bagKey(b.batchId, bg.nomorBag);
+                    if (checked) sel.add(key); else sel.delete(key);
+                });
+            });
+            rerenderBatchList(cellId);
+        }
+
+        // ---------- Render daftar batch ----------
 
         function renderBatchListInto(cellId, batches) {
             const container = document.getElementById(`batchList-${cellId}`);
             if (!container) return;
-            container.innerHTML = renderBatchTable(batches);
+
+            const cellData = getCellData(cellId);
+            const isSimpanan = !!cellData?.isSimpanan;
+            const canSelect = canTransfer;
+
+            // Pertahankan posisi scroll supaya centang tidak melompat ke atas.
+            const oldScroll = container.querySelector('.batch-scroll');
+            const scrollTop = oldScroll ? oldScroll.scrollTop : 0;
+
+            container.innerHTML =
+                (canSelect && batches.length > 0 ? renderTransferBar(cellId) : '') +
+                renderBatchTable(cellId, batches, isSimpanan, canSelect);
+
+            const newScroll = container.querySelector('.batch-scroll');
+            if (newScroll) newScroll.scrollTop = scrollTop;
+
+            // Status "sebagian" untuk checkbox pilih-semua per batch.
+            if (canSelect) {
+                const sel = getSelectionSet(cellId);
+                container.querySelectorAll('.batch-all').forEach(cb => {
+                    const batch = batches.find(b => String(b.batchId) === cb.dataset.batch);
+                    if (!batch) return;
+                    const n = batch.bags.filter(bg => sel.has(bagKey(batch.batchId, bg.nomorBag))).length;
+                    cb.indeterminate = n > 0 && n < batch.bags.length;
+                });
+            }
         }
 
-        function renderBatchTable(batches) {
-            if (!batches || batches.length === 0) {
-                return `<div class="warna-empty">Belum ada batch asli (Inbound) yang tercatat untuk cell ini.</div>`;
-            }
-
-            const rows = batches.map(b => `
-                <tr>
-                    <td class="mono" style="font-size:0.75rem;">${b.kodeProduksi}</td>
-                    <td style="font-size:0.75rem;">${b.noTrolly}</td>
-                    <td style="font-size:0.75rem;">${b.tanggalProduksi ?? '-'}</td>
-                    <td class="num" style="font-size:0.75rem;">${b.jumlahBag}</td>
-                    <td style="font-size:0.68rem; color:var(--muted);">${b.kgBags.map(k => Number(k).toLocaleString('id-ID', {maximumFractionDigits:1})).join(', ')}</td>
-                    <td class="num" style="font-size:0.75rem; font-weight:700;">${Number(b.totalKg).toLocaleString('id-ID', {maximumFractionDigits:1})}</td>
-                </tr>
-            `).join('');
+        function renderTransferBar(cellId) {
+            const { count, kg } = getSelectionSummary(cellId);
+            const dariSimpanan = !!getCellData(cellId)?.isSimpanan;
 
             return `
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr>
-                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kode Produksi</th>
-                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">No Trolly</th>
-                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Tanggal</th>
-                            <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Jumlah Bag</th>
-                            <th style="text-align:left; font-size:0.62rem; color:var(--muted); padding:4px 8px;">Kg per Bag</th>
-                            <th class="num" style="font-size:0.62rem; color:var(--muted); padding:4px 8px;">Total Kg</th>
-                        </tr>
-                    </thead>
-                    <tbody>${rows}</tbody>
-                </table>
+                <div class="transfer-bar">
+                    <div class="transfer-info"><b>${fmtNum(count)}</b> bag dipilih &middot; <b>${fmtNum(kg)}</b> kg</div>
+                    <div class="transfer-actions">
+                        <button type="button" class="btn-link" onclick="selectAllCell(${cellId}, true)">Pilih semua</button>
+                        <button type="button" class="btn-link" onclick="selectAllCell(${cellId}, false)">Kosongkan pilihan</button>
+                        <button type="button" class="btn-transfer" ${count === 0 ? 'disabled' : ''} onclick="startTransfer(${cellId})">
+                            <span class="material-symbols-outlined" style="font-size:16px;">move_down</span>
+                            ${dariSimpanan ? 'Pindahkan ke Cell Biasa' : 'Pindahkan ke Cell Simpanan'}
+                        </button>
+                    </div>
+                </div>
             `;
         }
 
-        function renderWarnaBreakdown(w) {
+        function renderBatchTable(cellId, batches, isSimpanan, canSelect) {
+            if (!batches || batches.length === 0) {
+                return `<div class="warna-empty">${isSimpanan
+                    ? 'Belum ada stock di cell simpanan ini.'
+                    : 'Belum ada batch asli (Inbound) yang tercatat untuk cell ini.'}</div>`;
+            }
+
+            const sel = getSelectionSet(cellId);
+
+            const rows = batches.map(b => {
+                const total = b.bags.length;
+                const nSel = b.bags.filter(bg => sel.has(bagKey(b.batchId, bg.nomorBag))).length;
+
+                const headCheck = canSelect
+                    ? `<input type="checkbox" class="batch-all" data-batch="${b.batchId}" ${nSel === total && total > 0 ? 'checked' : ''}
+                           onchange="toggleBatchAll(${cellId}, ${b.batchId}, this.checked)" title="Pilih semua bag di batch ini">`
+                    : '';
+
+                const headRow = `
+                    <tr class="batch-head-row">
+                        <td style="width:34px;">${headCheck}</td>
+                        <td class="mono">${esc(b.kodeProduksi)}</td>
+                        <td>${esc(b.namaProduk ?? '-')}</td>
+                        <td>${esc(b.noTrolly ?? '-')}</td>
+                        <td>${esc(b.tanggalProduksi ?? '-')}</td>
+                        <td class="num">${b.jumlahBag} bag</td>
+                        <td class="num">${fmtNum(b.totalKg)} kg</td>
+                    </tr>
+                `;
+
+                const bagRows = b.bags.map(bg => {
+                    const checked = sel.has(bagKey(b.batchId, bg.nomorBag));
+                    const check = canSelect
+                        ? `<input type="checkbox" ${checked ? 'checked' : ''}
+                               onchange="toggleBag(${cellId}, ${b.batchId}, ${bg.nomorBag}, this.checked)">`
+                        : '';
+                    const asal = bg.asalCell ? ` &middot; asal Cell <b style="color:var(--hazard);">${esc(bg.asalCell)}</b>` : '';
+
+                    return `
+                        <tr class="bag-row">
+                            <td>${check}</td>
+                            <td colspan="4" style="padding-left:22px;">Bag #${bg.nomorBag}${asal}</td>
+                            <td></td>
+                            <td class="num">${fmtNum(bg.kg)}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                return headRow + bagRows;
+            }).join('');
+
+            return `
+                <div class="batch-scroll">
+                    <table class="batch-table">
+                        <thead>
+                            <tr>
+                                <th style="width:34px;"></th>
+                                <th>Kode Produksi</th>
+                                <th>Produk</th>
+                                <th>No Trolly</th>
+                                <th>Tanggal</th>
+                                <th class="num">Bag</th>
+                                <th class="num">Kg</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderWarnaBreakdown(w, isSimpanan) {
             if (!w) return `<div class="warna-empty">Belum ada data breakdown warna untuk cell ini.</div>`;
 
             const fmt = (v) => Number(v || 0).toLocaleString('id-ID', { maximumFractionDigits: 1 });
             const total = (w.merah?.bag || 0) + (w.biru?.bag || 0) + (w.hijau?.bag || 0) + (w.kuning?.bag || 0);
 
             if (total === 0) {
-                return `<div class="warna-empty">Belum ada breakdown warna untuk cell ini (upload Excel dengan kolom BAG MERAH/BIRU/HIJAU/KUNING).</div>`;
+                return isSimpanan
+                    ? `<div class="warna-empty">Belum ada stock di cell simpanan ini.</div>`
+                    : `<div class="warna-empty">Belum ada breakdown warna untuk cell ini (upload Excel dengan kolom BAG MERAH/BIRU/HIJAU/KUNING).</div>`;
             }
 
             const cards = [
@@ -758,6 +1020,169 @@
                     <div class="sub">${fmt(w[c.key]?.kg)} Kg</div>
                 </div>
             `).join('') + `</div>`;
+        }
+
+        // ---------- Pindahkan bag ke cell simpanan ----------
+
+        async function startTransfer(cellId) {
+            if (isTransferring) return;
+
+            const cellData = getCellData(cellId);
+            const summary = getSelectionSummary(cellId);
+
+                        if (!cellData || summary.count === 0) return;
+
+            const dariSimpanan = !!cellData.isSimpanan;
+
+            // Dari cell simpanan: wajib satu produk per proses.
+            if (dariSimpanan && summary.produkIds.length > 1) {
+                Swal.fire({
+                    title: 'Produk berbeda',
+                    text: 'Bag yang dipilih berasal dari lebih dari satu produk. Pindahkan satu produk per proses.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            // 1. Ambil daftar tujuan + sisa kapasitas live.
+            //    Dari cell biasa  -> 6 cell simpanan.
+            //    Dari simpanan    -> cell biasa yang terkunci produk yang sama.
+            const urlTujuan = dariSimpanan
+                ? `{{ route('warehouse.stock.tujuan-produk') }}?produk_id=${encodeURIComponent(summary.produkIds[0])}`
+                : `{{ route('warehouse.stock.tujuan-simpanan') }}`;
+
+            let tujuan;
+            try {
+                Swal.fire({
+                    title: 'Memuat cell tujuan...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading(),
+                });
+
+                const res = await fetch(urlTujuan, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                tujuan = await res.json();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: `Tidak bisa memuat cell tujuan: ${err.message}`, icon: 'error' });
+                return;
+            }
+
+            if (!tujuan || tujuan.length === 0) {
+                Swal.fire({
+                    title: 'Tidak ada cell tujuan',
+                    text: dariSimpanan
+                        ? 'Belum ada cell yang terkunci untuk produk ini. Bag dari cell simpanan hanya bisa dipindah ke cell yang sudah terkunci produk yang sama.'
+                        : 'Belum ada cell simpanan yang aktif.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            // 2. Modal pilih tujuan. Cell yang kapasitasnya tidak cukup
+            //    dinonaktifkan (server tetap memvalidasi ulang).
+            const opsi = tujuan.map(t => {
+                const cukupBag = Number(t.sisa) >= summary.count;
+                const cukupKg = t.sisaKg === null || Number(t.sisaKg) + 0.001 >= summary.kg;
+                const ok = cukupBag && cukupKg;
+
+                return `
+                    <label style="display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid #d5dde5; border-radius:8px; margin-bottom:8px; cursor:${ok ? 'pointer' : 'not-allowed'}; opacity:${ok ? 1 : 0.5};">
+                        <input type="radio" name="tujuanCell" value="${t.id}" ${ok ? '' : 'disabled'}>
+                        <span style="font-size:13px;">
+                            <b>${esc(t.kodeCell)}</b>
+                            &mdash; sisa ${fmtNum(t.sisa)} bag / ${t.sisaKg === null ? '-' : fmtNum(t.sisaKg) + ' kg'}
+                            ${ok ? '' : '<span style="color:#dc2626;">(kapasitas tidak cukup)</span>'}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+
+             const hasil = await Swal.fire({
+                title: dariSimpanan ? 'Pindahkan ke Cell Biasa' : 'Pindahkan ke Cell Simpanan',
+                html: `
+                    <div style="text-align:left; font-size:13px; color:#475569; margin-bottom:12px;">
+                        Dari Cell <b>${esc(cellData.kodeCell)}</b>:
+                        <b>${fmtNum(summary.count)} bag</b> (${fmtNum(summary.kg)} kg).<br>
+                        Pilih cell tujuan:
+                    </div>
+                    <div style="text-align:left;">${opsi}</div>
+                    <div style="text-align:left; font-size:12px; color:#b45309; margin-top:10px;">
+                        ${dariSimpanan
+                            ? 'Bag hanya bisa dipindah ke cell yang terkunci produk yang sama, dan tidak ada fitur batalkan.'
+                            : 'Bag di cell simpanan tidak bisa di-Outbound sebelum dipindah ke cell biasa.'}
+                    </div>
+                `,
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonText: 'Pindahkan',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64798c',
+                preConfirm: () => {
+                    const picked = Swal.getPopup().querySelector('input[name="tujuanCell"]:checked');
+                    if (!picked) {
+                        Swal.showValidationMessage('Pilih salah satu cell tujuan.');
+                        return false;
+                    }
+                    return Number(picked.value);
+                },
+            });
+
+            if (!hasil.isConfirmed) return;
+
+            await submitTransfer(cellId, hasil.value, summary);
+        }
+
+        async function submitTransfer(fromCellId, toCellId, summary) {
+            if (isTransferring) return;
+            isTransferring = true;
+
+            Swal.fire({
+                title: 'Memindahkan stock...',
+                html: 'Mohon tunggu, jangan tutup halaman ini.',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            try {
+                const res = await fetch(`{{ route('warehouse.stock.transfer') }}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        from_cell_id: fromCellId,
+                        to_cell_id: toCellId,
+                        bags: summary.bags,
+                    }),
+                });
+
+                const result = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    throw new Error(result.message || `Gagal memindahkan stock (HTTP ${res.status}).`);
+                }
+
+                await Swal.fire({ title: 'Berhasil!', text: result.message, icon: 'success' });
+
+                // Bersihkan pilihan & cache, lalu muat ulang angka terbaru.
+                selectedBags[fromCellId] = new Set();
+                batchCache = {};
+                await loadStockData();
+            } catch (err) {
+                await Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+
+                // Kalau gagal karena data berubah (bag sudah keluar/pindah),
+                // muat ulang daftar batch cell ini supaya tampilannya sesuai.
+                delete batchCache[fromCellId];
+                loadBatchesForCell(fromCellId);
+            } finally {
+                isTransferring = false;
+            }
         }
 
         function resetFilters() {

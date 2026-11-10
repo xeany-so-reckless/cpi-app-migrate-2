@@ -18,12 +18,14 @@ class Cell extends Model
         'kapasitas_max_kg',
         'current_product_id',
         'is_active',
+        'is_simpanan', // BARU - cell simpanan (1C01-1C06)
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'is_active'   => 'boolean',
+            'is_simpanan' => 'boolean', // BARU
         ];
     }
 
@@ -56,6 +58,182 @@ class Cell extends Model
         return $this->hasMany(CellStockAdjustment::class);
     }
 
+    // =====================================================================
+    // BARU - Cell Simpanan & Pemindahan Stock (stock_transfer_bags).
+    //
+    // Tabel stock_transfer_bags adalah RIWAYAT: satu baris = satu kali
+    // pemindahan satu bag. Satu bag boleh dipindah berkali-kali (cell biasa
+    // -> simpanan -> cell biasa -> ...), jadi lokasi bag SAAT INI adalah
+    // to_cell_id dari baris TERAKHIR (id terbesar) untuk bag itu; kalau
+    // belum pernah dipindah, lokasinya cell reservasi aslinya.
+    //
+    // Hitungan jumlah (bag/kg) per cell tetap sederhana: total yang MASUK
+    // dikurangi total yang KELUAR dari riwayat, jadi tetap benar walau bag
+    // berpindah-pindah.
+    // =====================================================================
+
+    /**
+     * True kalau Cell ini adalah cell simpanan (1C01-1C06): tidak pernah
+     * terkunci produk (boleh campur), tidak menerima dari Inbound/TPR,
+     * tidak muncul di Outbound, dan tidak bisa di-upload Excel. Isinya
+     * hanya dari fitur "Pindahkan" di halaman Stock.
+     */
+    public function isSimpanan(): bool
+    {
+        return (bool) $this->is_simpanan;
+    }
+
+    /**
+     * Riwayat bag yang DIPINDAHKAN KELUAR dari Cell ini (Cell ini = asal).
+     */
+    public function transfersOut(): HasMany
+    {
+        return $this->hasMany(StockTransferBag::class, 'from_cell_id');
+    }
+
+    /**
+     * Riwayat bag yang DIPINDAHKAN MASUK ke Cell ini (Cell ini = tujuan).
+     */
+    public function transfersIn(): HasMany
+    {
+        return $this->hasMany(StockTransferBag::class, 'to_cell_id');
+    }
+
+    public function transferKeluarBag(): int
+    {
+        return (int) $this->transfersOut()->count();
+    }
+
+    public function transferMasukBag(): int
+    {
+        return (int) $this->transfersIn()->count();
+    }
+
+    public function transferKeluarKg(): float
+    {
+        return (float) $this->transfersOut()->sum('kg');
+    }
+
+    public function transferMasukKg(): float
+    {
+        return (float) $this->transfersIn()->sum('kg');
+    }
+
+    /**
+     * True kalau Cell ini SEDANG terkunci ke produk dengan id $produkId.
+     * Dipakai untuk memvalidasi tujuan pemindahan dari cell simpanan:
+     * bag hanya boleh pindah ke cell yang sudah terkunci produk yang sama.
+     */
+    public function terkunciKeProdukId(int $produkId): bool
+    {
+        return $this->current_product_id !== null
+            && (int) $this->current_product_id === $produkId;
+    }
+
+    /**
+     * Daftar bag yang SAAT INI benar-benar ada secara fisik di Cell ini
+     * (belum keluar lewat Outbound). Ini sumber kebenaran lokasi bag
+     * untuk tampilan batch di halaman Stock dan untuk availableBags().
+     *
+     * Bag dianggap ada di Cell ini kalau:
+     * - pernah dipindah, dan pemindahan TERAKHIR-nya menuju Cell ini; atau
+     * - belum pernah dipindah, dan batch-nya memang reservasi (USED) Cell ini.
+     *
+     * Tiap elemen:
+     *  - 'batch'        SerahTerimaBatch (relasi produk sudah di-load)
+     *  - 'batch_id', 'nomor_bag', 'kg'
+     *  - 'dipindah'     true kalau bag ini ada di sini hasil pemindahan
+     *  - 'asal_cell_id' id cell asal pemindahan terakhir (null kalau tidak dipindah)
+     *
+     * $termasukReject = true dipakai halaman Stock (konsisten dengan angka
+     * Terpakai yang menghitung jumlah_bag penuh); false dipakai Outbound
+     * (bag reject tidak pernah dikeluarkan).
+     */
+    public function daftarBagFisik(bool $termasukReject = true): array
+    {
+        $reservasi = $this->reservations()
+            ->where('status', 'USED')
+            ->get(['batch_id']);
+
+        $batchIdMilik = $reservasi->pluck('batch_id')->filter()->unique()->values()->all();
+
+        // Batch yang pernah ada bag-nya dipindah MASUK ke Cell ini
+        // (bisa dari batch milik cell lain).
+        $batchIdMasuk = StockTransferBag::where('to_cell_id', $this->id)
+            ->pluck('batch_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $semuaBatchId = array_values(array_unique(array_merge($batchIdMilik, $batchIdMasuk)));
+
+        if (count($semuaBatchId) === 0) {
+            return [];
+        }
+
+        // Pemindahan TERAKHIR tiap bag (baris ber-id terbesar menang).
+        $terakhir = [];
+        StockTransferBag::whereIn('batch_id', $semuaBatchId)
+            ->orderBy('id')
+            ->get(['id', 'batch_id', 'nomor_bag', 'from_cell_id', 'to_cell_id'])
+            ->each(function ($row) use (&$terakhir) {
+                $terakhir[$row->batch_id.'-'.$row->nomor_bag] = $row;
+            });
+
+        $sudahKeluar = OutboundShipmentCellBag::whereIn('batch_id', $semuaBatchId)
+            ->whereNotNull('nomor_bag')
+            ->get(['batch_id', 'nomor_bag'])
+            ->map(fn ($row) => $row->batch_id.'-'.$row->nomor_bag)
+            ->flip();
+
+        $batches = SerahTerimaBatch::with('produk')
+            ->whereIn('id', $semuaBatchId)
+            ->orderBy('id')
+            ->get();
+
+        $milik = array_flip($batchIdMilik);
+        $idCellIni = (int) $this->id;
+        $hasil = [];
+
+        foreach ($batches as $batch) {
+            $batchMilikCellIni = isset($milik[$batch->id]);
+
+            for ($i = 1; $i <= $batch->jumlah_bag; $i++) {
+                $key = $batch->id.'-'.$i;
+                $row = $terakhir[$key] ?? null;
+
+                if ($row) {
+                    $lokasi = (int) $row->to_cell_id;
+                } else {
+                    $lokasi = $batchMilikCellIni ? $idCellIni : null;
+                }
+
+                if ($lokasi === null || $lokasi !== $idCellIni) {
+                    continue; // bag ini tidak sedang berada di Cell ini
+                }
+
+                if (isset($sudahKeluar[$key])) {
+                    continue; // sudah keluar via Outbound
+                }
+
+                if (! $termasukReject && $batch->{"status_bag_{$i}"} === 'TOLAK (REJECT)') {
+                    continue;
+                }
+
+                $hasil[] = [
+                    'batch'        => $batch,
+                    'batch_id'     => $batch->id,
+                    'nomor_bag'    => $i,
+                    'kg'           => (float) $batch->{"kg_bag_{$i}"},
+                    'dipindah'     => $row !== null,
+                    'asal_cell_id' => $row ? (int) $row->from_cell_id : null,
+                ];
+            }
+        }
+
+        return $hasil;
+    }
+
     /**
      * Total selisih dari semua penyesuaian (upload Excel) yang pernah ada
      * untuk cell ini. Boleh negatif (kalau fisik lebih sedikit dari
@@ -81,6 +259,9 @@ class Cell extends Model
      * PENDING reservation TIDAK dihitung (karena belum ada berat pasti
      * sebelum TPR input kg per bag-nya) - cuma dari batch yang statusnya
      * sudah USED (kg_bag_1..10 asli) + penyesuaian kg dari upload Excel.
+     *
+     * REVISI (Pemindahan): dikurangi kg bag yang dipindah KELUAR dari
+     * cell ini, dan ditambah kg bag yang dipindah MASUK ke cell ini.
      */
     public function terpakaiKg(): float
     {
@@ -93,7 +274,10 @@ class Cell extends Model
             ), 0) as total')
             ->value('total');
 
-        return (float) $usedKg + $this->totalAdjustmentKg();
+        return (float) $usedKg
+            + $this->totalAdjustmentKg()
+            - $this->transferKeluarKg()
+            + $this->transferMasukKg();
     }
 
     public function sisaKapasitasKg(): float
@@ -108,9 +292,12 @@ class Cell extends Model
     /**
      * Breakdown stock per warna (kuartal produksi), gabungan dari semua
      * penyesuaian (upload Excel) yang pernah ada untuk cell ini.
-     * Dipakai buat tampilan "klik cell -> lihat rincian per warna".
+     * Dipakai untuk tampilan "klik cell -> lihat rincian per warna".
      *
      * Merah = Jan-Mar, Biru = Apr-Jun, Hijau = Jul-Sep, Kuning = Okt-Des.
+     *
+     * CATATAN: method ini hanya membaca adjustment. Breakdown yang dipakai
+     * halaman Stock dihitung di StockController::data().
      */
     public function breakdownWarna(): array
     {
@@ -170,9 +357,16 @@ class Cell extends Model
      * pengecekan itu tanggung jawab pemanggil (Controller) SEBELUM
      * transaksi utama jalan, supaya pesan error yang tepat bisa
      * ditampilkan ke user. Method ini murni aksi "kunci", bukan gate.
+     *
+     * REVISI (Cell Simpanan): cell simpanan TIDAK PERNAH dikunci produk
+     * (boleh campur), jadi method ini tidak melakukan apa-apa untuk itu.
      */
     public function lockKeProduk(Product $produk): void
     {
+        if ($this->isSimpanan()) {
+            return;
+        }
+
         if ($this->current_product_id !== $produk->id) {
             $this->update(['current_product_id' => $produk->id]);
         }
@@ -183,13 +377,21 @@ class Cell extends Model
      * Dipanggil setiap kali ada aksi yang berpotensi menghabiskan stock:
      * - StockController::uploadExcel() (penyesuaian fisik manual)
      * - OutboundController::processCellOutbound() (barang keluar)
+     * - StockController::transfer() (bag dipindah keluar dari cell asal)
      *
      * Sengaja pakai stockBag() (stock FISIK riil) sebagai acuan "kosong",
      * BUKAN sisaKapasitas() (itu ruang sisa, bukan stock) - supaya
      * konsisten dengan makna "kosong" yang dipakai di seluruh sistem.
+     *
+     * REVISI (Cell Simpanan): cell simpanan tidak punya kunci produk,
+     * jadi tidak ada yang perlu dilepas.
      */
     public function releaseJikaKosong(): void
     {
+        if ($this->isSimpanan()) {
+            return;
+        }
+
         if ($this->stockBag() <= 0 && $this->current_product_id !== null) {
             $this->update(['current_product_id' => null]);
         }
@@ -204,21 +406,28 @@ class Cell extends Model
      *   belum lengkap dari gudang), ATAU $produk null (Cell kosong,
      *   belum tahu produk apa yang akan masuk) -> fallback ke
      *   kapasitas_max statis milik Cell ini sendiri.
+     *
+     * REVISI (Cell Simpanan): isinya campur produk, jadi selalu pakai
+     * kapasitas_max statis (90) tanpa lookup standard_capacities.
      */
     public function kapasitasBagUntukProduk(?Product $produk): ?int
-{
-    if ($produk === null) {
-        return $this->kapasitas_max;
+    {
+        if ($this->isSimpanan()) {
+            return $this->kapasitas_max;
+        }
+
+        if ($produk === null) {
+            return $this->kapasitas_max;
+        }
+
+        if (! $this->lantai || ! $this->tipe_rak) {
+            return $this->kapasitas_max;
+        }
+
+        $standar = StandardCapacity::untukProdukDanCell($produk->id, $this->lantai, $this->tipe_rak)->first();
+
+        return $standar->kapasitas_bag ?? $this->kapasitas_max;
     }
-
-    if (! $this->lantai || ! $this->tipe_rak) {
-        return $this->kapasitas_max;
-    }
-
-    $standar = StandardCapacity::untukProdukDanCell($produk->id, $this->lantai, $this->tipe_rak)->first();
-
-    return $standar->kapasitas_bag ?? $this->kapasitas_max;
-}
 
     /**
      * Sisa kapasitas (dalam bag) saat ini.
@@ -231,6 +440,9 @@ class Cell extends Model
      * sebenarnya) + reservasi yang masih PENDING (pakai max_bag_allowed,
      * supaya tidak dobel-reservasi lebih dari fisik yang tersedia)
      * + total penyesuaian manual (upload Excel) yang pernah dilakukan.
+     *
+     * REVISI (Pemindahan): dikurangi bag yang dipindah KELUAR dari cell
+     * ini, dan ditambah bag yang dipindah MASUK ke cell ini.
      */
     public function sisaKapasitas(): int
     {
@@ -247,7 +459,11 @@ class Cell extends Model
 
         $kapasitas = $this->kapasitasBagUntukProduk($this->currentProduct) ?? $this->kapasitas_max;
 
-        return max(0, $kapasitas - $terpakaiUsed - $terpakaiPending - $adjustment);
+        $terpakai = $terpakaiUsed + $terpakaiPending + $adjustment
+            - $this->transferKeluarBag()
+            + $this->transferMasukBag();
+
+        return max(0, $kapasitas - $terpakai);
     }
 
     // =====================================================================
@@ -268,6 +484,9 @@ class Cell extends Model
      * (selisih negatif) otomatis mengurangi angka ini juga - karena
      * totalAdjustment() menjumlahkan SEMUA sumber adjustment.
      *
+     * REVISI (Pemindahan): dikurangi bag yang dipindah KELUAR dari cell
+     * ini, ditambah bag yang dipindah MASUK ke cell ini.
+     *
      * Ini juga acuan utama releaseJikaKosong() di atas.
      */
     public function stockBag(): int
@@ -277,7 +496,13 @@ class Cell extends Model
             ->join('serah_terima_batches', 'serah_terima_batches.id', '=', 'cell_reservations.batch_id')
             ->sum('serah_terima_batches.jumlah_bag');
 
-        return max(0, $terpakaiUsed + $this->totalAdjustment());
+        return max(
+            0,
+            $terpakaiUsed
+                + $this->totalAdjustment()
+                - $this->transferKeluarBag()
+                + $this->transferMasukBag()
+        );
     }
 
     /**
@@ -328,52 +553,35 @@ class Cell extends Model
      * Baris 'generic' cuma MUNCUL 1 KALI mewakili SISA total
      * genericAdjustmentBag()/genericAdjustmentKg() - karena stock jenis
      * ini tidak punya identitas per-bag, jadi tidak bisa dipecah satu-satu.
+     *
+     * REVISI (Pemindahan):
+     * - Cell simpanan selalu mengembalikan array kosong (barang simpanan
+     *   tidak untuk di-Outbound).
+     * - Lokasi bag ditentukan lewat daftarBagFisik(): bag yang sedang
+     *   dipindah ke cell simpanan tidak tampil di cell asalnya, dan bag
+     *   yang dikembalikan dari simpanan ke cell ini ikut tampil.
      */
     public function availableBags(): array
     {
+        if ($this->isSimpanan()) {
+            return [];
+        }
+
         $bags = [];
 
-        // Bag dari batch asli (identitas lengkap)
-        $reservations = $this->reservations()
-            ->where('status', 'USED')
-            ->with('batch.produk')
-            ->get();
+        // Bag reject tidak pernah masuk stock Outbound, jadi dilewati.
+        foreach ($this->daftarBagFisik(false) as $item) {
+            $batch = $item['batch'];
 
-        // Bag yang sudah pernah keluar sebelumnya (dari cell manapun -
-        // tapi cukup dicek by batch_id+nomor_bag karena 1 bag cuma bisa
-        // ada di 1 cell dalam satu waktu).
-        $sudahKeluar = OutboundShipmentCellBag::whereNotNull('batch_id')
-            ->whereNotNull('nomor_bag')
-            ->get(['batch_id', 'nomor_bag'])
-            ->map(fn ($row) => $row->batch_id.'-'.$row->nomor_bag)
-            ->flip();
-
-        foreach ($reservations as $reservation) {
-            $batch = $reservation->batch;
-            if (! $batch) {
-                continue;
-            }
-
-            for ($i = 1; $i <= $batch->jumlah_bag; $i++) {
-                $statusBag = $batch->{"status_bag_{$i}"};
-                if ($statusBag === 'TOLAK (REJECT)') {
-                    continue; // bag reject tidak pernah masuk stock, skip
-                }
-
-                if (isset($sudahKeluar[$batch->id.'-'.$i])) {
-                    continue; // sudah pernah keluar via Outbound sebelumnya
-                }
-
-                $bags[] = [
-                    'type'             => 'batch',
-                    'batch_id'         => $batch->id,
-                    'nomor_bag'        => $i,
-                    'kode_produksi'    => $batch->kode_produksi,
-                    'produk'           => $batch->produk->name ?? null,
-                    'kg'               => (float) $batch->{"kg_bag_{$i}"},
-                    'tanggal_produksi' => optional($batch->tanggal_produksi)->format('Y-m-d'),
-                ];
-            }
+            $bags[] = [
+                'type'             => 'batch',
+                'batch_id'         => $item['batch_id'],
+                'nomor_bag'        => $item['nomor_bag'],
+                'kode_produksi'    => $batch->kode_produksi,
+                'produk'           => $batch->produk->name ?? null,
+                'kg'               => $item['kg'],
+                'tanggal_produksi' => optional($batch->tanggal_produksi)->format('Y-m-d'),
+            ];
         }
 
         // Baris generik untuk sisa stock tanpa identitas (upload Excel)

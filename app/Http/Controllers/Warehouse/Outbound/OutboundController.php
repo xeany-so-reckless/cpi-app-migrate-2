@@ -143,6 +143,7 @@ class OutboundController extends Controller
     {
         $cells = Cell::with('currentProduct:id,code,name')
             ->where('is_active', true)
+            ->where('is_simpanan', false) // cell simpanan tidak untuk di-Outbound
             ->orderBy('kode_cell')
             ->get()
             ->filter(fn (Cell $cell) => $cell->stockBag() > 0)
@@ -281,7 +282,13 @@ class OutboundController extends Controller
      */
     private function processCellOutbound(OutboundShipment $shipment, array $cellInput): void
     {
-        $cell = Cell::findOrFail($cellInput['cell_id']);
+         $cell = Cell::findOrFail($cellInput['cell_id']);
+
+        // Cell simpanan tidak boleh di-Outbound (pengaman server, selain
+        // sudah disembunyikan dari dropdown).
+        if ($cell->isSimpanan()) {
+            abort(422, "Cell {$cell->kode_cell} adalah cell simpanan dan tidak bisa di-Outbound.");
+        }
 
         // Ambil ulang daftar bag yang MASIH tersedia sekarang (bukan
         // dari input client) - supaya kalau ada bag yang sudah kepakai

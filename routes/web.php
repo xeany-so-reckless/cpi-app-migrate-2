@@ -60,9 +60,9 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         // // BARU - Pindahkan bag ke cell simpanan (1C01-1C06) + daftar tujuannya.
         // // Middleware grup ini sudah membatasi ke admin_gudang & supervisor_gudang,
         // // dan transfer() mengecek ulang role di server.
-        // Route::get('/tujuan-simpanan', [StockController::class, 'tujuanSimpanan'])->name('tujuan-simpanan');
-        // Route::get('/tujuan-produk', [StockController::class, 'tujuanProduk'])->name('tujuan-produk');
-        // Route::post('/transfer', [StockController::class, 'transfer'])->name('transfer');
+        Route::get('/tujuan-simpanan', [StockController::class, 'tujuanSimpanan'])->name('tujuan-simpanan');
+        Route::get('/tujuan-produk', [StockController::class, 'tujuanProduk'])->name('tujuan-produk');
+        Route::post('/transfer', [StockController::class, 'transfer'])->name('transfer');
 
         // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
         Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
