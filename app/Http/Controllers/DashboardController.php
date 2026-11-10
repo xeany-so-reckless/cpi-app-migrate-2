@@ -101,7 +101,7 @@ class DashboardController extends Controller
 
             [
                 "name" => "PGA",
-                "icon" => "fire_extinguisher",
+                "icon" => "health_and_safety",
                 "info" => "Dashboard PGA, inspeksi APAR, dan Buku Tamu",
                 "url"  => route('pga.login'),
             ],
