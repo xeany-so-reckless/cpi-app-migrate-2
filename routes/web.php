@@ -354,7 +354,7 @@ Route::prefix('pga')->name('pga.')->group(function () {
         Route::get('/', [PgaController::class, 'dashboard'])->name('index');
 
         Route::prefix('apar')->name('apar.')->group(function () {
-            Route::get('/', [PgaController::class, 'apar'])->name('index');
+            Route::get('/', [PgaAparController::class, 'index'])->name('index');
             Route::get('/qr', [PgaQrController::class, 'index'])->name('qr');
             Route::get('/{inspeksi}/foto', PgaAparFotoController::class)->whereNumber('inspeksi')->name('foto');
             Route::get('/{inspeksi}', [PgaAparController::class, 'show'])->whereNumber('inspeksi')->name('show');
