@@ -161,7 +161,6 @@
                 <span class="material-symbols-outlined" style="font-size:18px;">logout</span> Keluar
             </button>
         </form>
-        <a href="{{ route('dashboard') }}" class="sb-back">← Dashboard Produksi</a>
     </div>
 </aside>
 
