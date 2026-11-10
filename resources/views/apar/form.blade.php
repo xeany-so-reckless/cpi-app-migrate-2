@@ -90,7 +90,7 @@
 <body>
 
 <header class="head">
-    <div class="eyebrow">CPI Jombang &middot; Departemen Produksi</div>
+    <div class="eyebrow">CPI Jombang &middot; Personalia & General Affairs</div>
     <h1>Inspeksi APAR</h1>
     <p>Isi form di bawah sesuai kondisi APAR di lokasi</p>
 </header>
