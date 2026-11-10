@@ -59,6 +59,10 @@ return Application::configure(basePath: dirname(__DIR__))
     return route('warehouse.outbound.login');
 }
 
+            if ($request->is('pga*')) {
+                return route('pga.login');
+            }
+
             return route('tally.login');
         });
     })

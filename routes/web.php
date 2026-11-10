@@ -26,7 +26,12 @@ use App\Http\Controllers\ProduksiFresh\ProduksiFreshController;
 use App\Http\Controllers\Warehouse\Outbound\AuthController as WarehouseOutboundAuthController;
 use App\Http\Controllers\Warehouse\Outbound\OutboundController;
 use App\Http\Controllers\Warehouse\Outbound\OutboundFreshController;
-
+use App\Http\Controllers\Pga\AuthController as PgaAuthController;
+use App\Http\Controllers\Pga\PgaController;
+use App\Http\Controllers\Pga\PgaAparController;
+use App\Http\Controllers\Pga\PgaQrController;
+use App\Http\Controllers\Pga\PgaAparFotoController;
+use App\Http\Controllers\Apar\InspeksiController as AparInspeksiController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -49,8 +54,15 @@ Route::prefix('warehouse/stock')->name('warehouse.stock.')->group(function () {
         Route::get('/data', [StockController::class, 'data'])->name('data');
         Route::get('/filter-options', [StockController::class, 'filterOptions'])->name('filter-options');
 
-        // Baru: upload Excel penyesuaian stock cell
+                // Baru: upload Excel penyesuaian stock cell
         Route::post('/upload', [StockController::class, 'uploadExcel'])->name('upload');
+
+        // // BARU - Pindahkan bag ke cell simpanan (1C01-1C06) + daftar tujuannya.
+        // // Middleware grup ini sudah membatasi ke admin_gudang & supervisor_gudang,
+        // // dan transfer() mengecek ulang role di server.
+        // Route::get('/tujuan-simpanan', [StockController::class, 'tujuanSimpanan'])->name('tujuan-simpanan');
+        // Route::get('/tujuan-produk', [StockController::class, 'tujuanProduk'])->name('tujuan-produk');
+        // Route::post('/transfer', [StockController::class, 'transfer'])->name('transfer');
 
         // Baru: detail batch inbound per cell (dipanggil saat baris di-expand)
         Route::get('/{cell}/batches', [StockController::class, 'batches'])->name('batches');
@@ -327,4 +339,40 @@ Route::prefix('ppic')->name('ppic.')->group(function () {
             Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');
         });
     });
+});
+
+// ==================== PGA ====================
+// Login terpisah, role 'pga' (PGA01, PGA02, PGA03).
+Route::prefix('pga')->name('pga.')->group(function () {
+
+    Route::get('/login', [PgaAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [PgaAuthController::class, 'login'])->name('login.attempt');
+
+    Route::middleware(['auth:tally', 'role:pga', 'no-cache'])->group(function () {
+        Route::post('/logout', [PgaAuthController::class, 'logout'])->name('logout');
+
+        Route::get('/', [PgaController::class, 'dashboard'])->name('index');
+
+        Route::prefix('apar')->name('apar.')->group(function () {
+            Route::get('/', [PgaController::class, 'apar'])->name('index');
+            Route::get('/qr', [PgaQrController::class, 'index'])->name('qr');
+            Route::get('/{inspeksi}/foto', PgaAparFotoController::class)->whereNumber('inspeksi')->name('foto');
+            Route::get('/{inspeksi}', [PgaAparController::class, 'show'])->whereNumber('inspeksi')->name('show');
+            Route::get('/{inspeksi}/edit', [PgaAparController::class, 'edit'])->whereNumber('inspeksi')->name('edit');
+            Route::put('/{inspeksi}', [PgaAparController::class, 'update'])->whereNumber('inspeksi')->name('update');
+            Route::delete('/{inspeksi}', [PgaAparController::class, 'destroy'])->whereNumber('inspeksi')->name('destroy');
+        });
+
+        Route::prefix('buku-tamu')->name('bukutamu.')->group(function () {
+            Route::get('/', [PgaController::class, 'bukuTamu'])->name('index');
+        });
+    });
+});
+
+// ==================== FORM INSPEKSI APAR (PUBLIK - tujuan QR) ====================
+// Tanpa login. Jangan ubah URL '/apar' setelah QR dicetak.
+Route::prefix('apar')->name('apar.')->group(function () {
+    Route::get('/', [AparInspeksiController::class, 'form'])->name('form');
+    Route::post('/', [AparInspeksiController::class, 'store'])->middleware('throttle:30,1')->name('store');
+    Route::get('/sukses', [AparInspeksiController::class, 'sukses'])->name('sukses');
 });
