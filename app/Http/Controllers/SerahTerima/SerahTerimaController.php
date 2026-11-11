@@ -11,6 +11,7 @@ use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class SerahTerimaController extends Controller
@@ -90,7 +91,7 @@ class SerahTerimaController extends Controller
             ->implode(' + ');
 
         $baseQuery = DB::table('serah_terima_batches')
-    ->whereBetween('tanggal_produksi', [$dari, $sampai]);
+            ->whereBetween('tanggal_produksi', [$dari, $sampai]);
 
         // 1. Ringkasan total untuk rentang terpilih
         $summaryRow = (clone $baseQuery)
@@ -195,7 +196,7 @@ class SerahTerimaController extends Controller
         $cell = Cell::findOrFail($data['cell_id']);
         $user = $request->user('tally');
 
-                if (! $cell->is_active) {
+        if (! $cell->is_active) {
             return response()->json(['message' => 'Cell ini sedang tidak aktif.'], 422);
         }
 
@@ -222,8 +223,7 @@ class SerahTerimaController extends Controller
             'created_by_user_id' => $user->id,
         ]);
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'create',
             "{$user->employee_code} ({$user->name}) membuat reservasi Cell {$cell->kode_cell} (maks {$maxBagAllowed} bag, sisa kapasitas saat itu: {$sisa} bag)",
             $user
@@ -346,10 +346,11 @@ class SerahTerimaController extends Controller
             return $batch;
         });
 
-        ActivityLogger::log(
-            'serah_terima',
+        $batch->load('produk');
+
+        $this->catatLog(
             'create',
-            "{$user->employee_code} ({$user->name}) membuat data produksi baru dengan Kode Produksi: {$kodeProduksi} (Trolly {$data['no_trolly']}, {$data['jumlah_bag']} bag, Cell {$reservation->cell->kode_cell})",
+            "{$user->employee_code} ({$user->name}) membuat data produksi baru Kode Produksi: {$kodeProduksi} (Trolly {$data['no_trolly']}, Cell {$reservation->cell->kode_cell}, ".$this->ringkasBatch($batch).')',
             $user
         );
 
@@ -383,8 +384,7 @@ class SerahTerimaController extends Controller
         $kodeProduksiLama = $batch->kode_produksi;
 
         if ($user->hasRole('tally_produksi') && $this->isLockedByGudang($batch)) {
-            ActivityLogger::log(
-                'serah_terima',
+            $this->catatLog(
                 'update',
                 "DITOLAK: {$user->employee_code} ({$user->name}) mencoba mengoreksi {$kodeProduksiLama} tapi sudah diproses Tally Gudang",
                 $user
@@ -423,6 +423,14 @@ class SerahTerimaController extends Controller
 
         $kodeProduksi = SerahTerimaBatch::generateKodeProduksi($data['tanggal_produksi'], $data['kode_item']);
 
+        // Simpan nilai lama SEBELUM batch ditimpa, untuk log sebelum -> sesudah.
+        $lama = [
+            'kode'  => $batch->produk->code ?? '-',
+            'bag'   => (int) $batch->jumlah_bag,
+            'kgs'   => array_slice($batch->kg_bags_array, 0, (int) $batch->jumlah_bag),
+            'total' => $this->totalKgMentah($batch),
+        ];
+
         $batch->kode_produksi = $kodeProduksi;
         $batch->tanggal_produksi = $data['tanggal_produksi'];
         $batch->no_trolly = $data['no_trolly'];
@@ -440,10 +448,28 @@ class SerahTerimaController extends Controller
             $reservation->cell->lockKeProduk($produk);
         }
 
-        ActivityLogger::log(
-            'serah_terima',
+        // Susun daftar perubahan (hanya yang berubah).
+        $ubah = [];
+        if ($lama['kode'] !== $produk->code) {
+            $ubah[] = "Produk {$lama['kode']} → {$produk->code}";
+        }
+        if ($lama['bag'] !== (int) $batch->jumlah_bag) {
+            $ubah[] = "Jumlah bag {$lama['bag']} → {$batch->jumlah_bag}";
+        }
+        $kgBaru = array_slice($batch->kg_bags_array, 0, (int) $batch->jumlah_bag);
+        $maxIdx = max(count($lama['kgs']), count($kgBaru));
+        for ($i = 0; $i < $maxIdx; $i++) {
+            $o = isset($lama['kgs'][$i]) ? $this->fmtKg($lama['kgs'][$i]) : '-';
+            $n = isset($kgBaru[$i]) ? $this->fmtKg($kgBaru[$i]) : '-';
+            if ($o !== $n) {
+                $ubah[] = 'Bag #'.($i + 1)." {$o} → {$n} kg";
+            }
+        }
+        $ubah[] = 'Total '.$this->fmtKg($lama['total']).' → '.$this->fmtKg($this->totalKgMentah($batch)).' kg';
+
+        $this->catatLog(
             'update',
-            "{$user->employee_code} ({$user->name}) mengoreksi data {$kodeProduksiLama} menjadi Kode Produksi: {$kodeProduksi}",
+            "{$user->employee_code} ({$user->name}) mengoreksi {$kodeProduksiLama} menjadi {$kodeProduksi} | ".implode(' | ', $ubah),
             $user
         );
 
@@ -472,10 +498,12 @@ class SerahTerimaController extends Controller
         $batch->tally_gudang_user_id = $user->id;
         $batch->save();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $kgBag = $this->fmtKg($batch->{"kg_bag_{$col}"});
+        $kodeItem = $batch->produk->code ?? '-';
+
+        $this->catatLog(
             'verify',
-            "{$user->employee_code} ({$user->name}) mengubah status bag #{$col} pada {$batch->kode_produksi} menjadi {$data['status']}",
+            "{$user->employee_code} ({$user->name}) mengubah status bag #{$col} ({$kgBag} kg, produk {$kodeItem}) pada {$batch->kode_produksi} menjadi {$data['status']}",
             $user
         );
 
@@ -502,10 +530,9 @@ class SerahTerimaController extends Controller
         $batch->tally_gudang_user_id = $user->id;
         $batch->save();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'verify',
-            "{$user->employee_code} ({$user->name}) memverifikasi semua bag ({$batch->jumlah_bag} bag) pada {$batch->kode_produksi} menjadi {$data['status']}",
+            "{$user->employee_code} ({$user->name}) memverifikasi semua bag pada {$batch->kode_produksi} menjadi {$data['status']} | ".$this->ringkasBatch($batch),
             $user
         );
 
@@ -531,10 +558,9 @@ class SerahTerimaController extends Controller
         $batch->qr_admin_gudang_url = $qrUrl;
         $batch->save();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'approve',
-            "{$user->employee_code} ({$user->name}) approve sisi Gudang untuk {$batch->kode_produksi} (Cell: {$batch->kode_cell})",
+            "{$user->employee_code} ({$user->name}) approve sisi Gudang untuk {$batch->kode_produksi} (Cell: {$batch->kode_cell}) | ".$this->ringkasBatch($batch),
             $user
         );
 
@@ -563,10 +589,9 @@ class SerahTerimaController extends Controller
         $batch->qr_spv_url = $qrUrl;
         $batch->save();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'approve',
-            "{$user->employee_code} ({$user->name}) approve sisi SPV Produksi untuk {$batch->kode_produksi}",
+            "{$user->employee_code} ({$user->name}) approve sisi SPV Produksi untuk {$batch->kode_produksi} | ".$this->ringkasBatch($batch),
             $user
         );
 
@@ -598,10 +623,9 @@ class SerahTerimaController extends Controller
         $batch->barcode_url = $barcodeUrl;
         $batch->save();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'approve',
-            "Barcode final terbit untuk {$batch->kode_produksi} (Gudang: {$namaGudang}, SPV Produksi: {$namaSpv})",
+            "Barcode final terbit untuk {$batch->kode_produksi} (Gudang: {$namaGudang}, SPV Produksi: {$namaSpv}) | ".$this->ringkasBatch($batch),
             null
         );
     }
@@ -617,12 +641,14 @@ class SerahTerimaController extends Controller
         $kodeProduksi = $batch->kode_produksi;
         $noTrolly = $batch->no_trolly;
 
+        // Ringkasan harus dibuat SEBELUM delete, karena setelahnya isinya hilang.
+        $ringkas = $this->ringkasBatch($batch);
+
         $batch->delete();
 
-        ActivityLogger::log(
-            'serah_terima',
+        $this->catatLog(
             'delete',
-            "{$user->employee_code} ({$user->name}) menghapus data Kode Produksi: {$kodeProduksi} (Trolly {$noTrolly})",
+            "{$user->employee_code} ({$user->name}) menghapus data Kode Produksi: {$kodeProduksi} (Trolly {$noTrolly}, {$ringkas})",
             $user
         );
 
@@ -641,8 +667,7 @@ class SerahTerimaController extends Controller
         $user = $request->user('tally');
 
         if (! $user->hasAnyRole($roles)) {
-            ActivityLogger::log(
-                'serah_terima',
+            $this->catatLog(
                 $logAction,
                 "DITOLAK: {$user->employee_code} ({$user->name}) mencoba aksi ini tapi role tidak diizinkan (butuh: ".implode(', ', $roles).')',
                 $user
@@ -650,6 +675,54 @@ class SerahTerimaController extends Controller
 
             abort(403, 'Anda tidak memiliki akses untuk aksi ini.');
         }
+    }
+
+    /** 25.0 -> "25", 26.50 -> "26.5" */
+    private function fmtKg($v): string
+    {
+        return rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.') ?: '0';
+    }
+
+    /** "20, 25, 26.5" sebanyak jumlah bag saja */
+    private function daftarKg(array $kgs, int $jumlahBag): string
+    {
+        $list = [];
+        for ($i = 0; $i < $jumlahBag; $i++) {
+            $list[] = $this->fmtKg($kgs[$i] ?? 0);
+        }
+
+        return implode(', ', $list);
+    }
+
+    /** "Produk A001 - Tepung X, 10 bag (20, 25, 26.5), total 245.5 kg" */
+    private function ringkasBatch(SerahTerimaBatch $b): string
+    {
+        $kode = $b->produk->code ?? '-';
+        $nama = $b->produk->name ?? '-';
+
+        $reject = [];
+        for ($i = 1; $i <= (int) $b->jumlah_bag; $i++) {
+            if ($b->{"status_bag_{$i}"} === 'TOLAK (REJECT)') {
+                $reject[] = "#{$i}";
+            }
+        }
+
+        return "Produk {$kode} - {$nama}, {$b->jumlah_bag} bag ("
+            .$this->daftarKg($b->kg_bags_array, (int) $b->jumlah_bag)
+            .'), total '.$this->fmtKg($this->totalKgMentah($b)).' kg'
+            .($reject ? ', reject: '.implode(' ', $reject) : '');
+    }
+
+    /** Total semua bag (termasuk yang reject), beda dengan accessor total_kg di model. */
+    private function totalKgMentah(SerahTerimaBatch $b): float
+    {
+        return array_sum(array_slice($b->kg_bags_array, 0, (int) $b->jumlah_bag));
+    }
+
+    /** Pembungkus log: potong di 500 karakter supaya tidak error insert. */
+    private function catatLog(string $action, string $deskripsi, $user): void
+    {
+        ActivityLogger::log('serah_terima', $action, Str::limit($deskripsi, 500, '...'), $user);
     }
 
     private function validateBatchInput(Request $request, bool $forUpdate = false): array

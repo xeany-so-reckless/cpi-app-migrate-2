@@ -132,6 +132,10 @@
     return data;
   }
 
+    function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
   function confirmLogout() {
     Swal.fire({
       title: '<span style="font-size:22px;font-weight:700;">Keluar dari Sistem?</span>',
@@ -205,16 +209,16 @@
         const moduleClass = moduleColors[log.module] || 'bg-gray-100 text-gray-700';
         const actionClass = actionColors[log.action] || 'bg-gray-50 text-gray-600';
         tbody.innerHTML += `
-          <tr class="hover:bg-gray-50 transition">
-            <td class="p-2.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">${log.waktu}</td>
-            <td class="p-2.5 font-bold text-gray-800">${log.employeeCode}</td>
-            <td class="p-2.5">${log.userName}</td>
-            <td class="p-2.5"><span class="badge-module ${moduleClass}">${log.module}</span></td>
-            <td class="p-2.5"><span class="badge-action ${actionClass}">${log.action}</span></td>
-            <td class="p-2.5 text-gray-600">${log.description}</td>
-            <td class="p-2.5 font-mono text-[11px] text-gray-400">${log.ipAddress}</td>
-          </tr>
-        `;
+        <tr class="hover:bg-gray-50 transition">
+          <td class="p-2.5 font-mono text-[11px] text-gray-500 whitespace-nowrap">${esc(log.waktu)}</td>
+          <td class="p-2.5 font-bold text-gray-800">${esc(log.employeeCode)}</td>
+          <td class="p-2.5">${esc(log.userName)}</td>
+          <td class="p-2.5"><span class="badge-module ${moduleClass}">${esc(log.module)}</span></td>
+          <td class="p-2.5"><span class="badge-action ${actionClass}">${esc(log.action)}</span></td>
+          <td class="p-2.5 text-gray-600 min-w-[320px] break-words">${esc(log.description)}</td>
+          <td class="p-2.5 font-mono text-[11px] text-gray-400">${esc(log.ipAddress)}</td>
+        </tr>
+      `;
       });
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-red-500 font-bold">Gagal memuat data: ${err.message}</td></tr>`;
