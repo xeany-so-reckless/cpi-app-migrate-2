@@ -163,6 +163,7 @@ class SerahTerimaController extends Controller
         $cells = Cell::query()
             ->with('currentProduct:id,code,name')
             ->where('is_active', true)
+            ->where('is_simpanan', false) // cell simpanan tidak menerima dari Inbound
             ->orderBy('kode_cell')
             ->get()
             ->map(fn (Cell $c) => [
@@ -194,8 +195,14 @@ class SerahTerimaController extends Controller
         $cell = Cell::findOrFail($data['cell_id']);
         $user = $request->user('tally');
 
-        if (! $cell->is_active) {
+                if (! $cell->is_active) {
             return response()->json(['message' => 'Cell ini sedang tidak aktif.'], 422);
+        }
+
+        if ($cell->isSimpanan()) {
+            return response()->json([
+                'message' => "Cell {$cell->kode_cell} adalah cell simpanan dan tidak bisa dipakai untuk reservasi Inbound.",
+            ], 422);
         }
 
         $sisa = $cell->sisaKapasitas();
@@ -245,6 +252,7 @@ class SerahTerimaController extends Controller
     {
         $reservations = CellReservation::with(['cell.currentProduct:id,code'])
             ->where('status', 'PENDING')
+            ->whereHas('cell', fn ($q) => $q->where('is_simpanan', false))
             ->orderBy('created_at')
             ->get()
             ->map(fn (CellReservation $r) => [
@@ -303,6 +311,10 @@ class SerahTerimaController extends Controller
             // Lock row Cell di dalam transaksi - cegah 2 produk berbeda
             // rebutan Cell kosong yang sama pada saat hampir bersamaan.
             $cell = Cell::where('id', $reservation->cell_id)->lockForUpdate()->firstOrFail();
+
+            if ($cell->isSimpanan()) {
+                abort(422, "Cell {$cell->kode_cell} adalah cell simpanan dan tidak bisa menerima batch dari Inbound. Minta Tally Gudang buat reservasi di Cell lain.");
+            }
 
             if (! $cell->bisaMenerimaProduk($produk)) {
                 $namaTerkunci = $cell->currentProduct->name ?? '-';
