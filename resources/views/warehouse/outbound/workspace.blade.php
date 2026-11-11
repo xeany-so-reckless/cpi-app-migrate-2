@@ -57,7 +57,7 @@
             color: var(--text);
         }
 
-        /* BARU - Toggle Tab Frozen / Fresh */
+        /* Toggle Tab Frozen / Fresh */
         .tab-toggle {
             display: inline-flex; background: var(--surface); border: 1px solid var(--line);
             border-radius: 11px; padding: 4px; gap: 4px;
@@ -130,6 +130,28 @@
         }
         .bag-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 0.85rem; }
 
+        /* BARU (Revisi 2) - Kartu Tir: 1 kartu per Tir, 1 input per produk */
+        .tir-card { padding: 14px; border-bottom: 1px solid var(--line); }
+        .tir-card:last-child { border-bottom: none; }
+        .tir-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .tir-card-head .tir-sub { margin-left: auto; font-size: 0.78rem; color: var(--muted); }
+        .tir-card-head .tir-sub b { color: var(--text); font-family: 'JetBrains Mono', monospace; }
+        .tir-card-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+        .tir-card-body label {
+            text-transform: none; letter-spacing: 0; font-size: 0.78rem; font-weight: 600;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tir-compare { margin-top: 14px; font-size: 0.8rem; }
+        .tir-compare-title {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; letter-spacing: 1px;
+            text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+        }
+        .tir-compare-row {
+            display: flex; justify-content: space-between; gap: 12px; padding: 5px 0;
+            border-top: 1px dashed var(--line); color: var(--muted);
+        }
+        .tir-compare-row.diff { color: var(--hazard); font-weight: 700; }
+
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         thead th {
             text-align: left; font-size: 0.68rem; color: var(--muted); text-transform: uppercase;
@@ -176,7 +198,7 @@
         <div class="page-title">Input Outbound</div>
     </div>
 
-    {{-- BARU - Toggle Tab Frozen / Fresh --}}
+    {{-- Toggle Tab Frozen / Fresh --}}
     <div class="tab-toggle" id="tabToggle">
         <button type="button" class="active" data-tab="frozen" onclick="setActiveTab('frozen')">Frozen</button>
         <button type="button" data-tab="fresh" onclick="setActiveTab('fresh')">Fresh</button>
@@ -223,6 +245,7 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div class="mono" style="font-size:0.85rem;">
                         Isi Cell <span id="detailKodeCell" class="bag-chip"></span>
+                        <span id="detailProdukNama" class="bag-meta" style="margin-left:6px;"></span>
                     </div>
                     <button class="btn btn-outline" onclick="okAllBags()">
                         <span class="material-symbols-outlined" style="font-size:16px;">done_all</span> OK ALL
@@ -246,6 +269,8 @@
             <div class="card-title"><span class="material-symbols-outlined">local_shipping</span> Data Tir (Opsional)</div>
             <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
                 Isi kalau truk besar (misal tronton) - kosongkan kalau customer pakai mobil kecil.
+                Daftar produk diambil dari Cell yang sudah ditambahkan ke DO. Satu Tir boleh berisi lebih dari satu produk -
+                isi jumlah bag tiap produk, kosongkan kalau produk itu tidak ada di Tir tersebut.
             </p>
 
             <div class="bag-list" id="tirListContainer">
@@ -260,6 +285,8 @@
                     Total Bag (Tir): <b id="tirTotalBag" style="color:var(--text);">0</b>
                 </div>
             </div>
+
+            <div class="tir-compare" id="tirCompare"></div>
         </div>
 
         {{-- ==================== DAFTAR CELL DALAM DO INI ==================== --}}
@@ -350,7 +377,7 @@
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
-    // BARU - Tab aktif saat ini: 'frozen' atau 'fresh'. Menentukan panel
+    // Tab aktif saat ini: 'frozen' atau 'fresh'. Menentukan panel
     // mana yang ditampilkan dan fungsi submit/reset mana yang dipanggil
     // dari 1 save-bar yang dipakai bersama.
     let activeTab = 'frozen';
@@ -367,13 +394,17 @@
     }
 
     // State DO (Frozen) yang sedang dibangun di sisi client
-    let doCells = []; // [{ cellId, kodeCell, bags: [...], totalBag, totalKg }]
-    let tirRows = []; // [{ jumlahBag: number|null }] - urutan array = label Tir 1, Tir 2, dst
+    // REVISI 2: tiap cell sekarang membawa produkId & produkNama, dipakai
+    // untuk membentuk daftar produk di Data Tir.
+    let doCells = []; // [{ cellId, kodeCell, produkId, produkNama, bags: [...], totalBag, totalKg }]
+    // REVISI 2: tiap Tir berisi jumlah bag PER PRODUK.
+    // items = { [produkKey]: jumlahBag } - produkKey = id produk (string) atau 'adj'.
+    let tirRows = []; // [{ items: { '5': 8, '7': 4 } }] - urutan array = label Tir 1, Tir 2, dst
     let currentCell = null; // cell yang sedang dibuka detailnya
     let currentBags = []; // hasil availableBags() untuk currentCell
     let cellOptionsCache = [];
 
-    // BARU - State PO (Fresh) yang sedang dibangun di sisi client
+    // State PO (Fresh) yang sedang dibangun di sisi client
     let freshItems = []; // hasil getPoItems() untuk No PO yang sedang dipilih
     let freshPoOptionsCache = [];
 
@@ -392,6 +423,12 @@
             throw new Error(data.message || 'Terjadi kesalahan pada server.');
         }
         return data;
+    }
+
+    function escHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function confirmLogout() {
@@ -427,7 +464,7 @@
             }
 
             select.innerHTML = `<option value="">-- Pilih Kode Cell --</option>` + tersedia.map(c =>
-                `<option value="${c.id}">${c.kodeCell} (${c.stockBag} Bag / ${c.stockKg} Kg)</option>`
+                `<option value="${c.id}">${c.kodeCell} · ${c.produkNama ?? 'Stock Adjustment'} (${c.stockBag} Bag / ${c.stockKg} Kg)</option>`
             ).join('');
         } catch (err) {
             select.innerHTML = `<option value="">Gagal memuat: ${err.message}</option>`;
@@ -455,6 +492,11 @@
             currentBags = res.bags.map((b, idx) => ({ ...b, _key: bagKey(b), _checked: false }));
 
             document.getElementById('detailKodeCell').innerText = currentCell.kodeCell;
+
+            // Nama produk diambil dari cache dropdown, jadi tidak perlu request baru
+            const opt = cellOptionsCache.find(c => c.id === Number(cellId));
+            document.getElementById('detailProdukNama').innerText = opt ? (opt.produkNama ?? 'Stock Adjustment') : '';
+
             renderBagList();
         } catch (err) {
             container.innerHTML = `<div class="bag-empty">Gagal memuat isi cell: ${err.message}</div>`;
@@ -519,9 +561,14 @@
         const totalBag = checked.reduce((sum, b) => sum + (b.type === 'generic' ? b.jumlah_bag : 1), 0);
         const totalKg = checked.reduce((sum, b) => sum + Number(b.kg), 0);
 
+        // REVISI 2: simpan produk cell ini (dari cache dropdown) untuk daftar produk di Data Tir
+        const opt = cellOptionsCache.find(c => c.id === currentCell.id);
+
         doCells.push({
             cellId: currentCell.id,
             kodeCell: currentCell.kodeCell,
+            produkId: opt?.produkId ?? null,
+            produkNama: opt?.produkNama ?? null,
             bags: checked.map(b => b.type === 'generic'
                 ? { type: 'generic' }
                 : { type: 'batch', batch_id: b.batch_id, nomor_bag: b.nomor_bag }
@@ -537,13 +584,40 @@
         currentBags = [];
 
         renderDoCellTable();
+        renderTirList(); // daftar produk di Data Tir ikut diperbarui
         loadCellOptions(); // cell yang baru ditambahkan hilang dari pilihan
     }
 
     function removeCellFromDo(index) {
-        doCells.splice(index, 1);
-        renderDoCellTable();
-        loadCellOptions();
+        const removed = doCells[index];
+        const keyRemoved = produkKey(removed.produkId);
+        const masihAda = doCells.some((c, i) => i !== index && produkKey(c.produkId) === keyRemoved);
+        const punyaIsiTir = !masihAda && tirRows.some(r => Number(r.items[keyRemoved]) > 0);
+
+        const lakukan = () => {
+            doCells.splice(index, 1);
+            // Produk ini sudah tidak ada lagi di DO -> angkanya di semua Tir ikut dibuang
+            if (!masihAda) tirRows.forEach(r => { delete r.items[keyRemoved]; });
+            renderDoCellTable();
+            renderTirList();
+            loadCellOptions();
+        };
+
+        if (punyaIsiTir) {
+            Swal.fire({
+                title: 'Hapus Cell ini?',
+                text: `Produk ${removed.produkNama ?? 'Stock Adjustment'} tidak ada lagi di DO ini, jadi angkanya di Data Tir ikut dihapus.`,
+                icon: 'warning',
+                showCancelButton: true,
+                reverseButtons: true,
+                confirmButtonText: 'Ya, Hapus',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#dc2626',
+            }).then(res => { if (res.isConfirmed) lakukan(); });
+            return;
+        }
+
+        lakukan();
     }
 
     function renderDoCellTable() {
@@ -572,19 +646,67 @@
         document.getElementById('grandTotalKg').innerText = grandKg.toLocaleString('id-ID', {maximumFractionDigits:1});
     }
 
-    // ==================== DATA TIR (OPSIONAL, FROZEN) ====================
-    const MAX_TIR = 20;
+    // ==================== DATA TIR (OPSIONAL, FROZEN) - REVISI 2 ====================
+    // 1 kartu per Tir, isinya 1 input jumlah bag per produk. Daftar produk
+    // diturunkan dari Cell yang sudah ada di DO (cell terkunci ke 1 produk).
+    // Produk tanpa identitas (cell tanpa currentProduct) memakai kunci 'adj'
+    // dan dikirim ke server sebagai produk_id null.
+    const MAX_TIR = 22;
+    const ADJ_KEY = 'adj';
+
+    function produkKey(produkId) {
+        return (produkId === null || produkId === undefined) ? ADJ_KEY : String(produkId);
+    }
+
+    // Produk unik di DO ini, urut sesuai cell yang pertama kali ditambahkan
+    function getDoProducts() {
+        const map = new Map();
+        doCells.forEach(c => {
+            const key = produkKey(c.produkId);
+            if (!map.has(key)) {
+                map.set(key, { key, produkId: c.produkId ?? null, nama: c.produkNama ?? 'Stock Adjustment' });
+            }
+        });
+        return Array.from(map.values());
+    }
+
+    // Total bag per produk menurut Cell (untuk perbandingan info)
+    function getCellBagByProduk() {
+        const m = {};
+        doCells.forEach(c => {
+            const k = produkKey(c.produkId);
+            m[k] = (m[k] || 0) + c.totalBag;
+        });
+        return m;
+    }
+
+    function tirSubtotal(row) {
+        return Object.values(row.items).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    }
 
     function addTirRow() {
-        if (tirRows.length >= MAX_TIR) {
-            Swal.fire({ title: 'Maksimal 20 Tir', icon: 'warning' });
+        if (getDoProducts().length === 0) {
+            Swal.fire({
+                title: 'Tambahkan Cell dulu',
+                text: 'Daftar produk di Data Tir diambil dari Cell yang sudah ditambahkan ke DO.',
+                icon: 'warning',
+            });
             return;
         }
-        tirRows.push({ jumlahBag: null });
+        if (tirRows.length >= MAX_TIR) {
+            Swal.fire({ title: `Maksimal ${MAX_TIR} Tir`, icon: 'warning' });
+            return;
+        }
+
+        tirRows.push({ items: {} });
         renderTirList();
-        // fokus otomatis ke input yang baru muncul
-        const inputs = document.querySelectorAll('.tir-jumlah-input');
-        if (inputs.length > 0) inputs[inputs.length - 1].focus();
+
+        // fokus otomatis ke input pertama di kartu yang baru muncul
+        const cards = document.querySelectorAll('.tir-card');
+        if (cards.length > 0) {
+            const firstInput = cards[cards.length - 1].querySelector('input');
+            if (firstInput) firstInput.focus();
+        }
     }
 
     function removeTirRow(index) {
@@ -592,33 +714,59 @@
         renderTirList();
     }
 
-    function updateTirJumlah(index, value) {
-        tirRows[index].jumlahBag = value === '' ? null : parseInt(value, 10);
+    function updateTirItem(index, key, value) {
+        const n = value === '' ? null : parseInt(value, 10);
+        if (n === null || Number.isNaN(n)) {
+            delete tirRows[index].items[key];
+        } else {
+            tirRows[index].items[key] = n;
+        }
+
+        // Update subtotal kartu ini tanpa render ulang supaya fokus input tidak hilang
+        const sub = document.getElementById(`tirSub-${index}`);
+        if (sub) sub.innerText = tirSubtotal(tirRows[index]).toLocaleString('id-ID');
+
         updateTirTotal();
     }
 
     function renderTirList() {
         const container = document.getElementById('tirListContainer');
         const btnAdd = document.getElementById('btnAddTir');
+        const produk = getDoProducts();
+
         btnAdd.disabled = tirRows.length >= MAX_TIR;
 
         if (tirRows.length === 0) {
-            container.innerHTML = `<div class="bag-empty">Belum ada Tir ditambahkan.</div>`;
+            container.innerHTML = `<div class="bag-empty">${
+                produk.length === 0
+                    ? 'Tambahkan Cell ke DO dulu - daftar produk Tir akan muncul dari situ.'
+                    : 'Belum ada Tir ditambahkan.'
+            }</div>`;
             updateTirTotal();
             return;
         }
 
         container.innerHTML = tirRows.map((row, idx) => `
-            <div class="bag-item">
-                <span class="bag-chip">Tir ${idx + 1}</span>
-                <input type="number" min="1" class="form-control tir-jumlah-input"
-                    style="max-width:140px; height:38px;"
-                    placeholder="Jumlah Bag"
-                    value="${row.jumlahBag ?? ''}"
-                    oninput="updateTirJumlah(${idx}, this.value)">
-                <button class="btn btn-danger-outline" style="margin-left:auto; padding:6px 10px;" onclick="removeTirRow(${idx})">
-                    <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
-                </button>
+            <div class="tir-card">
+                <div class="tir-card-head">
+                    <span class="bag-chip">Tir ${idx + 1}</span>
+                    <span class="tir-sub">Subtotal: <b id="tirSub-${idx}">${tirSubtotal(row).toLocaleString('id-ID')}</b> Bag</span>
+                    <button class="btn btn-danger-outline" style="padding:6px 10px;" onclick="removeTirRow(${idx})">
+                        <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
+                    </button>
+                </div>
+                <div class="tir-card-body">
+                    ${produk.map(p => `
+                        <div>
+                            <label title="${escHtml(p.nama)}">${escHtml(p.nama)}</label>
+                            <input type="number" min="1" step="1" class="form-control"
+                                style="height:38px;"
+                                placeholder="Jumlah Bag"
+                                value="${row.items[p.key] ?? ''}"
+                                oninput="updateTirItem(${idx}, '${p.key}', this.value)">
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `).join('');
 
@@ -626,18 +774,54 @@
     }
 
     function updateTirTotal() {
-        const total = tirRows.reduce((sum, r) => sum + (Number(r.jumlahBag) || 0), 0);
+        const total = tirRows.reduce((sum, r) => sum + tirSubtotal(r), 0);
         document.getElementById('tirTotalBag').innerText = total.toLocaleString('id-ID');
+
+        // Perbandingan Tir vs Cell per produk - HANYA informasi, tidak memblokir simpan
+        const box = document.getElementById('tirCompare');
+        const produk = getDoProducts();
+
+        if (tirRows.length === 0 || produk.length === 0) {
+            box.innerHTML = '';
+            return;
+        }
+
+        const cellBag = getCellBagByProduk();
+        const tirBag = {};
+        tirRows.forEach(r => {
+            Object.entries(r.items).forEach(([k, v]) => {
+                tirBag[k] = (tirBag[k] || 0) + (Number(v) || 0);
+            });
+        });
+
+        box.innerHTML = `
+            <div class="tir-compare-title">Perbandingan dengan Cell (info saja)</div>
+            ${produk.map(p => {
+                const t = tirBag[p.key] || 0;
+                const c = cellBag[p.key] || 0;
+                return `
+                    <div class="tir-compare-row ${t !== c ? 'diff' : ''}">
+                        <span>${escHtml(p.nama)}</span>
+                        <span class="mono">Tir ${t.toLocaleString('id-ID')} / Cell ${c.toLocaleString('id-ID')} Bag</span>
+                    </div>
+                `;
+            }).join('')}
+        `;
     }
 
-    // Hanya baris yang benar-benar terisi angka valid yang dikirim ke
-    // server - baris kosong dilewati begitu saja (tidak mengganggu
-    // penomoran Tir 1, Tir 2, dst yang terkirim, karena backend
-    // menomori ulang berdasarkan urutan array yang dikirim).
+    // Hanya angka valid (> 0) yang dikirim. Tir yang semua inputnya kosong
+    // dilewati - penomoran Tir 1, Tir 2, dst di server mengikuti urutan
+    // array yang dikirim.
     function collectTirPayload() {
+        const produk = getDoProducts();
+
         return tirRows
-            .filter(r => Number.isInteger(r.jumlahBag) && r.jumlahBag > 0)
-            .map(r => r.jumlahBag);
+            .map(row => ({
+                items: produk
+                    .filter(p => Number.isInteger(row.items[p.key]) && row.items[p.key] > 0)
+                    .map(p => ({ produk_id: p.produkId, jumlah_bag: row.items[p.key] })),
+            }))
+            .filter(t => t.items.length > 0);
     }
 
     // ==================== SAVE (FROZEN) ====================
@@ -698,7 +882,7 @@
     }
 
     // ==================== LOAD DROPDOWN NO PO (FRESH) ====================
-    // BARU - Analog loadCellOptions(), tapi sumbernya baris produksi_fresh
+    // Analog loadCellOptions(), tapi sumbernya baris produksi_fresh
     // (tipe main) yang belum ter-outbound, bukan Cell.
     async function loadFreshPoOptions() {
         const select = document.getElementById('fr_no_po');
@@ -756,18 +940,18 @@
         }
 
         container.innerHTML = freshItems.map(item => `
-    <div class="bag-item">
-        <input type="checkbox" ${item._checked ? 'checked' : ''} onchange="toggleFreshItem(${item.id}, this.checked)" style="cursor:pointer;">
-        <span class="bag-chip">${item.kodeProduksi}</span>
-        <span class="bag-meta">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
-        <span class="bag-kg">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
-        <input type="text" class="form-control" style="max-width:200px; height:36px; margin-left:8px;"
-            placeholder="Keterangan (opsional)"
-            value="${item._keterangan}"
-            onclick="event.stopPropagation()"
-            oninput="updateFreshItemKeterangan(${item.id}, this.value)">
-    </div>
-`).join('');
+            <div class="bag-item">
+                <input type="checkbox" ${item._checked ? 'checked' : ''} onchange="toggleFreshItem(${item.id}, this.checked)" style="cursor:pointer;">
+                <span class="bag-chip">${item.kodeProduksi}</span>
+                <span class="bag-meta">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
+                <span class="bag-kg">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
+                <input type="text" class="form-control" style="max-width:200px; height:36px; margin-left:8px;"
+                    placeholder="Keterangan (opsional)"
+                    value="${item._keterangan}"
+                    onclick="event.stopPropagation()"
+                    oninput="updateFreshItemKeterangan(${item.id}, this.value)">
+            </div>
+        `).join('');
 
         updateFreshItemTotal();
     }
@@ -779,9 +963,9 @@
     }
 
     function updateFreshItemKeterangan(id, value) {
-    const item = freshItems.find(i => i.id === id);
-    if (item) item._keterangan = value;
-}
+        const item = freshItems.find(i => i.id === id);
+        if (item) item._keterangan = value;
+    }
 
     function okAllFreshItems() {
         freshItems.forEach(i => i._checked = true);
@@ -808,9 +992,9 @@
             no_pol: document.getElementById('fr_no_pol').value.trim(),
             nama_driver: document.getElementById('fr_nama_driver').value.trim(),
             items: checkedItems.map(i => ({
-    produksi_fresh_id: i.id,
-    keterangan: i._keterangan.trim() || null,
-})),
+                produksi_fresh_id: i.id,
+                keterangan: i._keterangan.trim() || null,
+            })),
         };
 
         if (!payload.tanggal || !payload.no_po || !payload.nama_customer || !payload.jam_muat || !payload.no_pol || !payload.nama_driver) {

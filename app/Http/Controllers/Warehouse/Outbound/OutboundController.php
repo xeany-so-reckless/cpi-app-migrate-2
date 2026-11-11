@@ -9,6 +9,7 @@ use App\Models\OutboundShipment;
 use App\Models\OutboundShipmentCell;
 use App\Models\OutboundShipmentCellBag;
 use App\Models\OutboundShipmentTir;
+use App\Models\OutboundShipmentTirItem;
 use App\Models\User;
 use App\Support\ActivityLogger;
 use Illuminate\Http\JsonResponse;
@@ -98,7 +99,7 @@ class OutboundController extends Controller
             'cells.cell',
             'cells.bags' => fn ($q) => $q->orderBy('id'),
             'cells.bags.batch.produk',
-            'tirs',
+            'tirs.items.produk',
         ]);
 
         return response()->json([
@@ -123,9 +124,14 @@ class OutboundController extends Controller
                     'namaProduk'   => $bag->batch->produk->name ?? null,
                 ]),
             ]),
-            'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [
+                'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [
                 'tirKe'     => $tir->tir_ke,
                 'jumlahBag' => $tir->jumlah_bag,
+                'items'     => $tir->items->map(fn (OutboundShipmentTirItem $item) => [
+                    'produkId'   => $item->produk_id,
+                    'namaProduk' => $item->produk->name ?? 'Stock Adjustment',
+                    'jumlahBag'  => $item->jumlah_bag,
+                ]),
             ]),
         ]);
     }
@@ -154,6 +160,7 @@ class OutboundController extends Controller
                 'lantai'      => $cell->lantai,
                 'stockBag'    => $cell->stockBag(),
                 'stockKg'     => round($cell->stockKg(), 2),
+                'produkId'    => $cell->current_product_id,
                 'produkNama'  => $cell->currentProduct->name ?? null,
             ])
             ->values();
@@ -223,9 +230,30 @@ class OutboundController extends Controller
             // BARU - Tir, opsional sepenuhnya (khusus truk besar). Cuma
             // jumlah_bag yang diisi user - tir_ke/label "Tir 1", "Tir 2"
             // otomatis dari urutan array, bukan nomor segel manual.
-            'tirs'                       => ['nullable', 'array', 'max:20'],
-            'tirs.*'                     => ['integer', 'min:1'],
+            'tirs'                       => ['nullable', 'array', 'max:22'],
+            'tirs.*.items'               => ['required', 'array', 'min:1'],
+            'tirs.*.items.*.produk_id'   => ['nullable', 'integer', 'exists:products,id'],
+            'tirs.*.items.*.jumlah_bag'  => ['required', 'integer', 'min:1'],
         ]);
+
+        // REVISI 2 - produk di Data Tir harus termasuk produk dari Cell yang
+        // dimuat. Dicek SEBELUM transaksi karena processCellOutbound() bisa
+        // melepas current_product_id kalau cell habis.
+        $cellProdukIds = Cell::whereIn('id', collect($data['cells'])->pluck('cell_id'))
+            ->pluck('current_product_id');
+        $produkIdSah = $cellProdukIds->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $bolehTanpaProduk = $cellProdukIds->contains(fn ($id) => $id === null);
+
+        foreach (($data['tirs'] ?? []) as $tirInput) {
+            foreach ($tirInput['items'] as $item) {
+                $pid = $item['produk_id'] ?? null;
+                $sah = $pid === null ? $bolehTanpaProduk : in_array((int) $pid, $produkIdSah, true);
+
+                if (! $sah) {
+                    abort(422, 'Produk pada Data Tir tidak sesuai dengan Cell yang dimuat.');
+                }
+            }
+        }
 
         $shipment = DB::transaction(function () use ($data, $request) {
             $shipment = OutboundShipment::create([
@@ -246,12 +274,28 @@ class OutboundController extends Controller
             // BARU - simpan Tir kalau ada. tir_ke mengikuti urutan array
             // (1-based) = label "Tir 1", "Tir 2", dst - tidak wajib ada
             // isinya sama sekali.
-            foreach (($data['tirs'] ?? []) as $index => $jumlahBag) {
-                OutboundShipmentTir::create([
+                        foreach (($data['tirs'] ?? []) as $index => $tirInput) {
+                // Gabungkan kalau ada produk yang sama muncul 2x di 1 tir
+                $items = collect($tirInput['items'])
+                    ->groupBy(fn ($i) => $i['produk_id'] ?? 'null')
+                    ->map(fn ($g) => [
+                        'produk_id'  => $g->first()['produk_id'] ?? null,
+                        'jumlah_bag' => $g->sum('jumlah_bag'),
+                    ]);
+
+                $tir = OutboundShipmentTir::create([
                     'outbound_shipment_id' => $shipment->id,
                     'tir_ke'               => $index + 1,
-                    'jumlah_bag'           => $jumlahBag,
+                    'jumlah_bag'           => $items->sum('jumlah_bag'), // total semua item di tir ini
                 ]);
+
+                foreach ($items as $item) {
+                    OutboundShipmentTirItem::create([
+                        'outbound_shipment_tir_id' => $tir->id,
+                        'produk_id'                => $item['produk_id'],
+                        'jumlah_bag'               => $item['jumlah_bag'],
+                    ]);
+                }
             }
 
             return $shipment;

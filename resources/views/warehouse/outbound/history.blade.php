@@ -8,7 +8,7 @@
     @include('partials.favicon')
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    {{-- BARU - Library QR Code (client-side) untuk tanda tangan Warehouse di PDF Tally Loading --}}
+    {{-- Library QR Code (client-side) untuk tanda tangan Warehouse di PDF Tally Loading & Tally Tir --}}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0" />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
         .page-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--amber-dim); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 8px; }
         .page-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 2.4rem; text-transform: uppercase; color: var(--text); }
 
-        /* BARU - Toggle Tab Frozen / Fresh */
+        /* Toggle Tab Frozen / Fresh */
         .tab-toggle {
             display: inline-flex; background: var(--surface); border: 1px solid var(--line);
             border-radius: 11px; padding: 4px; gap: 4px;
@@ -89,7 +89,8 @@
         .bag-row { display: flex; gap: 10px; padding: 5px 0; font-size: 0.78rem; color: var(--muted); border-top: 1px dashed var(--line); }
         .bag-row:first-of-type { border-top: none; }
         .tir-summary { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
-        .detail-actions { text-align: right; margin-top: 12px; }
+        .tir-summary-line { padding: 2px 0; }
+        .detail-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
         /* ============================================================
            AREA CETAK PDF - FORM TALLY LOADING (FM-WH-002), A4 PORTRAIT
@@ -135,6 +136,41 @@
         .tl-root table.tl-sign td.nm { height: 5mm; }
         .tl-root table.tl-sign td.rl { height: 5mm; font-weight: bold; }
         .tl-root .tl-foot { font-size: 7.5pt; margin-top: 3mm; }
+
+        /* ============================================================
+           BARU (Revisi 3) - AREA CETAK PDF - FORM TALLY SHEET TIR MUATAN
+           (FM-WH-016), A4 LANDSCAPE. Khusus Frozen. Semua selector
+           di-scope ke .tt-root supaya tidak bentrok dengan .tl-root.
+           ============================================================ */
+        #pdfPrintAreaTir { width: 297mm; }
+
+        .tt-root, .tt-root * { font-family: Arial, Helvetica, sans-serif; }
+        .tt-root { color: #000; background: #fff; }
+
+        /* Tinggi 209mm (bukan 210mm) supaya tidak melahirkan halaman kosong tambahan */
+        .tt-page {
+            width: 297mm; height: 209mm; padding: 8mm 8.5mm; box-sizing: border-box;
+            position: relative; overflow: hidden; background: #fff;
+        }
+
+        .tt-root table.tt-t { width: 280mm; border-collapse: collapse; table-layout: fixed; font-size: 8pt; }
+        .tt-root table.tt-t td {
+            border: 0.25mm solid #000; padding: 0 0.8mm; height: 6mm; line-height: 1.1;
+            text-align: center; vertical-align: middle; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        }
+        .tt-root table.tt-t td.l { text-align: left; padding-left: 1.5mm; }
+        .tt-root table.tt-t td.sm { font-size: 7pt; }
+        .tt-root table.tt-t td.n7 { font-size: 7pt; }
+        .tt-root table.tt-t tr.h55 td { height: 5.5mm; }
+        .tt-root .tt-lbl { display: inline-block; width: 30mm; font-weight: bold; }
+
+        .tt-root .tt-witness { font-size: 8.5pt; font-weight: bold; margin-bottom: 1mm; }
+        .tt-root table.tt-sign { width: 280mm; border-collapse: collapse; table-layout: fixed; font-size: 8.5pt; }
+        .tt-root table.tt-sign td { border: 0; padding: 0; text-align: center; vertical-align: middle; }
+        .tt-root table.tt-sign td.rl { height: 5mm; font-weight: bold; }
+        .tt-root table.tt-sign td.sp { height: 20mm; }
+        .tt-root table.tt-sign td.sp img { width: 18mm; height: 18mm; image-rendering: pixelated; }
+        .tt-root table.tt-sign td.nm { height: 5mm; }
     </style>
 </head>
 <body>
@@ -160,7 +196,7 @@
         <div class="page-title">Riwayat Outbound</div>
     </div>
 
-    {{-- BARU - Toggle Tab Frozen / Fresh --}}
+    {{-- Toggle Tab Frozen / Fresh --}}
     <div class="tab-toggle" id="tabToggle">
         <button type="button" class="active" data-tab="frozen" onclick="setActiveTab('frozen')">Frozen</button>
         <button type="button" data-tab="fresh" onclick="setActiveTab('fresh')">Fresh</button>
@@ -209,7 +245,7 @@
     </div>
 
     {{-- ============================================================ --}}
-    {{-- ==================  TAB FRESH (BARU)  ======================= --}}
+    {{-- ==================  TAB FRESH  ============================== --}}
     {{-- ============================================================ --}}
     <div id="panelHistoryFresh" style="display:none;">
 
@@ -248,22 +284,24 @@
 
 </div>
 
-{{-- ==================== AREA CETAK PDF TALLY LOADING (diisi dinamis via JS) ====================
-     Dipakai bersama Frozen & Fresh. #pdfHost disembunyikan di luar layar;
-     #pdfPrintArea (anak di dalamnya) yang dikirim ke html2pdf, sengaja
-     TANPA position fixed supaya hasil clone html2pdf tidak ikut keluar layar.
-     #pdfMeasure dipakai untuk mengukur tinggi asli tiap bagian sebelum
-     dibagi ke halaman (paginasi). --}}
+{{-- ==================== AREA CETAK PDF (diisi dinamis via JS) ====================
+     #pdfHost disembunyikan di luar layar. Anak-anaknya:
+     - #pdfMeasure   : mengukur tinggi tiap bagian Tally Loading sebelum dipaginasi.
+     - #pdfPrintArea : area cetak Tally Loading (A4 portrait) - dipakai Frozen & Fresh.
+     - #pdfPrintAreaTir : BARU - area cetak Tally Tir (A4 landscape), khusus Frozen.
+     Semuanya sengaja TANPA position fixed sendiri supaya hasil clone html2pdf
+     tidak ikut keluar layar. --}}
 <div id="pdfHost">
     <div id="pdfMeasure" class="tl-root"></div>
     <div id="pdfPrintArea" class="tl-root"></div>
+    <div id="pdfPrintAreaTir" class="tt-root"></div>
 </div>
 
 <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
     const PDF_LOGO_URL = "{{ asset('images/logo.png') }}";
 
-    // BARU - Tab aktif saat ini: 'frozen' atau 'fresh'.
+    // Tab aktif saat ini: 'frozen' atau 'fresh'.
     let activeTab = 'frozen';
 
     function setActiveTab(tab) {
@@ -285,7 +323,7 @@
     }
 
     // ============================================================
-    // ==================  TAB FROZEN (SUDAH ADA)  =================
+    // ==================  TAB FROZEN  =============================
     // ============================================================
     let allHistoryData = [];
     let expandedRows = new Set();
@@ -388,6 +426,12 @@
         return detail;
     }
 
+    // True kalau DO ini punya Tir yang sudah ada rincian per produknya
+    // (DO lama sebelum revisi Tir per produk tidak punya rincian ini).
+    function tirPunyaRincian(detail) {
+        return (detail.tirs || []).some(t => t.items && t.items.length > 0);
+    }
+
     function renderDetailInto(id, detail) {
         const container = document.getElementById(`detailInner-${id}`);
         if (!container) return;
@@ -408,16 +452,30 @@
             </div>
         `).join('');
 
+        // REVISI 3: Tir dirinci per produk. DO lama (tanpa rincian) tetap
+        // tampil seperti sebelumnya: "Tir N (X Bag)".
+        const tirLine = t => (t.items && t.items.length > 0)
+            ? `Tir ${t.tirKe}: ${t.items.map(i => `${pdfEsc(i.namaProduk)} ${i.jumlahBag}`).join(' + ')}`
+            : `Tir ${t.tirKe} (${t.jumlahBag} Bag)`;
+
         const tirHtml = detail.tirs.length > 0 ? `
             <div class="tir-summary">
-                <b>Tir:</b> ${detail.tirs.map(t => `Tir ${t.tirKe} (${t.jumlahBag} Bag)`).join(', ')}
+                <b>Tir:</b>
+                ${detail.tirs.map(t => `<div class="tir-summary-line">${tirLine(t)}</div>`).join('')}
             </div>
+        ` : '';
+
+        const tirButton = tirPunyaRincian(detail) ? `
+            <button class="btn btn-outline" onclick="downloadTirPdf(${id})">
+                <span class="material-symbols-outlined" style="font-size:16px;">picture_as_pdf</span> PDF Tir
+            </button>
         ` : '';
 
         container.innerHTML = `
             ${cellsHtml || '<div class="empty-state">Tidak ada data Cell.</div>'}
             ${tirHtml}
             <div class="detail-actions">
+                ${tirButton}
                 <button class="btn btn-amber" onclick="downloadPdf(${id})">
                     <span class="material-symbols-outlined" style="font-size:16px;">picture_as_pdf</span> Download PDF
                 </button>
@@ -442,7 +500,7 @@
     }
 
     // ============================================================
-    // ==================  TAB FRESH (BARU)  =======================
+    // ==================  TAB FRESH  ==============================
     // ============================================================
     let allFreshHistoryData = [];
     let expandedFreshRows = new Set();
@@ -543,13 +601,13 @@
         if (!container) return;
 
         const itemsHtml = detail.items.map(item => `
-    <div class="bag-row">
-        <span style="width:110px;">${item.kodeProduksi}</span>
-        <span style="flex:1;">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
-        <span class="mono">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
-        ${item.keterangan ? `<span style="color:var(--danger); font-style:italic;">${item.keterangan}</span>` : ''}
-    </div>
-`).join('');
+            <div class="bag-row">
+                <span style="width:110px;">${item.kodeProduksi}</span>
+                <span style="flex:1;">${item.kodeProduk ?? '-'} &middot; ${item.namaProduk ?? '-'}</span>
+                <span class="mono">${Number(item.qty).toLocaleString('id-ID', {maximumFractionDigits:2})} Qty</span>
+                ${item.keterangan ? `<span style="color:var(--danger); font-style:italic;">${item.keterangan}</span>` : ''}
+            </div>
+        `).join('');
 
         container.innerHTML = `
             <div class="detail-cell-block">
@@ -575,7 +633,7 @@
     document.getElementById('filterSearchFresh').addEventListener('input', debounce(loadFreshHistoryData, 400));
 
     // ============================================================
-    // ==========  PDF FORM TALLY LOADING (FM-WH-002) - BARU  ======
+    // ==========  PDF FORM TALLY LOADING (FM-WH-002)  =============
     // ============================================================
     // Format A4 portrait, dipakai bersama Frozen & Fresh.
     //  - 1 blok per produk, grid 10 kolom x 10 baris = maks 100 bag per
@@ -638,7 +696,7 @@
                 <tr class="h6">
                     <td rowspan="3">
                         <img src="${PDF_LOGO_URL}" alt="" style="height:10mm; display:block; margin:0 auto 1mm;">
-                        <div style="font-weight:bold; font-size:8pt;">JOMBANG - INDONESIA</div>
+                        <div style="font-weight:bold; font-size:8pt;">CPI JOMBANG INDONESIA</div>
                     </td>
                     <td rowspan="3">
                         <div style="font-weight:bold; font-size:14pt;">FORM TALLY LOADING</div>
@@ -849,10 +907,9 @@
         })));
     }
 
-    async function pdfRender(doc, filename) {
-        const area = document.getElementById('pdfPrintArea');
-        area.innerHTML = pdfBuildPagesHtml(doc);
-
+    // REVISI 3: bagian "simpan ke file" dipisah supaya bisa dipakai dua
+    // area cetak - Tally Loading (portrait) dan Tally Tir (landscape).
+    async function pdfSaveArea(area, filename, orientation) {
         try {
             await pdfWaitImages(area);
 
@@ -861,7 +918,7 @@
                 filename: filename,
                 image: { type: 'png' },
                 html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: orientation },
                 pagebreak: { mode: ['css'] },
             };
 
@@ -869,6 +926,12 @@
         } finally {
             area.innerHTML = '';
         }
+    }
+
+    async function pdfRender(doc, filename) {
+        const area = document.getElementById('pdfPrintArea');
+        area.innerHTML = pdfBuildPagesHtml(doc);
+        await pdfSaveArea(area, filename, 'portrait');
     }
 
     // ---------- Susun data DO Frozen -> struktur dokumen Tally Loading ----------
@@ -979,6 +1042,200 @@
             await pdfRender(
                 pdfBuildFreshDoc(detail),
                 `Tally_Loading_Fresh_${pdfFileSafe(detail.noPo)}_${detail.tanggal}.pdf`
+            );
+        });
+    }
+
+    // ============================================================
+    // ======  PDF FORM TALLY SHEET TIR MUATAN (FM-WH-016) - BARU  ==
+    // ============================================================
+    // Format A4 LANDSCAPE, 1 halaman, khusus Frozen. Matriks:
+    //  - Baris  = ITEM (produk), minimal 15 baris (sama seperti form asli),
+    //             bertambah otomatis kalau produk lebih dari 15.
+    //  - Kolom  = No. Tir 1..22, lalu TOTAL per item.
+    //  - Baris TOTAL di bawah = jumlah bag per Tir.
+    // Data dari detail.tirs[].items[] (lihat historyDetail() di controller).
+    // ============================================================
+    const TIR_COLS = 22;       // jumlah kolom No. Tir di form asli
+    const TIR_MIN_ROWS = 15;   // jumlah baris item minimal di form asli
+    const TIR_ROWS_BUDGET_MM = 100; // total tinggi area baris item; kalau baris > 20, tinggi baris mengecil
+
+    // ---------- Susun data DO Frozen -> struktur dokumen Tally Tir ----------
+    function pdfBuildTirDoc(detail) {
+        const tirs = (detail.tirs || []).filter(t => t.items && t.items.length > 0);
+        if (tirs.length === 0) {
+            throw new Error('DO ini belum punya rincian Tir per produk.');
+        }
+
+        // Produk unik, urut sesuai kemunculan pertama di Tir
+        const produkMap = new Map();
+        tirs.forEach(t => {
+            t.items.forEach(it => {
+                const key = (it.produkId === null || it.produkId === undefined) ? 'adj' : String(it.produkId);
+                if (!produkMap.has(key)) {
+                    produkMap.set(key, { nama: it.namaProduk || '-', perTir: {} });
+                }
+                const p = produkMap.get(key);
+                p.perTir[t.tirKe] = (p.perTir[t.tirKe] || 0) + Number(it.jumlahBag);
+            });
+        });
+
+        return {
+            noDo: detail.noDo,
+            tanggal: detail.tanggal,
+            jamMuat: detail.jamMuat,
+            tujuan: detail.namaCustomer,
+            noPol: detail.noPol,
+            driver: detail.namaDriver,
+            checkerNama: detail.checkerNama,
+            checkerKode: detail.checkerKode,
+            produk: Array.from(produkMap.values()),
+        };
+    }
+
+    // ---------- Susun 1 halaman Tally Tir (landscape) ----------
+    function pdfBuildTirPageHtml(doc) {
+        const rowCount = Math.max(TIR_MIN_ROWS, doc.produk.length);
+        const rowH = Math.min(5, TIR_ROWS_BUDGET_MM / rowCount);
+        const H = `style="height:${rowH}mm"`;
+
+        const colTotals = Array(TIR_COLS).fill(0);
+        const colUsed = Array(TIR_COLS).fill(false);
+        let grand = 0;
+
+        const colgroup = `<colgroup>
+            <col style="width:8mm"><col style="width:50mm">
+            ${'<col style="width:9.4mm">'.repeat(TIR_COLS)}
+            <col style="width:15mm">
+        </colgroup>`;
+
+        const tirNums = Array.from({ length: TIR_COLS }, (_, c) => `<td class="n7">${c + 1}</td>`).join('');
+
+        const rows = Array.from({ length: rowCount }, (_, r) => {
+            const p = doc.produk[r];
+
+            if (!p) {
+                // baris kosong (sama seperti form asli)
+                return `<tr><td ${H}>${r + 1}</td><td ${H}></td>${Array.from({ length: TIR_COLS }, () => `<td ${H}></td>`).join('')}<td ${H}></td></tr>`;
+            }
+
+            let rowTotal = 0;
+            const cells = Array.from({ length: TIR_COLS }, (_, c) => {
+                const v = p.perTir[c + 1];
+                if (v) {
+                    rowTotal += v;
+                    colTotals[c] += v;
+                    colUsed[c] = true;
+                    return `<td ${H}>${pdfNum(v)}</td>`;
+                }
+                return `<td ${H}></td>`;
+            }).join('');
+
+            grand += rowTotal;
+
+            return `<tr>
+                <td ${H}>${r + 1}</td>
+                <td class="l" ${H}>${pdfEsc(p.nama)}</td>
+                ${cells}
+                <td ${H}><b>${pdfNum(rowTotal)}</b></td>
+            </tr>`;
+        }).join('');
+
+        const totalCells = colTotals.map((t, c) => `<td><b>${colUsed[c] ? pdfNum(t) : ''}</b></td>`).join('');
+
+        const qrText = `Checker WH: ${doc.checkerNama} (${doc.checkerKode}) | Tally Tir No DO: ${doc.noDo} | ${doc.tanggal} ${pdfJam(doc.jamMuat)}`;
+        const qrUrl = pdfMakeQr(qrText);
+        const blank = '(' + '&nbsp;'.repeat(26) + ')';
+
+        return `
+            <div class="tt-page">
+                <table class="tt-t">
+                    <colgroup><col style="width:55mm"><col style="width:140mm"><col style="width:85mm"></colgroup>
+                    <tr>
+                        <td rowspan="3">
+                            <img src="${PDF_LOGO_URL}" alt="" style="height:10mm; display:block; margin:0 auto 1mm;">
+                            <div style="font-weight:bold; font-size:8pt;">CPI JOMBANG INDONESIA</div>
+                        </td>
+                        <td rowspan="3">
+                            <div style="font-weight:bold; font-size:14pt;">FORM TALLY SHEET TIR MUATAN</div>
+                        </td>
+                        <td class="l sm">No Dokumen &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: FM-WH-016</td>
+                    </tr>
+                    <tr><td class="l sm">Tanggal Efektif : 27 Maret 2024</td></tr>
+                    <tr><td class="l sm">Revisi/ Tgl &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 00/-</td></tr>
+                </table>
+                <div style="height:2mm;"></div>
+
+                <table class="tt-t">
+                    <colgroup><col style="width:140mm"><col style="width:140mm"></colgroup>
+                    <tr>
+                        <td class="l"><span class="tt-lbl">Hari / Tanggal</span>: ${pdfEsc(pdfHariTanggal(doc.tanggal))}</td>
+                        <td class="l"><span class="tt-lbl">No. Mobil</span>: ${pdfEsc(doc.noPol)}</td>
+                    </tr>
+                    <tr>
+                        <td class="l"><span class="tt-lbl">Tujuan / Customer</span>: ${pdfEsc(doc.tujuan)}</td>
+                        <td class="l"><span class="tt-lbl">No DO</span>: ${pdfEsc(doc.noDo)}</td>
+                    </tr>
+                </table>
+                <div style="height:2mm;"></div>
+
+                <table class="tt-t">
+                    ${colgroup}
+                    <tr class="h55">
+                        <td rowspan="2"><b>No.</b></td>
+                        <td rowspan="2"><b>ITEM</b></td>
+                        <td colspan="${TIR_COLS}"><b>NO. TIR</b></td>
+                        <td rowspan="2"><b>TOTAL</b></td>
+                    </tr>
+                    <tr class="h55">${tirNums}</tr>
+                    ${rows}
+                    <tr class="h55">
+                        <td colspan="2" class="l"><b>TOTAL</b></td>
+                        ${totalCells}
+                        <td><b>${pdfNum(grand)}</b></td>
+                    </tr>
+                </table>
+                <div style="height:3mm;"></div>
+
+                <div class="tt-witness">Disaksikan Oleh :</div>
+                <table class="tt-sign">
+                    <colgroup><col style="width:70mm"><col style="width:70mm"><col style="width:70mm"><col style="width:70mm"></colgroup>
+                    <tr>
+                        <td class="rl">Driver</td>
+                        <td class="rl">Checker WH</td>
+                        <td class="rl">Quality Control</td>
+                        <td class="rl">SPV/Foreman WH</td>
+                    </tr>
+                    <tr>
+                        <td class="sp"></td>
+                        <td class="sp">${qrUrl ? `<img src="${qrUrl}" alt="">` : ''}</td>
+                        <td class="sp"></td>
+                        <td class="sp"></td>
+                    </tr>
+                    <tr>
+                        <td class="nm">( ${pdfEsc(doc.driver)} )</td>
+                        <td class="nm">( ${pdfEsc(doc.checkerNama)} )</td>
+                        <td class="nm">${blank}</td>
+                        <td class="nm">${blank}</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+    }
+
+    async function pdfRenderTir(doc, filename) {
+        const area = document.getElementById('pdfPrintAreaTir');
+        area.innerHTML = pdfBuildTirPageHtml(doc);
+        await pdfSaveArea(area, filename, 'landscape');
+    }
+
+    // ==================== DOWNLOAD PDF TIR - FROZEN ====================
+    function downloadTirPdf(id) {
+        return pdfRunWithLoading(async () => {
+            const detail = await getDetail(id);
+            await pdfRenderTir(
+                pdfBuildTirDoc(detail),
+                `Tally_Tir_${pdfFileSafe(detail.noDo)}_${detail.tanggal}.pdf`
             );
         });
     }

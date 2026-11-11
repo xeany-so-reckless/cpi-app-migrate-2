@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OutboundShipmentTir extends Model
 {
@@ -23,5 +24,13 @@ class OutboundShipmentTir extends Model
     public function shipment(): BelongsTo
     {
         return $this->belongsTo(OutboundShipment::class, 'outbound_shipment_id');
+    }
+
+    /**
+     * Rincian isi Tir ini per produk (1 Tir boleh berisi >1 produk).
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(OutboundShipmentTirItem::class, 'outbound_shipment_tir_id');
     }
 }
