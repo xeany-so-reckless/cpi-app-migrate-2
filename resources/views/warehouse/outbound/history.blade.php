@@ -824,7 +824,6 @@
                     <td class="rl">DRIVER</td>
                 </tr>
             </table>
-            <div class="tl-foot">1. Putih : Customer; &nbsp;2. Merah : Warehouse; &nbsp;3. Kuning : Logistik</div>
         `;
     }
 
