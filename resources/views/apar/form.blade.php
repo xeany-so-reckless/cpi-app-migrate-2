@@ -61,16 +61,17 @@
         .seg input:checked + .pill.na  { background: #e2e8f0; border-color: #94a3b8; color: var(--slate); }
         .seg input:focus-visible + .pill { outline: 3px solid #93c5fd; outline-offset: 1px; }
 
-        /* Foto */
+        /* Foto: dua tombol (kamera & galeri) */
+        .foto-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .foto-btn {
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-            width: 100%; min-height: 120px; border: 2px dashed #cbd5e1; border-radius: 12px;
+            width: 100%; min-height: 110px; border: 2px dashed #cbd5e1; border-radius: 12px;
             background: #f8fafc; color: var(--slate-3); font-size: .85rem; font-weight: 600;
-            cursor: pointer; text-align: center; padding: 14px;
+            cursor: pointer; text-align: center; padding: 12px;
         }
-        .foto-btn svg { width: 34px; height: 34px; stroke: var(--red); }
+        .foto-btn svg { width: 32px; height: 32px; stroke: var(--red); }
         .foto-btn.has-file { border-style: solid; border-color: var(--green); }
-        #foto { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+        #foto, #fotoKamera { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
         .foto-wrap { position: relative; }
         #fotoPreview { display: none; width: 100%; max-height: 300px; object-fit: contain; border-radius: 10px; margin-top: 10px; border: 1px solid var(--line); background: #000; }
         #fotoInfo { font-size: .74rem; color: var(--muted); margin-top: 6px; }
@@ -90,7 +91,7 @@
 <body>
 
 <header class="head">
-    <div class="eyebrow">CPI Jombang &middot; Personalia & General Affairs</div>
+    <div class="eyebrow">CPI Jombang &middot; Departemen Produksi</div>
     <h1>Inspeksi APAR</h1>
     <p>Isi form di bawah sesuai kondisi APAR di lokasi</p>
 </header>
@@ -219,11 +220,21 @@
             <div class="field">
                 <span class="lbl">Foto dokumentasi <span class="req">*</span></span>
                 <div class="foto-wrap">
+                    {{-- Input utama (yang dikirim ke server). Galeri langsung mengisi input ini. --}}
                     <input type="file" id="foto" name="foto" accept="image/*" required>
-                    <label for="foto" class="foto-btn" id="fotoBtn">
-                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                        <span id="fotoText">Ambil / pilih foto</span>
-                    </label>
+                    {{-- Input kamera: memaksa membuka kamera (tanpa name, filenya disalin ke #foto lewat JS) --}}
+                    <input type="file" id="fotoKamera" accept="image/*" capture="environment" tabindex="-1">
+
+                    <div class="foto-actions">
+                        <label for="fotoKamera" class="foto-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <span>Buka Kamera</span>
+                        </label>
+                        <label for="foto" class="foto-btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                            <span>Pilih dari Galeri</span>
+                        </label>
+                    </div>
                 </div>
                 <img id="fotoPreview" alt="Pratinjau foto">
                 <div id="fotoInfo"></div>
@@ -254,8 +265,7 @@
     // ---- Foto: pratinjau + perkecil di browser sebelum diunggah ----
     const MAX_SISI = 1600;
     const foto = document.getElementById('foto');
-    const fotoBtn = document.getElementById('fotoBtn');
-    const fotoText = document.getElementById('fotoText');
+    const fotoKamera = document.getElementById('fotoKamera');
     const preview = document.getElementById('fotoPreview');
     const info = document.getElementById('fotoInfo');
     const btnSubmit = document.getElementById('btnSubmit');
@@ -302,12 +312,18 @@
 
         preview.src = URL.createObjectURL(file);
         preview.style.display = 'block';
-        fotoBtn.classList.add('has-file');
-        fotoText.textContent = 'Ganti foto';
+        document.querySelectorAll('.foto-btn').forEach(b => b.classList.add('has-file'));
         info.textContent = 'Ukuran foto: ' + kb(file.size);
 
         btnSubmit.disabled = false;
         btnSubmit.textContent = 'Kirim Inspeksi';
+    });
+
+    // Hasil jepretan kamera disalin ke input utama, lalu diproses sama seperti foto galeri
+    fotoKamera.addEventListener('change', function () {
+        if (!fotoKamera.files.length) return;
+        foto.files = fotoKamera.files;
+        foto.dispatchEvent(new Event('change'));
     });
 
     // ---- Cegah kirim ganda ----
