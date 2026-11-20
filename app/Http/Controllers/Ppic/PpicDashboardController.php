@@ -98,6 +98,7 @@ class PpicDashboardController extends Controller
 
         return match (true) {
             $kode >= 1 && $kode <= 36 => 'FEH1',
+            $kode >= 85 && $kode <= 91 => 'FEH1',
             $kode >= 47 && $kode <= 53 => 'FEH2',
             $kode >= 58 && $kode <= 60 => 'FEH2',
             $kode === 83 => 'FEH2',

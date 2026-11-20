@@ -42,6 +42,17 @@ class ProductSeeder extends Seeder
             ['16', 'Yamiku Griller FZN (1.9-2.0) SLJ', 15, 'kw1', 16],
             ['17', 'Yamiku Griller FZN 2.0 UP SLJ', 15, 'kw1', 17],
 
+            // === KW 1 - GRILLER SL (BARU) ===
+            // Kode 85-91 ikut jenis PO FEH1 lewat mapKodeProdukKeJenisPo()
+            // di PpicDashboardController.
+            ['85', 'Griller SL Size 0 Frozen KG', 30, 'kw1', 18],
+            ['86', 'Griller SL Size 1 Frozen KG', 20, 'kw1', 19],
+            ['87', 'Griller SL Size 2 Frozen KG', 20, 'kw1', 20],
+            ['88', 'Griller SL Size A Frozen',    20, 'kw1', 21],
+            ['89', 'Griller SL Size B Frozen',    20, 'kw1', 22],
+            ['90', 'Griller SL Size C Frozen',    20, 'kw1', 23],
+            ['91', 'Griller SL Size D Frozen',    16, 'kw1', 24],
+
             // === KW 2 (GRILLER) ===
             ['18', 'Yamiku Griller Frozen (0.3-0.4) Super SL', 40, 'kw2', 1],
             ['19', 'Yamiku Griller Frozen (0.4-0.5) Super SL', 40, 'kw2', 2],
