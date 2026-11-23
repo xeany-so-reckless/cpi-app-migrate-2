@@ -68,9 +68,9 @@
                         <div>{{ $label }}</div>
                         <div>
                             @if ($nilai === 'baik')
-                                <span class="badge ok">Baik</span>
+                                <span class="badge ok">{{ $field === 'pressure_gauge' ? 'Normal' : 'Baik' }}</span>
                             @elseif ($nilai === 'rusak')
-                                <span class="badge bad">Rusak</span>
+                                <span class="badge bad">{{ $field === 'pressure_gauge' ? 'Tidak' : 'Rusak' }}</span>
                             @elseif ($nilai === 'tidak_ada')
                                 <span class="badge na">Tidak Ada</span>
                             @else

@@ -182,11 +182,11 @@
                     <div class="seg">
                         <label>
                             <input type="radio" name="{{ $field }}" value="baik" @checked($nilai === 'baik') required>
-                            <span class="pill ok">Baik</span>
+                            <span class="pill ok">{{ $isGauge ? 'Normal' : 'Baik' }}</span>
                         </label>
                         <label>
                             <input type="radio" name="{{ $field }}" value="rusak" @checked($nilai === 'rusak')>
-                            <span class="pill bad">Rusak</span>
+                            <span class="pill bad">{{ $isGauge ? 'Tidak' : 'Rusak' }}</span>
                         </label>
                         @if ($isRoda)
                             <label>
@@ -197,7 +197,7 @@
                     </div>
 
                     @if ($isGauge)
-                        <div class="hint">Khusus APAR jenis Dry Chemical Powder.</div>
+    <div class="hint">Khusus APAR jenis Dry Chemical Powder.<br>Kalau indikator <strong>hijau</strong> pilih <strong>Normal</strong>. Kalau <strong>kuning atau merah</strong> pilih <strong>Tidak</strong>.</div>
                     @elseif ($isRoda)
                         <div class="hint">Khusus APAB (alat pemadam api berat). Pilih "Tidak Ada" bila bukan APAB.</div>
                     @endif

@@ -129,7 +129,7 @@
                         @endif
                     </div>
                     @if ($isGauge)
-                        <div class="hint">Hanya berlaku untuk jenis Dry Chemical Powder.</div>
+    <div class="hint">Hanya berlaku untuk jenis Dry Chemical Powder.<br>Kalau indikator <strong>hijau</strong> pilih <strong>Normal</strong>. Kalau <strong>kuning atau merah</strong> pilih <strong>Tidak</strong>.</div>
                     @elseif ($isRoda)
                         <div class="hint">Khusus APAB. Pilih "Tidak Ada" bila bukan APAB.</div>
                     @endif
