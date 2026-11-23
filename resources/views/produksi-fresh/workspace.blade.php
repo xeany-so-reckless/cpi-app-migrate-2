@@ -193,7 +193,8 @@
           <label>Kode Produk</label>
           <div class="input-with-icon">
             <span class="material-icons-round">qr_code_scanner</span>
-            <input type="number" id="prodCode" placeholder="Ketik lalu tekan Enter ↵">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="go"
+       id="prodCode" placeholder="Ketik kode produk" autocomplete="off">
           </div>
           <div id="prodError" class="error-text" style="text-align:left;"></div>
         </div>
@@ -434,9 +435,36 @@
       }
     }
 
-    document.getElementById('prodCode').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); validateProduct(); }
-    });
+    const prodCodeEl = document.getElementById('prodCode');
+let prodCodeTimer = null;
+let lastValidatedCode = '';
+
+function runValidate() {
+  const code = prodCodeEl.value.trim();
+  if (code === lastValidatedCode) return; // hindari validasi ganda
+  lastValidatedCode = code;
+  validateProduct();
+}
+
+// Desktop & scanner: Enter langsung cari
+prodCodeEl.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' || e.keyCode === 13) {
+    e.preventDefault();
+    clearTimeout(prodCodeTimer);
+    runValidate();
+  }
+});
+
+// HP/tab: otomatis cari setelah berhenti mengetik 600 ms
+prodCodeEl.addEventListener('input', function () {
+  this.value = this.value.replace(/[^0-9]/g, '');
+  clearTimeout(prodCodeTimer);
+  if (!this.value) { lastValidatedCode = ''; validateProduct(); return; }
+  prodCodeTimer = setTimeout(runValidate, 600);
+});
+
+// Cadangan: tombol Go/Done di keyboard virtual
+prodCodeEl.addEventListener('change', runValidate);
 
     document.getElementById('qty').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); addToList(); }
@@ -469,22 +497,28 @@
     }
 
     function validateProduct() {
-      const code = document.getElementById('prodCode').value;
-      const errDiv = document.getElementById('prodError');
-      const nameInput = document.getElementById('prodName');
-      const batchInput = document.getElementById('batchCode');
+  const code = document.getElementById('prodCode').value.trim();
+  const errDiv = document.getElementById('prodError');
+  const nameInput = document.getElementById('prodName');
+  const batchInput = document.getElementById('batchCode');
 
-      errDiv.innerText = '';
-      nameInput.value = '';
-      batchInput.value = '';
+  errDiv.innerText = '';
+  nameInput.value = '';
+  batchInput.value = '';
 
-      if (!code) return;
+  if (!code) return;
 
-      const prod = productCache.find(p => p.code === String(code));
-      if (!prod) {
-        errDiv.innerText = '⚠ Kode tidak ditemukan atau bukan produk tipe ini!';
-        return;
-      }
+  if (productCache.length === 0) {
+    errDiv.innerText = '⏳ Daftar produk masih dimuat, coba sebentar lagi...';
+    lastValidatedCode = ''; // izinkan dicoba ulang
+    return;
+  }
+
+  const prod = productCache.find(p => p.code === code);
+  if (!prod) {
+    errDiv.innerText = '⚠ Kode tidak ditemukan atau bukan produk tipe ini!';
+    return;
+  }
 
       nameInput.value = prod.name;
       batchInput.value = previewKodeProduksi(prod.categoryCode || '00');
@@ -610,6 +644,7 @@
       document.getElementById('batchCode').value = '';
       document.getElementById('qty').value = '';
       document.getElementById('prodError').innerText = '';
+      lastValidatedCode = '';
     }
 
     function cetakPdf() {
