@@ -31,7 +31,9 @@ use App\Http\Controllers\Pga\PgaController;
 use App\Http\Controllers\Pga\PgaAparController;
 use App\Http\Controllers\Pga\PgaQrController;
 use App\Http\Controllers\Pga\PgaAparFotoController;
+use App\Http\Controllers\Pga\PgaTrainingController;
 use App\Http\Controllers\Apar\InspeksiController as AparInspeksiController;
+use App\Http\Controllers\Training\EvaluasiController as TrainingEvaluasiController;
 
 Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -363,6 +365,15 @@ Route::prefix('pga')->name('pga.')->group(function () {
             Route::delete('/{inspeksi}', [PgaAparController::class, 'destroy'])->whereNumber('inspeksi')->name('destroy');
         });
 
+        Route::prefix('training')->name('training.')->group(function () {
+            Route::get('/', [PgaTrainingController::class, 'index'])->name('index');
+            Route::get('/qr', [PgaQrController::class, 'training'])->name('qr');
+            Route::get('/{evaluasi}', [PgaTrainingController::class, 'show'])->whereNumber('evaluasi')->name('show');
+            Route::get('/{evaluasi}/edit', [PgaTrainingController::class, 'edit'])->whereNumber('evaluasi')->name('edit');
+            Route::put('/{evaluasi}', [PgaTrainingController::class, 'update'])->whereNumber('evaluasi')->name('update');
+            Route::delete('/{evaluasi}', [PgaTrainingController::class, 'destroy'])->whereNumber('evaluasi')->name('destroy');
+        });
+
         Route::prefix('buku-tamu')->name('bukutamu.')->group(function () {
             Route::get('/', [PgaController::class, 'bukuTamu'])->name('index');
         });
@@ -375,4 +386,12 @@ Route::prefix('apar')->name('apar.')->group(function () {
     Route::get('/', [AparInspeksiController::class, 'form'])->name('form');
     Route::post('/', [AparInspeksiController::class, 'store'])->middleware('throttle:30,1')->name('store');
     Route::get('/sukses', [AparInspeksiController::class, 'sukses'])->name('sukses');
+});
+
+// ==================== FORM EVALUASI TRAINING (PUBLIK - tujuan QR) ====================
+// Tanpa login. Jangan ubah URL '/training' setelah QR dicetak.
+Route::prefix('training')->name('training.')->group(function () {
+    Route::get('/', [TrainingEvaluasiController::class, 'form'])->name('form');
+    Route::post('/', [TrainingEvaluasiController::class, 'store'])->middleware('throttle:120,1')->name('store');
+    Route::get('/sukses', [TrainingEvaluasiController::class, 'sukses'])->name('sukses');
 });

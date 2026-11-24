@@ -14,12 +14,29 @@ use Illuminate\View\View;
 use Throwable;
 
 /**
- * Halaman cetak QR code form inspeksi APAR (satu QR umum untuk semua APAR).
- * QR berisi URL form publik (route apar.form, yaitu /apar).
+ * Halaman cetak QR code untuk form publik PGA:
+ *  - index()    : form inspeksi APAR (route apar.form, yaitu /apar)
+ *  - training() : form evaluasi training (route training.form, yaitu /training)
+ * Satu QR umum untuk semua pengguna form.
  */
 class PgaQrController extends Controller
 {
     public function index(Request $request): View
+    {
+        return view('pga.apar.qr', $this->siapkan($request, route('apar.form')));
+    }
+
+    public function training(Request $request): View
+    {
+        return view('pga.training.qr', $this->siapkan($request, route('training.form')));
+    }
+
+    /**
+     * Validasi pilihan cetak lalu buat QR dari URL form.
+     *
+     * @return array{url:string, ukuran:string, jumlah:int, lokal:bool, qrUri:?string, qrError:?string}
+     */
+    private function siapkan(Request $request, string $urlDefault): array
     {
         $f = $request->validate([
             'url'    => ['nullable', 'url:http,https', 'max:255'],
@@ -36,7 +53,7 @@ class PgaQrController extends Controller
         // Default: alamat form di host yang sedang dipakai membuka halaman ini.
         // Di komputer lokal ini biasanya "localhost" -> HP tidak bisa membukanya,
         // jadi PGA/IT mengganti dengan IP atau nama host server yang sebenarnya.
-        $url    = $f['url'] ?? route('apar.form');
+        $url    = $f['url'] ?? $urlDefault;
         $ukuran = $f['ukuran'] ?? 'stiker';
         $jumlah = (int) ($f['jumlah'] ?? ($ukuran === 'besar' ? 1 : 6));
 
@@ -67,6 +84,6 @@ class PgaQrController extends Controller
             }
         }
 
-        return view('pga.apar.qr', compact('url', 'ukuran', 'jumlah', 'lokal', 'qrUri', 'qrError'));
+        return compact('url', 'ukuran', 'jumlah', 'lokal', 'qrUri', 'qrError');
     }
 }

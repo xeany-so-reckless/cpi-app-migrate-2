@@ -131,7 +131,7 @@
     <div class="sb-brand">
         <div class="sb-eyebrow">CPI Jombang</div>
         <div class="sb-title">PGA</div>
-        <div class="sb-sub">Dashboard &middot; APAR &middot; Buku Tamu</div>
+        <div class="sb-sub">Dashboard &middot; APAR &middot; Training &middot; Buku Tamu</div>
     </div>
 
     <nav class="sb-nav" aria-label="Menu PGA">
@@ -140,6 +140,10 @@
         </a>
         <a href="{{ route('pga.apar.index') }}" class="sb-link {{ request()->routeIs('pga.apar.*') ? 'active' : '' }}">
             <span class="material-symbols-outlined">fire_extinguisher</span> APAR
+        </a>
+
+        <a href="{{ route('pga.training.index') }}" class="sb-link {{ request()->routeIs('pga.training.*') ? 'active' : '' }}">
+            <span class="material-symbols-outlined">school</span> Evaluasi Training
         </a>
         <a href="{{ route('pga.bukutamu.index') }}" class="sb-link {{ request()->routeIs('pga.bukutamu.*') ? 'active' : '' }}">
             <span class="material-symbols-outlined">menu_book</span> Buku Tamu

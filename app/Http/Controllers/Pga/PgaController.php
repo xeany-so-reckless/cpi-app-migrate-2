@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Pga;
 
 use App\Http\Controllers\Controller;
 use App\Models\AparInspection;
+use App\Models\TrainingEvaluation;
+use App\Models\TrainingEvaluationAnswer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +14,7 @@ use Illuminate\View\View;
 class PgaController extends Controller
 {
     /**
-     * Dashboard PGA - ringkasan inspeksi APAR per bulan (default bulan berjalan, WIB).
+     * Dashboard PGA - ringkasan inspeksi APAR & evaluasi training per bulan (default bulan berjalan, WIB).
      */
     public function dashboard(Request $request): View
     {
@@ -81,7 +83,94 @@ class PgaController extends Controller
             'maxKomponen'  => $maxKomponen,
             'topLokasi'    => $topLokasi,
             'terbaru'      => $terbaru,
+            'training'     => $this->ringkasanTraining($awal, $akhir),
         ]);
+    }
+
+    /**
+     * Ringkasan Evaluasi Training untuk bulan yang dipilih.
+     * Rata-rata dihitung dari nilai 1-4 di database, tapi yang dikirim ke tampilan hanya label teks.
+     */
+    private function ringkasanTraining(Carbon $awal, Carbon $akhir): array
+    {
+        $dari   = $awal->toDateString();
+        $sampai = $akhir->toDateString();
+
+        $base = TrainingEvaluation::query()->whereBetween('tanggal_pengisian', [$dari, $sampai]);
+
+        $total     = (clone $base)->count();
+        $perhatian = (clone $base)->where('has_findings', true)->count();
+        $peserta   = (clone $base)->distinct()->count('nik');
+        $hariIni   = TrainingEvaluation::query()
+            ->whereDate('tanggal_pengisian', now('Asia/Jakarta')->toDateString())
+            ->count();
+
+        // Rata-rata per materi
+        $rawMateri = TrainingEvaluationAnswer::query()
+            ->join('training_evaluations as te', 'te.id', '=', 'training_evaluation_answers.training_evaluation_id')
+            ->whereBetween('te.tanggal_pengisian', [$dari, $sampai])
+            ->selectRaw('training_evaluation_answers.materi AS grup, AVG(training_evaluation_answers.nilai) AS rata, COUNT(DISTINCT te.id) AS pengisi')
+            ->groupBy('training_evaluation_answers.materi')
+            ->get()
+            ->keyBy('grup');
+
+        $perMateri = [];
+        foreach (TrainingEvaluation::materi() as $kode => $m) {
+            $perMateri[$kode] = $this->barisRingkas(
+                $rawMateri->get($kode),
+                ['kode' => $m['kode'], 'nama' => $m['judul'], 'wajib' => (bool) ($m['wajib'] ?? false)]
+            );
+        }
+
+        // Rata-rata per bagian
+        $rawBagian = TrainingEvaluationAnswer::query()
+            ->join('training_evaluations as te', 'te.id', '=', 'training_evaluation_answers.training_evaluation_id')
+            ->whereBetween('te.tanggal_pengisian', [$dari, $sampai])
+            ->selectRaw('te.bagian AS grup, AVG(training_evaluation_answers.nilai) AS rata, COUNT(DISTINCT te.id) AS pengisi')
+            ->groupBy('te.bagian')
+            ->get()
+            ->keyBy('grup');
+
+        $perBagian = [];
+        foreach (TrainingEvaluation::BAGIAN as $kode => $label) {
+            $baris = $this->barisRingkas($rawBagian->get($kode), ['kode' => null, 'nama' => $label, 'wajib' => false]);
+            if ($baris['pengisi'] > 0) {
+                $perBagian[$kode] = $baris;
+            }
+        }
+        // Bagian yang paling lemah di atas
+        uasort($perBagian, fn ($a, $b) => $a['urut'] <=> $b['urut']);
+
+        $terbaru = TrainingEvaluation::query()
+            ->withAvg('answers as rata_nilai', 'nilai')
+            ->orderByDesc('tanggal_pengisian')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get();
+
+        return [
+            'total'     => $total,
+            'perhatian' => $perhatian,
+            'peserta'   => $peserta,
+            'hariIni'   => $hariIni,
+            'perMateri' => $perMateri,
+            'perBagian' => $perBagian,
+            'terbaru'   => $terbaru,
+        ];
+    }
+
+    /** Satu baris ringkasan (materi / bagian): label teks, lebar bar, dan penanda perlu perhatian. */
+    private function barisRingkas(?object $raw, array $info): array
+    {
+        $rata = $raw ? (float) $raw->rata : null;
+
+        return $info + [
+            'pengisi'   => $raw ? (int) $raw->pengisi : 0,
+            'label'     => $rata !== null ? TrainingEvaluation::labelRataRata($rata) : null,
+            'persen'    => $rata !== null ? max(5, (int) round(($rata - 1) / 3 * 100)) : 0,
+            'perhatian' => $rata !== null && TrainingEvaluation::rataRataPerluPerhatian($rata),
+            'urut'      => $rata ?? 99, // hanya untuk pengurutan, tidak ditampilkan
+        ];
     }
 
     /**
