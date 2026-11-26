@@ -933,7 +933,7 @@
         await pdfSaveArea(area, filename, 'portrait');
     }
 
-    // ---------- Susun data DO Frozen -> struktur dokumen Tally Loading ----------
+        // ---------- Susun data DO Frozen -> struktur dokumen Tally Loading ----------
     function pdfBuildFrozenDoc(detail) {
         const groups = new Map(); // urutan kemunculan = urutan saat muat
 
@@ -943,8 +943,12 @@
 
             c.bags.forEach(b => {
                 const isGeneric = b.nomorBag === null || b.nomorBag === undefined;
-                const nama = isGeneric ? 'Stock Adjustment' : (b.namaProduk || '-');
-                const key = isGeneric ? '__generic__' : 'p:' + nama;
+
+                // REVISI: bag generik ikut blok produknya kalau namaProduk
+                // tersedia dari server. Hanya kalau produknya memang tidak
+                // diketahui, baru masuk blok "Stock Adjustment".
+                const nama = b.namaProduk || (isGeneric ? 'Stock Adjustment' : '-');
+                const key = (isGeneric && !b.namaProduk) ? '__generic__' : 'p:' + nama;
 
                 if (!groups.has(key)) groups.set(key, { nama, entries: [] });
                 groups.get(key).entries.push({

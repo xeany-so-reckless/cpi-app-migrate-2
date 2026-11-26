@@ -85,11 +85,18 @@ class OutboundController extends Controller
      * REVISI (PDF Tally Loading):
      * - Eager-load diperluas ke cells.bags.batch.produk supaya tiap bag
      *   membawa 'namaProduk' (dipakai FE untuk memecah blok per produk
-     *   di form Tally Loading). Bag Stock Adjustment tidak punya batch,
-     *   jadi namaProduk = null -> FE menaruhnya di blok "Stock Adjustment".
+     *   di form Tally Loading).
      * - Tambah 'checkerKode' (employee_code checker) untuk teks QR
      *   tanda tangan Warehouse.
      * - Cell & bag diurutkan by id supaya urutan di PDF = urutan saat muat.
+     *
+     * REVISI (Nama produk bag generik): bag Stock Adjustment tidak punya
+     * batch, jadi namaProduk dicari bertingkat:
+     *   1. produk dari batch bag itu sendiri;
+     *   2. produk yang tersimpan di bag (produk_id, diisi sejak revisi ini);
+     *   3. (data lama) produk dari bag batch lain di Cell yang sama -
+     *      satu Cell hanya berisi satu produk;
+     *   4. null -> FE menaruhnya di blok "Stock Adjustment".
      */
     public function historyDetail(OutboundShipment $shipment): JsonResponse
     {
@@ -99,6 +106,7 @@ class OutboundController extends Controller
             'cells.cell',
             'cells.bags' => fn ($q) => $q->orderBy('id'),
             'cells.bags.batch.produk',
+            'cells.bags.produk',
             'tirs.items.produk',
         ]);
 
@@ -112,19 +120,30 @@ class OutboundController extends Controller
             'namaDriver'   => $shipment->nama_driver,
             'checkerNama'  => $shipment->checker->name ?? '-',
             'checkerKode'  => $shipment->checker->employee_code ?? '-',
-            'cells'        => $shipment->cells->map(fn (OutboundShipmentCell $sc) => [
-                'kodeCell' => $sc->cell->kode_cell ?? '-',
-                'totalBag' => $sc->total_bag,
-                'totalKg'  => (float) $sc->total_kg,
-                'bags'     => $sc->bags->map(fn (OutboundShipmentCellBag $bag) => [
-                    'nomorBag'     => $bag->nomor_bag,
-                    'kodeProduksi' => $bag->kode_produksi,
-                    'kg'           => (float) $bag->kg,
-                    'keterangan'   => $bag->keterangan,
-                    'namaProduk'   => $bag->batch->produk->name ?? null,
-                ]),
-            ]),
-                'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [
+            'cells'        => $shipment->cells->map(function (OutboundShipmentCell $sc) {
+                // Cadangan untuk data lama: produk dari bag batch mana pun
+                // di Cell ini (satu Cell = satu produk).
+                $namaCadangan = $sc->bags
+                    ->map(fn (OutboundShipmentCellBag $b) => $b->batch->produk->name ?? null)
+                    ->filter()
+                    ->first();
+
+                return [
+                    'kodeCell' => $sc->cell->kode_cell ?? '-',
+                    'totalBag' => $sc->total_bag,
+                    'totalKg'  => (float) $sc->total_kg,
+                    'bags'     => $sc->bags->map(fn (OutboundShipmentCellBag $bag) => [
+                        'nomorBag'     => $bag->nomor_bag,
+                        'kodeProduksi' => $bag->kode_produksi,
+                        'kg'           => (float) $bag->kg,
+                        'keterangan'   => $bag->keterangan,
+                        'namaProduk'   => $bag->batch->produk->name
+                            ?? $bag->produk->name
+                            ?? $namaCadangan,
+                    ]),
+                ];
+            }),
+            'tirs' => $shipment->tirs->map(fn (OutboundShipmentTir $tir) => [
                 'tirKe'     => $tir->tir_ke,
                 'jumlahBag' => $tir->jumlah_bag,
                 'items'     => $tir->items->map(fn (OutboundShipmentTirItem $item) => [
@@ -274,7 +293,7 @@ class OutboundController extends Controller
             // BARU - simpan Tir kalau ada. tir_ke mengikuti urutan array
             // (1-based) = label "Tir 1", "Tir 2", dst - tidak wajib ada
             // isinya sama sekali.
-                        foreach (($data['tirs'] ?? []) as $index => $tirInput) {
+            foreach (($data['tirs'] ?? []) as $index => $tirInput) {
                 // Gabungkan kalau ada produk yang sama muncul 2x di 1 tir
                 $items = collect($tirInput['items'])
                     ->groupBy(fn ($i) => $i['produk_id'] ?? 'null')
@@ -323,10 +342,18 @@ class OutboundController extends Controller
      * dipanggil $cell->releaseJikaKosong() - supaya begitu barang yang
      * keluar membuat stock fisik Cell ini jadi 0, kunci current_product_id
      * otomatis dilepas dan Cell ini kembali terbuka untuk produk apapun.
+     *
+     * REVISI (Nama produk bag generik): produk Cell (current_product_id)
+     * dibaca DI AWAL, sebelum releaseJikaKosong() sempat melepas kunci,
+     * lalu disimpan di baris bag generik (kolom produk_id).
      */
     private function processCellOutbound(OutboundShipment $shipment, array $cellInput): void
     {
-         $cell = Cell::findOrFail($cellInput['cell_id']);
+        $cell = Cell::findOrFail($cellInput['cell_id']);
+
+        // Produk yang mengunci Cell ini SAAT INI - harus dibaca sebelum
+        // releaseJikaKosong() di akhir method (yang bisa mengosongkannya).
+        $produkIdCell = $cell->current_product_id;
 
         // Cell simpanan tidak boleh di-Outbound (pengaman server, selain
         // sudah disembunyikan dari dropdown).
@@ -380,6 +407,7 @@ class OutboundController extends Controller
                 'nomor_bag'     => $bag['nomor_bag'],
                 'kg'            => $bag['kg'],
                 'kode_produksi' => $bag['kode_produksi'],
+                'produk_id'     => null, // bag batch: produk sudah ada di batch
                 'keterangan'    => null,
             ];
         }
@@ -399,6 +427,7 @@ class OutboundController extends Controller
                     'nomor_bag'     => null,
                     'kg'            => $genericKg,
                     'kode_produksi' => null,
+                    'produk_id'     => $produkIdCell, // supaya nama produk tetap ada di Riwayat/PDF
                     'keterangan'    => 'Stock Adjustment',
                 ];
             }

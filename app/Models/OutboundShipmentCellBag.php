@@ -14,6 +14,11 @@ class OutboundShipmentCellBag extends Model
      * "Stock Adjustment" (stock tanpa identitas batch asli, dari hasil
      * upload Excel) - keterangan diisi untuk menjaga jejak.
      *
+     * produk_id (BARU) - produk bag ini. Terutama diisi untuk baris
+     * generik, supaya nama produknya tetap bisa ditampilkan di Riwayat
+     * dan PDF Tally Loading. Untuk bag batch boleh NULL (produknya sudah
+     * ada di batch).
+     *
      * PENTING: baris di tabel ini JUGA berfungsi sebagai penanda "bag X
      * di batch Y sudah pernah keluar" - dipakai Cell::availableBags()
      * (ditambahkan di Step 4) untuk exclude bag ini dari daftar centang
@@ -25,6 +30,7 @@ class OutboundShipmentCellBag extends Model
         'nomor_bag',
         'kg',
         'kode_produksi',
+        'produk_id',
         'keterangan',
     ];
 
@@ -36,6 +42,15 @@ class OutboundShipmentCellBag extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(SerahTerimaBatch::class, 'batch_id');
+    }
+
+    /**
+     * BARU - Produk yang tersimpan langsung di bag ini (dipakai untuk
+     * baris generik yang tidak punya batch).
+     */
+    public function produk(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'produk_id');
     }
 
     /**
