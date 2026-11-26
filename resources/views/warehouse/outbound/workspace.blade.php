@@ -113,7 +113,7 @@
         .bag-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
         .bag-item {
             display: flex; align-items: center; gap: 12px; padding: 12px 14px;
-            border-bottom: 1px solid var(--line); font-size: 0.85rem;
+            border-bottom: 1px solid var(--line); font-size: 0.85rem; flex-wrap: wrap;
         }
         .bag-item:last-child { border-bottom: none; }
         .bag-item:hover { background: var(--surface-hover); }
@@ -130,7 +130,20 @@
         }
         .bag-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 0.85rem; }
 
-        /* BARU (Revisi 2) - Kartu Tir: 1 kartu per Tir, 1 input per produk */
+        /* BARU - Warna karung (kuartal produksi). Selalu ada teks, bukan cuma warna. */
+        .warna-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+            border: 1px solid var(--line); background: #fff; color: var(--text); white-space: nowrap;
+        }
+        .warna-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+        .warna-merah  .warna-dot { background: #dc2626; }
+        .warna-biru   .warna-dot { background: #2563eb; }
+        .warna-hijau  .warna-dot { background: #16a34a; }
+        .warna-kuning .warna-dot { background: #eab308; }
+        .warna-group { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+
+        /* Kartu Tir: 1 kartu per Tir, 1 input per produk */
         .tir-card { padding: 14px; border-bottom: 1px solid var(--line); }
         .tir-card:last-child { border-bottom: none; }
         .tir-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
@@ -141,6 +154,8 @@
             text-transform: none; letter-spacing: 0; font-size: 0.78rem; font-weight: 600;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .tir-sisa { font-size: 0.7rem; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+        .tir-empty { display: none; font-size: 0.8rem; color: var(--muted); padding: 4px 0; }
         .tir-compare { margin-top: 14px; font-size: 0.8rem; }
         .tir-compare-title {
             font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; letter-spacing: 1px;
@@ -271,6 +286,7 @@
                 Isi kalau truk besar (misal tronton) - kosongkan kalau customer pakai mobil kecil.
                 Daftar produk diambil dari Cell yang sudah ditambahkan ke DO. Satu Tir boleh berisi lebih dari satu produk -
                 isi jumlah bag tiap produk, kosongkan kalau produk itu tidak ada di Tir tersebut.
+                Produk yang sudah teralokasi penuh di Tir lain otomatis disembunyikan.
             </p>
 
             <div class="bag-list" id="tirListContainer">
@@ -489,7 +505,7 @@
         try {
             const res = await apiFetch(`{{ url('warehouse/outbound/cells') }}/${cellId}`);
             currentCell = res.cell;
-            currentBags = res.bags.map((b, idx) => ({ ...b, _key: bagKey(b), _checked: false }));
+            currentBags = sortBags(res.bags.map((b, idx) => ({ ...b, _key: bagKey(b), _checked: false })));
 
             document.getElementById('detailKodeCell').innerText = currentCell.kodeCell;
 
@@ -507,6 +523,49 @@
         return b.type === 'generic' ? 'generic' : `${b.batch_id}-${b.nomor_bag}`;
     }
 
+    // BARU - Urut dari bag paling ringan ke paling berat. Kg sama -> urut
+    // nomor bag (lalu batch) supaya urutan stabil. Baris generik
+    // ("Stock Adjustment") isinya gabungan banyak bag, jadi selalu paling bawah.
+    function sortBags(bags) {
+        return [...bags].sort((a, b) => {
+            const ga = a.type === 'generic' ? 1 : 0;
+            const gb = b.type === 'generic' ? 1 : 0;
+            if (ga !== gb) return ga - gb;
+            if (ga === 1) return 0;
+
+            const kgDiff = Number(a.kg) - Number(b.kg);
+            if (kgDiff !== 0) return kgDiff;
+
+            const noDiff = Number(a.nomor_bag) - Number(b.nomor_bag);
+            if (noDiff !== 0) return noDiff;
+
+            return Number(a.batch_id) - Number(b.batch_id);
+        });
+    }
+
+    // BARU - Warna karung. Selalu menampilkan teks, bukan hanya warna.
+    const WARNA_LABEL = { merah: 'Merah', biru: 'Biru', hijau: 'Hijau', kuning: 'Kuning' };
+    const WARNA_URUT = ['merah', 'biru', 'hijau', 'kuning'];
+
+    function warnaBadge(warna, teks) {
+        if (!warna || !WARNA_LABEL[warna]) return '';
+        return `<span class="warna-badge warna-${warna}"><i class="warna-dot"></i>${teks ?? WARNA_LABEL[warna]}</span>`;
+    }
+
+    // Ringkasan warna baris generik: {merah:{bag,kg}, ...} -> "3 Merah", "2 Biru", ...
+    function warnaRingkasanHtml(ringkasan) {
+        if (!ringkasan) return '';
+
+        const parts = WARNA_URUT
+            .filter(w => ringkasan[w] && Number(ringkasan[w].bag) > 0)
+            .map(w => {
+                const kg = Number(ringkasan[w].kg).toLocaleString('id-ID', { maximumFractionDigits: 1 });
+                return `<span title="${kg} Kg">${warnaBadge(w, `${ringkasan[w].bag} ${WARNA_LABEL[w]}`)}</span>`;
+            });
+
+        return parts.length ? `<span class="warna-group">${parts.join('')}</span>` : '';
+    }
+
     function renderBagList() {
         const container = document.getElementById('bagListContainer');
 
@@ -522,6 +581,7 @@
                         <input type="checkbox" ${b._checked ? 'checked' : ''} onchange="toggleBag('${b._key}', this.checked)">
                         <span class="bag-generic-badge">Stock Adjustment</span>
                         <span class="bag-meta">${b.jumlah_bag} bag tanpa identitas batch (hasil penyesuaian manual)</span>
+                        ${warnaRingkasanHtml(b.warna_ringkasan)}
                         <span class="bag-kg">${Number(b.kg).toLocaleString('id-ID', {maximumFractionDigits:1})} Kg</span>
                     </label>
                 `;
@@ -531,6 +591,7 @@
                 <label class="bag-item" style="cursor:pointer;">
                     <input type="checkbox" ${b._checked ? 'checked' : ''} onchange="toggleBag('${b._key}', this.checked)">
                     <span class="bag-chip">Bag #${b.nomor_bag}</span>
+                    ${warnaBadge(b.warna)}
                     <span class="bag-meta">${b.kode_produksi ?? '-'} &middot; ${b.produk ?? '-'}</span>
                     <span class="bag-kg">${Number(b.kg).toLocaleString('id-ID', {maximumFractionDigits:1})} Kg</span>
                 </label>
@@ -646,11 +707,16 @@
         document.getElementById('grandTotalKg').innerText = grandKg.toLocaleString('id-ID', {maximumFractionDigits:1});
     }
 
-    // ==================== DATA TIR (OPSIONAL, FROZEN) - REVISI 2 ====================
+    // ==================== DATA TIR (OPSIONAL, FROZEN) ====================
     // 1 kartu per Tir, isinya 1 input jumlah bag per produk. Daftar produk
     // diturunkan dari Cell yang sudah ada di DO (cell terkunci ke 1 produk).
     // Produk tanpa identitas (cell tanpa currentProduct) memakai kunci 'adj'
     // dan dikirim ke server sebagai produk_id null.
+    //
+    // BARU: input produk di sebuah Tir disembunyikan kalau produk itu sudah
+    // teralokasi penuh di Tir LAIN. Di Tir yang memuat angkanya sendiri,
+    // input tetap tampil supaya bisa dikoreksi. Batas maksimal input =
+    // total bag produk di Cell dikurangi isi Tir lain.
     const MAX_TIR = 22;
     const ADJ_KEY = 'adj';
 
@@ -670,7 +736,7 @@
         return Array.from(map.values());
     }
 
-    // Total bag per produk menurut Cell (untuk perbandingan info)
+    // Total bag per produk menurut Cell (untuk perbandingan info & batas maksimal)
     function getCellBagByProduk() {
         const m = {};
         doCells.forEach(c => {
@@ -684,8 +750,53 @@
         return Object.values(row.items).reduce((sum, v) => sum + (Number(v) || 0), 0);
     }
 
+    // BARU - Batas maksimal produk $key di Tir ke-$index:
+    // total bag di Cell dikurangi isi produk itu di Tir LAIN.
+    function sisaTir(index, key) {
+        const total = getCellBagByProduk()[key] || 0;
+        let lain = 0;
+        tirRows.forEach((r, i) => {
+            if (i !== index) lain += Number(r.items[key]) || 0;
+        });
+        return total - lain;
+    }
+
+    // BARU - Tampilkan/sembunyikan input produk di tiap kartu Tir dan
+    // perbarui batas maksimalnya TANPA render ulang, supaya fokus dan
+    // isi input yang sedang diketik tidak hilang.
+    function refreshTirFields() {
+        const produk = getDoProducts();
+
+        tirRows.forEach((row, idx) => {
+            let tampil = 0;
+
+            produk.forEach(p => {
+                const wrap = document.getElementById(`tirField-${idx}-${p.key}`);
+                if (!wrap) return;
+
+                const sisa = sisaTir(idx, p.key);
+                const own = Number(row.items[p.key]) || 0;
+                const show = sisa > 0 || own > 0;
+
+                wrap.style.display = show ? '' : 'none';
+                if (show) tampil++;
+
+                const input = document.getElementById(`tirIn-${idx}-${p.key}`);
+                if (input) input.max = Math.max(sisa, 0);
+
+                const lbl = document.getElementById(`tirSisa-${idx}-${p.key}`);
+                if (lbl) lbl.innerText = `Maks ${Math.max(sisa, 0).toLocaleString('id-ID')} Bag`;
+            });
+
+            const empty = document.getElementById(`tirEmpty-${idx}`);
+            if (empty) empty.style.display = tampil === 0 ? 'block' : 'none';
+        });
+    }
+
     function addTirRow() {
-        if (getDoProducts().length === 0) {
+        const produk = getDoProducts();
+
+        if (produk.length === 0) {
             Swal.fire({
                 title: 'Tambahkan Cell dulu',
                 text: 'Daftar produk di Data Tir diambil dari Cell yang sudah ditambahkan ke DO.',
@@ -698,13 +809,33 @@
             return;
         }
 
+        // Kalau semua produk sudah teralokasi penuh, Tir baru pasti kosong
+        const cellBag = getCellBagByProduk();
+        const adaSisa = produk.some(p => {
+            const terpakai = tirRows.reduce((s, r) => s + (Number(r.items[p.key]) || 0), 0);
+            return (cellBag[p.key] || 0) - terpakai > 0;
+        });
+
+        if (tirRows.length > 0 && !adaSisa) {
+            Swal.fire({
+                title: 'Semua produk sudah teralokasi penuh',
+                text: 'Tidak ada sisa bag untuk Tir baru. Kurangi angka di Tir lain kalau perlu menambah Tir.',
+                icon: 'info',
+            });
+            return;
+        }
+
         tirRows.push({ items: {} });
         renderTirList();
 
-        // fokus otomatis ke input pertama di kartu yang baru muncul
+        // fokus otomatis ke input pertama yang tampil di kartu yang baru muncul
         const cards = document.querySelectorAll('.tir-card');
         if (cards.length > 0) {
-            const firstInput = cards[cards.length - 1].querySelector('input');
+            const idx = cards.length - 1;
+            const target = produk
+                .map(p => document.getElementById(`tirField-${idx}-${p.key}`))
+                .find(w => w && w.style.display !== 'none');
+            const firstInput = target ? target.querySelector('input') : null;
             if (firstInput) firstInput.focus();
         }
     }
@@ -715,17 +846,31 @@
     }
 
     function updateTirItem(index, key, value) {
-        const n = value === '' ? null : parseInt(value, 10);
-        if (n === null || Number.isNaN(n)) {
+        let n = value === '' ? null : parseInt(value, 10);
+
+        if (n === null || Number.isNaN(n) || n <= 0) {
             delete tirRows[index].items[key];
         } else {
-            tirRows[index].items[key] = n;
+            // Batas keras: tidak boleh melebihi sisa bag produk ini
+            const sisa = Math.max(sisaTir(index, key), 0);
+            if (n > sisa) {
+                n = sisa;
+                const input = document.getElementById(`tirIn-${index}-${key}`);
+                if (input) input.value = n > 0 ? n : '';
+            }
+
+            if (n > 0) {
+                tirRows[index].items[key] = n;
+            } else {
+                delete tirRows[index].items[key];
+            }
         }
 
         // Update subtotal kartu ini tanpa render ulang supaya fokus input tidak hilang
         const sub = document.getElementById(`tirSub-${index}`);
         if (sub) sub.innerText = tirSubtotal(tirRows[index]).toLocaleString('id-ID');
 
+        refreshTirFields(); // input produk di Tir lain muncul/hilang sesuai sisa
         updateTirTotal();
     }
 
@@ -757,19 +902,23 @@
                 </div>
                 <div class="tir-card-body">
                     ${produk.map(p => `
-                        <div>
+                        <div id="tirField-${idx}-${p.key}">
                             <label title="${escHtml(p.nama)}">${escHtml(p.nama)}</label>
                             <input type="number" min="1" step="1" class="form-control"
+                                id="tirIn-${idx}-${p.key}"
                                 style="height:38px;"
                                 placeholder="Jumlah Bag"
                                 value="${row.items[p.key] ?? ''}"
                                 oninput="updateTirItem(${idx}, '${p.key}', this.value)">
+                            <div class="tir-sisa" id="tirSisa-${idx}-${p.key}"></div>
                         </div>
                     `).join('')}
+                    <div class="tir-empty" id="tirEmpty-${idx}">Semua produk sudah teralokasi di Tir lain.</div>
                 </div>
             </div>
         `).join('');
 
+        refreshTirFields();
         updateTirTotal();
     }
 

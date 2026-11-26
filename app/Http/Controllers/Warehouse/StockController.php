@@ -636,10 +636,13 @@ class StockController extends Controller
      * BAG MERAH, BAG BIRU, BAG HIJAU, BAG KUNING - breakdown bag per kuartal
      * KG MERAH, KG BIRU, KG HIJAU, KG KUNING - breakdown kg per kuartal
      * (Merah=Jan-Mar, Biru=Apr-Jun, Hijau=Jul-Sep, Kuning=Okt-Des)
+     * KODE PRODUK (+ NAMA PRODUK sebagai cadangan pencarian) - REVISI:
+     * dipakai untuk MENGUNCI Cell ke produk itu (current_product_id),
+     * sama seperti Cell yang terisi lewat Inbound.
      *
-     * Kolom lain (COLD STORAGE, LANTAI, KODE PRODUK, NAMA PRODUK,
-     * KAPASITAS, KAPASITAS (KG)) cuma informasi/referensi dari sisi
-     * Excel, tidak menimpa data master di sistem.
+     * Kolom lain (COLD STORAGE, LANTAI, KAPASITAS, KAPASITAS (KG)) cuma
+     * informasi/referensi dari sisi Excel, tidak menimpa data master di
+     * sistem.
      *
      * Baris dengan kode cell yang tidak ditemukan di sistem di-skip
      * (bukan gagal total), dan dilaporkan balik ke frontend.
@@ -655,6 +658,15 @@ class StockController extends Controller
      * REVISI (Cell Simpanan): baris dengan cell simpanan (1C01-1C06)
      * DITOLAK dan masuk daftar "dilewati" - isi cell simpanan hanya
      * boleh berubah lewat fitur Pindahkan.
+     *
+     * REVISI (Kunci Produk): kalau kolom KODE PRODUK ada dan JUMLAH (BAG)
+     * > 0, Cell dikunci ke produk tsb lewat Cell::lockKeProduk(). Baris
+     * DILEWATI (dan tidak ada adjustment yang dibuat) kalau:
+     * - produknya tidak ditemukan di sistem, atau
+     * - Cell masih terkunci ke produk LAIN dan masih ada stock di sistem
+     *   (Cell harus dikosongkan dulu sebelum diisi produk berbeda).
+     * Kalau kolom KODE PRODUK tidak ada / kosong di baris itu, perilaku
+     * lama dipertahankan (tanpa mengunci).
      */
     public function uploadExcel(Request $request): JsonResponse
     {
@@ -686,6 +698,8 @@ class StockController extends Controller
         $colKgBiru = null;
         $colKgHijau = null;
         $colKgKuning = null;
+        $colKodeProduk = null;
+        $colNamaProduk = null;
         foreach ($headerRow as $colLetter => $headerText) {
             $normalized = strtoupper(trim((string) $headerText));
             if ($normalized === 'KODE CELL') {
@@ -721,6 +735,12 @@ class StockController extends Controller
             if ($normalized === 'KG KUNING') {
                 $colKgKuning = $colLetter;
             }
+            if ($normalized === 'KODE PRODUK') {
+                $colKodeProduk = $colLetter;
+            }
+            if ($normalized === 'NAMA PRODUK') {
+                $colNamaProduk = $colLetter;
+            }
         }
 
         if (! $colKodeCell || ! $colJumlah) {
@@ -730,7 +750,9 @@ class StockController extends Controller
         }
 
         $berhasil = 0;
+        $terkunci = 0;
         $dilewati = [];
+        $cacheProduk = []; // supaya produk yang sama tidak di-query berulang
 
         foreach ($rowKeys as $rowKey) {
             $row = $rows[$rowKey];
@@ -763,6 +785,56 @@ class StockController extends Controller
             $terpakaiSebelum = $this->hitungTerpakaiSistem($cell);
             $selisih = $jumlahAktual - $terpakaiSebelum;
 
+            // --- REVISI (Kunci Produk): tentukan produk untuk Cell ini
+            // SEBELUM adjustment dibuat, supaya baris yang bermasalah
+            // tidak meninggalkan adjustment setengah jalan. ---
+            $produk = null;
+            if ($jumlahAktual > 0 && $colKodeProduk) {
+                $kodeProdukRaw = trim((string) ($row[$colKodeProduk] ?? ''));
+                $namaProdukRaw = $colNamaProduk ? trim((string) ($row[$colNamaProduk] ?? '')) : '';
+
+                if ($kodeProdukRaw !== '') {
+                    $cacheKey = $kodeProdukRaw.'|'.strtoupper($namaProdukRaw);
+
+                    if (! array_key_exists($cacheKey, $cacheProduk)) {
+                        // Utamakan kode produk; kalau tidak ketemu, coba
+                        // cocokkan nama produk persis (tanpa beda huruf besar).
+                        $ketemu = Product::where('code', $kodeProdukRaw)->first();
+
+                        if (! $ketemu && $namaProdukRaw !== '') {
+                            $ketemu = Product::whereRaw('UPPER(name) = ?', [strtoupper($namaProdukRaw)])->first();
+                        }
+
+                        $cacheProduk[$cacheKey] = $ketemu;
+                    }
+
+                    $produk = $cacheProduk[$cacheKey];
+
+                    if (! $produk) {
+                        $dilewati[] = [
+                            'baris'     => $rowKey,
+                            'kode_cell' => $kodeCell,
+                            'alasan'    => "Produk dengan kode \"{$kodeProdukRaw}\" tidak ditemukan di sistem",
+                        ];
+                        continue;
+                    }
+
+                    // Cell masih terkunci ke produk LAIN dan masih berisi
+                    // -> jangan ditimpa diam-diam, minta dikosongkan dulu.
+                    if ($cell->current_product_id !== null
+                        && (int) $cell->current_product_id !== (int) $produk->id
+                        && $terpakaiSebelum > 0) {
+                        $namaTerkunci = $cell->currentProduct->name ?? '-';
+                        $dilewati[] = [
+                            'baris'     => $rowKey,
+                            'kode_cell' => $kodeCell,
+                            'alasan'    => "Cell masih terkunci untuk produk \"{$namaTerkunci}\" dan berisi stock. Kosongkan Cell dulu sebelum diisi produk \"{$produk->name}\"",
+                        ];
+                        continue;
+                    }
+                }
+            }
+
             // KG opsional: kalau kolomnya tidak ada di Excel (atau kosong
             // di baris ini), anggap tidak ada perubahan kg (selisih_kg=0).
             $kgSebelum = $this->hitungKgTerpakaiSistem($cell);
@@ -776,31 +848,48 @@ class StockController extends Controller
             $readFloat = fn ($colLetter) => ($colLetter && isset($row[$colLetter]) && $row[$colLetter] !== '')
                 ? (float) $row[$colLetter] : 0;
 
-            CellStockAdjustment::create([
-                'cell_id'               => $cell->id,
-                'jumlah_sistem_sebelum' => $terpakaiSebelum,
-                'jumlah_aktual'         => $jumlahAktual,
-                'selisih'               => $selisih,
-                'kg_sistem_sebelum'     => $kgSebelum,
-                'kg_aktual'             => $kgAktual,
-                'selisih_kg'            => $selisihKg,
-                'bag_merah'             => $readInt($colBagMerah),
-                'bag_biru'              => $readInt($colBagBiru),
-                'bag_hijau'             => $readInt($colBagHijau),
-                'bag_kuning'            => $readInt($colBagKuning),
-                'kg_merah'              => $readFloat($colKgMerah),
-                'kg_biru'               => $readFloat($colKgBiru),
-                'kg_hijau'              => $readFloat($colKgHijau),
-                'kg_kuning'             => $readFloat($colKgKuning),
-                'sumber'                => 'upload_excel',
-                'nama_file'             => $file->getClientOriginalName(),
-                'user_id'               => $user->id,
-            ]);
+            DB::transaction(function () use (
+                $cell, $produk, $terpakaiSebelum, $jumlahAktual, $selisih, $kgSebelum, $kgAktual, $selisihKg,
+                $readInt, $readFloat, $row, $file, $user,
+                $colBagMerah, $colBagBiru, $colBagHijau, $colBagKuning,
+                $colKgMerah, $colKgBiru, $colKgHijau, $colKgKuning
+            ) {
+                CellStockAdjustment::create([
+                    'cell_id'               => $cell->id,
+                    'jumlah_sistem_sebelum' => $terpakaiSebelum,
+                    'jumlah_aktual'         => $jumlahAktual,
+                    'selisih'               => $selisih,
+                    'kg_sistem_sebelum'     => $kgSebelum,
+                    'kg_aktual'             => $kgAktual,
+                    'selisih_kg'            => $selisihKg,
+                    'bag_merah'             => $readInt($colBagMerah),
+                    'bag_biru'              => $readInt($colBagBiru),
+                    'bag_hijau'             => $readInt($colBagHijau),
+                    'bag_kuning'            => $readInt($colBagKuning),
+                    'kg_merah'              => $readFloat($colKgMerah),
+                    'kg_biru'               => $readFloat($colKgBiru),
+                    'kg_hijau'              => $readFloat($colKgHijau),
+                    'kg_kuning'             => $readFloat($colKgKuning),
+                    'sumber'                => 'upload_excel',
+                    'nama_file'             => $file->getClientOriginalName(),
+                    'user_id'               => $user->id,
+                ]);
 
-            // STEP 8 - hasil penyesuaian fisik baris ini bisa saja membuat
-            // stock Cell jadi 0 (misal audit gudang menemukan Cell ini
-            // ternyata sudah kosong). Cek & lepas kunci produk kalau iya.
-            $cell->releaseJikaKosong();
+                // REVISI (Kunci Produk) - Cell berisi stock dari Excel
+                // harus terkunci ke produknya, seperti Cell hasil Inbound.
+                if ($produk) {
+                    $cell->lockKeProduk($produk);
+                }
+
+                // STEP 8 - hasil penyesuaian fisik baris ini bisa saja membuat
+                // stock Cell jadi 0 (misal audit gudang menemukan Cell ini
+                // ternyata sudah kosong). Cek & lepas kunci produk kalau iya.
+                $cell->releaseJikaKosong();
+            });
+
+            if ($produk) {
+                $terkunci++;
+            }
 
             $berhasil++;
         }
@@ -808,13 +897,14 @@ class StockController extends Controller
         ActivityLogger::log(
             'warehouse_stock',
             'update',
-            "{$user->employee_code} ({$user->name}) upload Excel penyesuaian stock: {$file->getClientOriginalName()} - {$berhasil} cell berhasil, ".count($dilewati).' dilewati',
+            "{$user->employee_code} ({$user->name}) upload Excel penyesuaian stock: {$file->getClientOriginalName()} - {$berhasil} cell berhasil ({$terkunci} terkunci produk), ".count($dilewati).' dilewati',
             $user
         );
 
         return response()->json([
             'success'  => true,
             'berhasil' => $berhasil,
+            'terkunci' => $terkunci,
             'dilewati' => $dilewati,
         ]);
     }

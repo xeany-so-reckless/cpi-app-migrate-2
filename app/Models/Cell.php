@@ -528,12 +528,115 @@ class Cell extends Model
      */
     public function genericAdjustmentBag(): int
     {
-        return max(0, (int) $this->adjustments()->where('sumber', 'upload_excel')->sum('selisih'));
+        return max(0, (int) $this->genericAdjustmentQuery()->sum('selisih'));
     }
 
     public function genericAdjustmentKg(): float
     {
-        return max(0, (float) $this->adjustments()->where('sumber', 'upload_excel')->sum('selisih_kg'));
+        return max(0, (float) $this->genericAdjustmentQuery()->sum('selisih_kg'));
+    }
+
+    /**
+     * REVISI - Adjustment upload_excel yang MASIH dihitung sebagai stock
+     * generik. Baris generik di Outbound selalu diambil SELURUHNYA (tidak
+     * bisa sebagian), jadi begitu pernah dikeluarkan, semua upload_excel
+     * yang id-nya sampai adjustment outbound itu dianggap sudah habis.
+     * Hanya upload_excel BARU setelah itu yang dihitung lagi.
+     *
+     * Ini mencegah baris "Stock Adjustment" muncul lagi di daftar centang
+     * setelah dikeluarkan, termasuk kalau Excel di-upload ulang nanti.
+     */
+    private function genericAdjustmentQuery()
+    {
+        $batasId = $this->idAdjustmentOutboundGenericTerakhir();
+
+        return $this->adjustments()
+            ->where('sumber', 'upload_excel')
+            ->when($batasId, fn ($q) => $q->where('id', '>', $batasId));
+    }
+
+    /**
+     * id cell_stock_adjustment dari Outbound TERAKHIR yang mengeluarkan
+     * baris generik "Stock Adjustment" di Cell ini. null kalau belum
+     * pernah.
+     */
+    private function idAdjustmentOutboundGenericTerakhir(): ?int
+    {
+        $id = OutboundShipmentCell::where('cell_id', $this->id)
+            ->whereIn(
+                'id',
+                OutboundShipmentCellBag::whereNull('batch_id')
+                    ->where('keterangan', 'Stock Adjustment')
+                    ->select('outbound_shipment_cell_id')
+            )
+            ->max('cell_stock_adjustment_id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * BARU - Warna karung (sesuai kuartal tanggal produksi) dari nomor
+     * bulan 1-12. Merah = Jan-Mar, Biru = Apr-Jun, Hijau = Jul-Sep,
+     * Kuning = Okt-Des. Satu-satunya tempat aturan kuartal untuk
+     * tampilan Outbound; null kalau bulan tidak diketahui.
+     */
+    public static function warnaDariBulan(?int $bulan): ?string
+    {
+        if ($bulan === null || $bulan < 1 || $bulan > 12) {
+            return null;
+        }
+
+        return match (true) {
+            $bulan <= 3 => 'merah',
+            $bulan <= 6 => 'biru',
+            $bulan <= 9 => 'hijau',
+            default     => 'kuning',
+        };
+    }
+
+    /**
+     * BARU - Ringkasan warna untuk baris generik "Stock Adjustment",
+     * dijumlahkan dari kolom bag_/kg_ warna di adjustment upload_excel.
+     * Excel stock diisi sebagai total fisik cell (cell dikosongkan dulu
+     * sebelum upload), jadi angka ini sejalan dengan genericAdjustmentBag().
+     *
+     * Return null kalau semua warna 0 / tidak ada datanya.
+     * Format: ['merah' => ['bag' => int, 'kg' => float], ...]
+     */
+    public function genericWarnaRingkasan(): ?array
+    {
+        $row = $this->genericAdjustmentQuery()
+            ->selectRaw('
+                COALESCE(SUM(bag_merah), 0) as bag_merah,
+                COALESCE(SUM(bag_biru), 0) as bag_biru,
+                COALESCE(SUM(bag_hijau), 0) as bag_hijau,
+                COALESCE(SUM(bag_kuning), 0) as bag_kuning,
+                COALESCE(SUM(kg_merah), 0) as kg_merah,
+                COALESCE(SUM(kg_biru), 0) as kg_biru,
+                COALESCE(SUM(kg_hijau), 0) as kg_hijau,
+                COALESCE(SUM(kg_kuning), 0) as kg_kuning
+            ')
+            ->first();
+
+        if (! $row) {
+            return null;
+        }
+
+        $hasil = [];
+        $adaData = false;
+
+        foreach (['merah', 'biru', 'hijau', 'kuning'] as $warna) {
+            $bag = max(0, (int) $row->{"bag_{$warna}"});
+            $kg = max(0, (float) $row->{"kg_{$warna}"});
+
+            if ($bag > 0) {
+                $adaData = true;
+            }
+
+            $hasil[$warna] = ['bag' => $bag, 'kg' => round($kg, 2)];
+        }
+
+        return $adaData ? $hasil : null;
     }
 
     /**
@@ -548,7 +651,11 @@ class Cell extends Model
      *  - 'kode_produksi'  (null kalau generic)
      *  - 'produk'         (nama produk, null kalau generic)
      *  - 'kg'
-     *  - 'tanggal_produksi' (dipakai FE/BE untuk breakdown warna kuartal, null kalau generic)
+     *  - 'tanggal_produksi' (null kalau generic)
+     *  - 'warna'          (BARU) merah|biru|hijau|kuning untuk bag batch,
+     *                     null kalau generic atau tanggal tidak ada
+     *  - 'warna_ringkasan' (BARU, hanya generic) bag & kg per warna dari
+     *                     upload Excel, atau null kalau tidak ada datanya
      *
      * Baris 'generic' cuma MUNCUL 1 KALI mewakili SISA total
      * genericAdjustmentBag()/genericAdjustmentKg() - karena stock jenis
@@ -572,6 +679,7 @@ class Cell extends Model
         // Bag reject tidak pernah masuk stock Outbound, jadi dilewati.
         foreach ($this->daftarBagFisik(false) as $item) {
             $batch = $item['batch'];
+            $tanggal = $batch->tanggal_produksi;
 
             $bags[] = [
                 'type'             => 'batch',
@@ -580,7 +688,8 @@ class Cell extends Model
                 'kode_produksi'    => $batch->kode_produksi,
                 'produk'           => $batch->produk->name ?? null,
                 'kg'               => $item['kg'],
-                'tanggal_produksi' => optional($batch->tanggal_produksi)->format('Y-m-d'),
+                'tanggal_produksi' => optional($tanggal)->format('Y-m-d'),
+                'warna'            => self::warnaDariBulan($tanggal ? (int) $tanggal->format('n') : null),
             ];
         }
 
@@ -595,6 +704,8 @@ class Cell extends Model
                 'produk'           => null,
                 'kg'               => $this->genericAdjustmentKg(),
                 'tanggal_produksi' => null,
+                'warna'            => null,
+                'warna_ringkasan'  => $this->genericWarnaRingkasan(),
                 'jumlah_bag'       => $genericBag, // baris ini mewakili banyak bag sekaligus
             ];
         }
