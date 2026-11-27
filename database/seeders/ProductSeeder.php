@@ -86,6 +86,13 @@ class ProductSeeder extends Seeder
             ['45', 'GRILLER BAHAN MBG', 0, 'bahan_baku', 9],
             ['46', 'GRILLER BB OTHERS PARTING', 0, 'bahan_baku', 10],
 
+            // BARU - Bahan baku Fresh (modul Produksi Fresh, tipe Main Product)
+            // category_code 02 = jenis Parting (sama dengan 47-49 & 83)
+            ['92', 'PARTING 9 SIZE B FRESH (1.0-1.1)', 0, 'bahan_baku', 11, 'main', '02'],
+            ['93', 'PARTING 9 SIZE C FRESH (1.1-1.25)', 0, 'bahan_baku', 12, 'main', '02'],
+            ['94', 'RM P-9 Size C Fresh', 0, 'bahan_baku', 13, 'main', '02'],
+            ['95', 'P10 Sz 0.9-1.0 KG Fresh', 0, 'bahan_baku', 14, 'main', '02'],
+
             // === PARTING & MARINASI ===
             ['47', 'YM PART 9@1.0 KG FRESH IKI', 0, 'parting', 1],
             ['48', 'YM PART 9 @1.1 KG FRESH SAE', 0, 'parting', 2],
